@@ -1,4 +1,7 @@
 {
+  "framework": "nextjs",
+  "buildCommand": "pnpm build",
+  "installCommand": "pnpm install",
   "crons": [
     {
       "path": "/api/cron/daily-digest",
