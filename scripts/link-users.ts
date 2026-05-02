@@ -54,7 +54,7 @@ async function main() {
   let linkedProjects = 0;
   for (const profile of profiles) {
     if (!profile.full_name) continue;
-    
+
     const { data, error } = await supabase
       .from("projects")
       .update({ manager_id: profile.id })
@@ -70,7 +70,7 @@ async function main() {
   let linkedTasks = 0;
   for (const profile of profiles) {
     if (!profile.full_name) continue;
-    
+
     const { data, error } = await supabase
       .from("tasks")
       .update({ owner_id: profile.id })
@@ -86,7 +86,7 @@ async function main() {
   let linkedMembers = 0;
   for (const profile of profiles) {
     if (!profile.full_name) continue;
-    
+
     // Find projects where the user owns tasks but isn't a project member
     const { data: userTasks } = await supabase
       .from("tasks")
@@ -95,7 +95,7 @@ async function main() {
 
     if (userTasks && userTasks.length > 0) {
       const projectIds = [...new Set(userTasks.map(t => t.project_id))];
-      
+
       for (const pId of projectIds) {
         const { error } = await supabase
           .from("project_members")

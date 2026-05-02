@@ -26,8 +26,8 @@ export default function LoginPage() {
       if (error) {
         toast.error("بيانات الدخول غير صحيحة");
       } else {
-        router.push("/dashboard");
-        router.refresh();
+        toast.success("تم الدخول بنجاح!");
+        window.location.href = "/dashboard";
       }
     } else {
       const { error } = await supabase.auth.signUp({ 
@@ -41,8 +41,7 @@ export default function LoginPage() {
         toast.error("حدث خطأ أثناء إنشاء الحساب");
       } else {
         toast.success("تم إنشاء الحساب بنجاح! جاري الدخول...");
-        router.push("/dashboard");
-        router.refresh();
+        window.location.href = "/dashboard";
       }
     }
     setLoading(false);
