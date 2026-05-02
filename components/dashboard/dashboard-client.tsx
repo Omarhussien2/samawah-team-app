@@ -71,7 +71,7 @@ export function DashboardClient({ user, projects, tasks, comments }: Props) {
         <p className="text-sm font-medium text-slate-500 uppercase tracking-wide">
           {format(new Date(), "EEEE، d MMMM yyyy", { locale: ar })}
         </p>
-        <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
+        <h1 className="text-3xl font-bold font-heading text-slate-900 tracking-tight">
           {greeting}، {user.full_name?.split(" ")[0] || "مرحباً"}! 👋
         </h1>
       </div>
@@ -106,7 +106,7 @@ export function DashboardClient({ user, projects, tasks, comments }: Props) {
           {/* Chart */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-bold text-slate-800">أداء الأسبوع</h2>
+              <h2 className="text-lg font-bold font-heading text-slate-800">أداء الأسبوع</h2>
             </div>
             <div className="h-72 w-full" dir="ltr">
               <ResponsiveContainer width="100%" height="100%">
@@ -128,7 +128,7 @@ export function DashboardClient({ user, projects, tasks, comments }: Props) {
           {/* Project Progress */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-bold text-slate-800">نشاط المشاريع</h2>
+              <h2 className="text-lg font-bold font-heading text-slate-800">نشاط المشاريع</h2>
               <Link href="/projects" className="text-sm text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1">
                 عرض الكل <ArrowUpRight size={14} />
               </Link>
@@ -158,7 +158,7 @@ export function DashboardClient({ user, projects, tasks, comments }: Props) {
           {/* Today's Tasks */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[400px]">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+              <h2 className="text-lg font-bold font-heading text-slate-800 flex items-center gap-2">
                 <CheckSquare size={18} className="text-indigo-600" />
                 مهام اليوم
               </h2>
@@ -190,7 +190,7 @@ export function DashboardClient({ user, projects, tasks, comments }: Props) {
           {/* Activity Timeline */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[350px]">
             <div className="mb-4">
-              <h2 className="text-lg font-bold text-slate-800">آخر التحديثات</h2>
+              <h2 className="text-lg font-bold font-heading text-slate-800">آخر التحديثات</h2>
             </div>
             <div className="flex-1 overflow-y-auto pr-2 -mr-2 scrollbar-thin scrollbar-thumb-slate-200">
               <div className="relative border-r-2 border-slate-100 right-3 mr-1 space-y-6 pb-4">

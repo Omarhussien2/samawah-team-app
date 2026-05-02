@@ -82,7 +82,7 @@ export function ProjectDetailClient({ project, tasks, challenges, documents, pro
             )}
             <div>
               <div className="flex items-center gap-3 mb-1">
-                <h1 className="text-2xl font-bold text-slate-900">{project.name}</h1>
+                <h1 className="text-2xl font-bold font-heading text-slate-900">{project.name}</h1>
                 <span className={cn("text-xs px-2.5 py-1 rounded-md font-bold border",
                   project.status === "active" ? "bg-emerald-50 text-emerald-700 border-emerald-100" :
                   project.status === "paused" ? "bg-amber-50 text-amber-700 border-amber-100" :
@@ -176,7 +176,7 @@ export function ProjectDetailClient({ project, tasks, challenges, documents, pro
           <div className="space-y-8 animate-in slide-in-from-bottom-2 duration-300">
             {/* Description */}
             <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-              <h3 className="text-lg font-bold text-slate-800 mb-3">وصف المشروع</h3>
+              <h3 className="text-lg font-bold font-heading text-slate-800 mb-3">وصف المشروع</h3>
               <p className="text-slate-600 leading-relaxed text-sm">
                 {project.description || <span className="text-slate-400 italic">لا يوجد وصف متاح للمشروع.</span>}
               </p>
@@ -263,7 +263,7 @@ export function ProjectDetailClient({ project, tasks, challenges, documents, pro
         {activeTab === "members" && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 animate-in fade-in duration-300">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+              <h3 className="text-lg font-bold font-heading text-slate-800 flex items-center gap-2">
                 <Users size={20} className="text-indigo-600" />
                 أعضاء المشروع
               </h3>

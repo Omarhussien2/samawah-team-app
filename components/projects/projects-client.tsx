@@ -47,7 +47,7 @@ export function ProjectsClient({ projects, profiles, templates, currentUser: _cu
             <FolderKanban size={24} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">المشاريع</h1>
+            <h1 className="text-2xl font-bold font-heading text-slate-900 tracking-tight">المشاريع</h1>
             <p className="text-slate-500 text-sm font-medium mt-0.5">{filtered.length} مشروع متاح</p>
           </div>
         </div>

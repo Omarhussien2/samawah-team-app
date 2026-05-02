@@ -196,7 +196,7 @@ export function TaskModal({ task, profiles, onClose }: Props) {
                 type="text" 
                 value={title} 
                 onChange={(e) => setTitle(e.target.value)}
-                className="text-2xl font-bold text-slate-900 w-full bg-transparent border-none focus:ring-0 focus:outline-none placeholder-slate-300"
+                className="text-2xl font-bold font-heading text-slate-900 w-full bg-transparent border-none focus:ring-0 focus:outline-none placeholder-slate-300"
                 placeholder="عنوان المهمة..."
               />
             </div>
@@ -217,7 +217,7 @@ export function TaskModal({ task, profiles, onClose }: Props) {
             <div className="mb-10">
               <div className="flex items-center gap-2 mb-3">
                 <AlignLeft size={18} className="text-slate-400" />
-                <h3 className="text-base font-semibold text-slate-800">الوصف</h3>
+                <h3 className="text-base font-bold font-heading text-slate-800">الوصف</h3>
               </div>
               <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 min-h-[120px] text-slate-500 text-sm hover:bg-slate-100/80 transition-colors cursor-pointer ring-1 ring-transparent hover:ring-slate-200">
                 {task.sub_task ? task.sub_task : "أضف وصفاً أكثر تفصيلاً للمهمة..."}
@@ -228,7 +228,7 @@ export function TaskModal({ task, profiles, onClose }: Props) {
             <div className="mb-6">
               <div className="flex items-center gap-2 mb-4">
                 <MessageSquare size={18} className="text-slate-400" />
-                <h3 className="text-base font-semibold text-slate-800">النشاطات والتعليقات</h3>
+                <h3 className="text-base font-bold font-heading text-slate-800">النشاطات والتعليقات</h3>
               </div>
 
               {/* Comment Input */}

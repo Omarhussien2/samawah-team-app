@@ -193,14 +193,17 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS update_projects_updated_at ON projects;
 CREATE TRIGGER update_projects_updated_at
   BEFORE UPDATE ON projects
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_tasks_updated_at ON tasks;
 CREATE TRIGGER update_tasks_updated_at
   BEFORE UPDATE ON tasks
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_challenges_updated_at ON challenges;
 CREATE TRIGGER update_challenges_updated_at
   BEFORE UPDATE ON challenges
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -211,7 +214,7 @@ CREATE TRIGGER update_challenges_updated_at
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO profiles (id, email, full_name)
+  INSERT INTO public.profiles (id, email, full_name)
   VALUES (
     NEW.id,
     NEW.email,
@@ -250,6 +253,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS calc_task_progress_trigger ON tasks;
 CREATE TRIGGER calc_task_progress_trigger
   BEFORE INSERT OR UPDATE ON tasks
   FOR EACH ROW EXECUTE FUNCTION calc_task_progress();

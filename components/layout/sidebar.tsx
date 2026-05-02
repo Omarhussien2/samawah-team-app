@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
@@ -78,10 +79,8 @@ export function Sidebar({ onClose }: SidebarProps) {
       {/* Logo */}
       <div className="flex items-center justify-between px-5 py-4">
         <Link href="/dashboard" className="flex items-center gap-2.5 transition-opacity hover:opacity-80">
-          <div className="w-8 h-8 bg-gradient-to-br from-primary to-indigo-600 rounded-xl flex items-center justify-center shadow-sm">
-            <span className="text-white font-bold text-sm">س</span>
-          </div>
-          <span className="font-bold text-lg text-slate-800 tracking-tight">سماوة</span>
+          <Image src="/logo.png" alt="شعار سماوة" width={32} height={32} className="w-8 h-8 object-contain" />
+          <span className="font-bold font-heading text-lg text-slate-800 tracking-tight">سماوة</span>
         </Link>
         {onClose && (
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 lg:hidden p-1 rounded-md hover:bg-slate-200 transition-colors">
