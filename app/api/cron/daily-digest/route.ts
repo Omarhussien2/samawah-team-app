@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/notifications/send-email";
 import { dailyDigestTemplate } from "@/lib/notifications/templates";
+import { createNotification } from "@/lib/notifications/create-notification";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 
@@ -37,8 +38,6 @@ export async function GET(request: NextRequest) {
     let sentCount = 0;
 
     for (const manager of managers) {
-      if (!manager.email) continue;
-
       // Get projects managed by this manager
       const { data: projects } = await supabase
         .from("projects")
@@ -74,30 +73,45 @@ export async function GET(request: NextRequest) {
         .in("project_id", projectIds)
         .eq("status", "open");
 
-      const html = dailyDigestTemplate({
-        managerName: manager.full_name ?? manager.email,
-        overdueTasks: (overdueTasks ?? []).map((t) => ({
-          title: t.title,
-          project: projectMap.get(t.project_id) ?? "—",
-          dueDate: t.due_date ? format(new Date(t.due_date), "d MMMM", { locale: ar }) : "—",
-        })),
-        todayTasks: (todayTasks ?? []).map((t) => ({
-          title: t.title,
-          project: projectMap.get(t.project_id) ?? "—",
-        })),
-        openChallenges: (challenges ?? []).map((c) => ({
-          title: c.title,
-          project: projectMap.get(c.project_id) ?? "—",
-        })),
+      const overdueCount = overdueTasks?.length ?? 0;
+      const todayCount = todayTasks?.length ?? 0;
+
+      // --- In-App Notification ---
+      await createNotification({
+        user_id: manager.id,
+        type: "daily_digest",
+        title: "ملخصك اليومي",
+        body: `لديك ${overdueCount} مهمة متأخرة و ${todayCount} مهمة مستحقة اليوم`,
+        sent_via: "in_app",
       });
 
-      const { success } = await sendEmail({
-        to: manager.email,
-        subject: `📋 ملخص يومي - سماوة | ${format(new Date(), "d MMMM yyyy", { locale: ar })}`,
-        html,
-      });
+      // --- Email (if configured) ---
+      if (manager.email) {
+        const html = dailyDigestTemplate({
+          managerName: manager.full_name ?? manager.email,
+          overdueTasks: (overdueTasks ?? []).map((t) => ({
+            title: t.title,
+            project: projectMap.get(t.project_id) ?? "—",
+            dueDate: t.due_date ? format(new Date(t.due_date), "d MMMM", { locale: ar }) : "—",
+          })),
+          todayTasks: (todayTasks ?? []).map((t) => ({
+            title: t.title,
+            project: projectMap.get(t.project_id) ?? "—",
+          })),
+          openChallenges: (challenges ?? []).map((c) => ({
+            title: c.title,
+            project: projectMap.get(c.project_id) ?? "—",
+          })),
+        });
 
-      if (success) sentCount++;
+        const { success } = await sendEmail({
+          to: manager.email,
+          subject: `📋 ملخص يومي - سماوة | ${format(new Date(), "d MMMM yyyy", { locale: ar })}`,
+          html,
+        });
+
+        if (success) sentCount++;
+      }
     }
 
     await supabase.from("automation_logs").update({ status: "success", payload: { sent: sentCount, date: today } }).eq("id", log?.id ?? "");

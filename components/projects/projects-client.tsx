@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { LayoutGrid, List, Plus, Search } from "lucide-react";
+import { LayoutGrid, List, Plus, Search, FolderKanban, Clock } from "lucide-react";
 import { ProjectCard } from "./project-card";
 import { ProjectRow } from "./project-row";
 import { CreateProjectModal } from "./create-project-modal";
@@ -18,7 +18,7 @@ interface Props {
 const STATUSES = ["active", "paused", "completed", "cancelled"];
 
 export function ProjectsClient({ projects, profiles, templates, currentUser: _currentUser }: Props) {
-  const [view, setView] = useState<"card" | "list">("card");
+  const [view, setView] = useState<"card" | "list" | "timeline">("card");
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterManager, setFilterManager] = useState("");
@@ -39,39 +39,44 @@ export function ProjectsClient({ projects, profiles, templates, currentUser: _cu
   }, [projects, profiles]);
 
   return (
-    <>
+    <div className="flex flex-col h-full animate-in fade-in duration-500 p-6 lg:p-8">
       {/* Header */}
-      <div className="section-header">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">المشاريع</h1>
-          <p className="text-muted-foreground text-sm mt-1">{filtered.length} مشروع</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-600">
+            <FolderKanban size={24} />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">المشاريع</h1>
+            <p className="text-slate-500 text-sm font-medium mt-0.5">{filtered.length} مشروع متاح</p>
+          </div>
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 font-medium text-sm"
+          className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-medium text-sm transition-colors shadow-sm active:scale-95"
         >
-          <Plus size={16} />
+          <Plus size={18} />
           مشروع جديد
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3 mb-6">
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-3 mb-8 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm">
         <div className="relative flex-1 min-w-[200px]">
-          <Search size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="البحث بالاسم..."
+            placeholder="البحث في المشاريع..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pr-9 pl-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+            className="w-full pr-9 pl-3 py-2 text-sm bg-slate-50 border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all placeholder:text-slate-400"
           />
         </div>
 
         <select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
-          className="px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white"
+          className="px-3 py-2 text-sm font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 bg-white cursor-pointer hover:border-slate-300 transition-colors"
         >
           <option value="">كل الحالات</option>
           {STATUSES.map((s) => (
@@ -82,7 +87,7 @@ export function ProjectsClient({ projects, profiles, templates, currentUser: _cu
         <select
           value={filterManager}
           onChange={(e) => setFilterManager(e.target.value)}
-          className="px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white"
+          className="px-3 py-2 text-sm font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 bg-white cursor-pointer hover:border-slate-300 transition-colors"
         >
           <option value="">كل المديرين</option>
           {managers.map((m) => (
@@ -90,56 +95,75 @@ export function ProjectsClient({ projects, profiles, templates, currentUser: _cu
           ))}
         </select>
 
-        <div className="flex items-center border border-border rounded-lg overflow-hidden">
+        <div className="w-px h-6 bg-slate-200 mx-1 hidden sm:block" />
+
+        <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl p-1">
           <button
             onClick={() => setView("card")}
-            className={`p-2 transition-colors ${view === "card" ? "bg-primary text-white" : "bg-white text-muted-foreground hover:bg-accent"}`}
+            className={`p-1.5 rounded-lg transition-colors ${view === "card" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
+            title="عرض كبطاقات"
           >
             <LayoutGrid size={16} />
           </button>
           <button
             onClick={() => setView("list")}
-            className={`p-2 transition-colors ${view === "list" ? "bg-primary text-white" : "bg-white text-muted-foreground hover:bg-accent"}`}
+            className={`p-1.5 rounded-lg transition-colors ${view === "list" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
+            title="عرض كقائمة"
           >
             <List size={16} />
+          </button>
+          <button
+            onClick={() => setView("timeline")}
+            className={`p-1.5 rounded-lg transition-colors ${view === "timeline" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
+            title="الخط الزمني (قيد التطوير)"
+          >
+            <Clock size={16} />
           </button>
         </div>
       </div>
 
-      {/* Content */}
-      {filtered.length === 0 ? (
-        <div className="text-center py-20 text-muted-foreground">
-          <div className="text-4xl mb-3">📋</div>
-          <p className="font-medium">لا توجد مشاريع</p>
-          <p className="text-sm mt-1">ابدأ بإنشاء مشروع جديد</p>
-        </div>
-      ) : view === "card" ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filtered.map((project) => (
-            <ProjectCard key={project.id} project={project} />
-          ))}
-        </div>
-      ) : (
-        <div className="bg-white rounded-xl border border-border overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 border-b border-border">
-              <tr>
-                <th className="text-right px-4 py-3 font-medium text-muted-foreground">المشروع</th>
-                <th className="text-right px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">المدير</th>
-                <th className="text-right px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">المرحلة</th>
-                <th className="text-right px-4 py-3 font-medium text-muted-foreground">الحالة</th>
-                <th className="text-right px-4 py-3 font-medium text-muted-foreground">الإنجاز</th>
-                <th className="text-right px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">تاريخ الانتهاء</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {filtered.map((project) => (
-                <ProjectRow key={project.id} project={project} />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* Content Area */}
+      <div className="flex-1">
+        {filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-[400px] text-center bg-white rounded-3xl border border-slate-200 shadow-sm border-dashed">
+            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+              <FolderKanban size={32} className="text-slate-300" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-800 mb-1">لا توجد مشاريع</h3>
+            <p className="text-sm text-slate-500 max-w-sm">لم يتم العثور على مشاريع مطابقة للبحث أو الفلتر، ابدأ بإنشاء مشروع جديد.</p>
+          </div>
+        ) : view === "card" ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {filtered.map((project) => (
+              <ProjectCard key={project.id} project={project} />
+            ))}
+          </div>
+        ) : view === "list" ? (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <table className="w-full text-sm text-right">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="px-6 py-4 font-semibold text-slate-600">المشروع</th>
+                  <th className="px-6 py-4 font-semibold text-slate-600 hidden md:table-cell">المدير</th>
+                  <th className="px-6 py-4 font-semibold text-slate-600 hidden lg:table-cell">المرحلة</th>
+                  <th className="px-6 py-4 font-semibold text-slate-600">الحالة</th>
+                  <th className="px-6 py-4 font-semibold text-slate-600">الإنجاز</th>
+                  <th className="px-6 py-4 font-semibold text-slate-600 hidden lg:table-cell">تاريخ الانتهاء</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filtered.map((project) => (
+                  <ProjectRow key={project.id} project={project} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-64 bg-white rounded-3xl border border-slate-200 shadow-sm">
+            <p className="text-slate-500 font-medium">عرض الخط الزمني (Gantt) قيد التطوير</p>
+          </div>
+        )}
+      </div>
 
       <CreateProjectModal
         open={showCreate}
@@ -147,6 +171,6 @@ export function ProjectsClient({ projects, profiles, templates, currentUser: _cu
         profiles={profiles}
         templates={templates}
       />
-    </>
+    </div>
   );
 }

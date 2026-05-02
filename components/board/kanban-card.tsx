@@ -3,12 +3,15 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { formatDateShort, getAlertLevelColor, getPriorityColor, getAvatarUrl, cn } from "@/lib/utils";
-import { CalendarDays, AlertTriangle } from "lucide-react";
+import { CalendarDays, AlertTriangle, MessageSquare, CheckSquare } from "lucide-react";
 import Image from "next/image";
 import type { Profile, Task } from "@/lib/supabase/types";
 
 interface Props {
-  task: Task & { owner?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null };
+  task: Task & { 
+    owner?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null;
+    project?: { id: string; name: string } | null;
+  };
   onTaskClick: (task: Props["task"]) => void;
   isDragging?: boolean;
 }
@@ -24,6 +27,24 @@ export function KanbanCard({ task, onTaskClick, isDragging }: Props) {
     opacity: isSortableDragging ? 0.4 : 1,
   };
 
+  // Determine due date color
+  const today = new Date().toISOString().split("T")[0];
+  let dueDateColor = "text-slate-500 bg-slate-100";
+  if (task.due_date) {
+    if (task.due_date < today) dueDateColor = "text-red-600 bg-red-50 border-red-100";
+    else if (task.due_date === today) dueDateColor = "text-amber-600 bg-amber-50 border-amber-100";
+    else dueDateColor = "text-emerald-600 bg-emerald-50 border-emerald-100";
+  }
+
+  // Priority Dot
+  const priorityColors = {
+    low: "bg-slate-400",
+    medium: "bg-blue-500",
+    high: "bg-orange-500",
+    critical: "bg-red-500",
+  };
+  const priorityColor = priorityColors[task.priority as keyof typeof priorityColors] || priorityColors.medium;
+
   return (
     <div
       ref={setNodeRef}
@@ -32,60 +53,89 @@ export function KanbanCard({ task, onTaskClick, isDragging }: Props) {
       {...listeners}
       onClick={() => onTaskClick(task)}
       className={cn(
-        "bg-white rounded-lg border border-border p-3 cursor-pointer hover:shadow-md hover:border-primary/30 transition-all",
-        isDragging && "shadow-xl rotate-2"
+        "group bg-white rounded-xl border border-slate-200 p-3 cursor-pointer hover:shadow-md hover:border-indigo-300 transition-all",
+        isDragging && "shadow-2xl rotate-2 ring-2 ring-indigo-500 border-transparent z-50",
+        task.status === "Done" && "opacity-75 bg-slate-50"
       )}
     >
-      {/* Alert badge */}
-      {task.alert_level && task.alert_level !== "Low" && (
-        <div className={cn("text-xs px-2 py-0.5 rounded-full inline-flex items-center gap-1 mb-2", getAlertLevelColor(task.alert_level))}>
-          <AlertTriangle size={10} />
-          {task.alert_level}
+      {/* Top Header: Project Badge & Priority */}
+      <div className="flex items-start justify-between mb-2">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {task.project && (
+            <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded uppercase tracking-wider">
+              {task.project.name}
+            </span>
+          )}
+          {task.alert_level && task.alert_level !== "Low" && (
+            <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-0.5", getAlertLevelColor(task.alert_level))}>
+              <AlertTriangle size={10} />
+              {task.alert_level}
+            </span>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Title */}
-      <p className="text-sm font-medium text-foreground line-clamp-2 mb-1">{task.title}</p>
-      {task.sub_task && (
-        <p className="text-xs text-muted-foreground line-clamp-1 mb-2">{task.sub_task}</p>
-      )}
+      <p className={cn(
+        "text-sm font-semibold text-slate-800 line-clamp-2 leading-snug mb-2",
+        task.status === "Done" && "line-through text-slate-500"
+      )}>
+        {task.title}
+      </p>
 
-      {/* Progress */}
-      {(task.progress ?? 0) > 0 && (
-        <div className="mb-2">
-          <div className="flex items-center justify-between text-xs text-muted-foreground mb-0.5">
-            <span>الإنجاز</span>
-            <span>{task.progress}%</span>
-          </div>
-          <div className="w-full h-1 bg-muted rounded-full">
-            <div className="h-full bg-primary rounded-full" style={{ width: `${task.progress}%` }} />
-          </div>
+      {/* Progress Bar (Thin) */}
+      {(task.progress ?? 0) > 0 && task.status !== "Done" && (
+        <div className="mb-3 w-full h-1 bg-slate-100 rounded-full overflow-hidden">
+          <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${task.progress}%` }} />
         </div>
       )}
 
       {/* Footer */}
-      <div className="flex items-center justify-between mt-2">
-        <div className="flex items-center gap-1.5">
-          {task.owner && (
+      <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100">
+        
+        {/* Left side: Avatar & Priority Dot */}
+        <div className="flex items-center gap-2">
+          {task.owner ? (
             <Image
-              src={task.owner.avatar_url ?? getAvatarUrl(task.owner.full_name)} width={24} height={24}
+              src={task.owner.avatar_url ?? getAvatarUrl(task.owner.full_name)} 
+              width={24} height={24}
               alt={task.owner.full_name ?? ""}
               title={task.owner.full_name ?? ""}
-              className="w-6 h-6 rounded-full border border-white shadow-sm object-cover"
+              className="w-6 h-6 rounded-full border-2 border-white shadow-sm object-cover"
             />
+          ) : (
+            <div className="w-6 h-6 rounded-full border-2 border-white border-dashed bg-slate-100 flex items-center justify-center">
+              <span className="text-[10px] text-slate-400">?</span>
+            </div>
           )}
-          {task.priority !== "medium" && (
-            <span className={cn("text-xs px-1.5 py-0.5 rounded-full", getPriorityColor(task.priority))}>
-              {task.priority === "high" ? "عالي" : task.priority === "critical" ? "حرج" : "منخفض"}
-            </span>
-          )}
+          <div className={cn("w-2 h-2 rounded-full", priorityColor)} title={`الأولوية: ${task.priority}`} />
         </div>
-        {task.due_date && (
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <CalendarDays size={11} />
-            <span>{formatDateShort(task.due_date)}</span>
+
+        {/* Right side: Indicators */}
+        <div className="flex items-center gap-2">
+          {/* Due Date */}
+          {task.due_date && (
+            <div className={cn("flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded border", dueDateColor)}>
+              <CalendarDays size={11} />
+              <span>{formatDateShort(task.due_date)}</span>
+            </div>
+          )}
+          
+          {/* Subtasks / Comments (Mocked or real if we add to query later) */}
+          <div className="flex items-center gap-2 text-slate-400">
+            {task.sub_task && (
+              <div className="flex items-center gap-0.5 text-[11px]">
+                <CheckSquare size={12} />
+              </div>
+            )}
+            {/* If we had comment counts: 
+            <div className="flex items-center gap-0.5 text-[11px]">
+              <MessageSquare size={12} />
+              <span>3</span>
+            </div> 
+            */}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

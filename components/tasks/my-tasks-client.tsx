@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { CheckCircle2, AlertCircle, Clock, CalendarCheck, List } from "lucide-react";
 import { formatDateShort, getStatusColor, getStatusLabel, isOverdue, isDueToday, cn } from "@/lib/utils";
 import { TaskModal } from "./task-modal";
+import { useRealtimeSubscription } from "@/lib/supabase/realtime";
 import type { Profile, Task } from "@/lib/supabase/types";
 
 type Filter = "all" | "today" | "week" | "overdue" | "done";
@@ -31,6 +32,29 @@ export function MyTasksClient({ tasks: initialTasks, currentUser: _currentUser, 
   const [tasks, setTasks] = useState(initialTasks);
   const [filter, setFilter] = useState<Filter>("all");
   const [selectedTask, setSelectedTask] = useState<typeof initialTasks[0] | null>(null);
+
+  // --- Realtime: live updates for user's tasks ---
+  const handleTaskChange = useCallback(
+    (payload: { eventType: string; new: Record<string, unknown>; old: Record<string, unknown> }) => {
+      if (payload.eventType === "UPDATE") {
+        const updated = payload.new as unknown as Task;
+        setTasks((prev) =>
+          prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t))
+        );
+      } else if (payload.eventType === "DELETE") {
+        const deleted = payload.old as unknown as Task;
+        setTasks((prev) => prev.filter((t) => t.id !== deleted.id));
+      } else if (payload.eventType === "INSERT") {
+        const inserted = payload.new as unknown as typeof initialTasks[0];
+        setTasks((prev) => {
+          if (prev.some((t) => t.id === inserted.id)) return prev;
+          return [...prev, inserted];
+        });
+      }
+    },
+    [initialTasks]
+  );
+  useRealtimeSubscription("tasks", `owner_id=eq.${_currentUser.id}`, handleTaskChange);
 
   const weekEnd = useMemo(() => {
     const d = new Date();

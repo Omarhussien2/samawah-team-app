@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/notifications/send-email";
 import { weeklySummaryTemplate } from "@/lib/notifications/templates";
+import { createNotificationForMany } from "@/lib/notifications/create-notification";
 
 export async function GET(request: NextRequest) {
   const secret = request.headers.get("authorization")?.replace("Bearer ", "");
@@ -27,12 +28,27 @@ export async function GET(request: NextRequest) {
       supabase.from("tasks").select("*", { count: "exact", head: true }).eq("status", "Done").gte("updated_at", weekAgoStr),
       supabase.from("tasks").select("*", { count: "exact", head: true }).lt("due_date", today).not("status", "in", '("Done","Cancelled")'),
       supabase.from("projects").select("name, progress").eq("status", "active").order("progress", { ascending: false }).limit(8),
-      supabase.from("profiles").select("email, full_name").eq("role", "admin").eq("active", true),
+      supabase.from("profiles").select("id, email, full_name").eq("role", "admin").eq("active", true),
     ]);
 
+    const completed = completedCount ?? 0;
+    const overdue = overdueCount ?? 0;
+
+    // --- In-App Notification for all admins ---
+    const adminIds = (adminUsers ?? []).map((a) => a.id);
+    if (adminIds.length > 0) {
+      await createNotificationForMany(adminIds, {
+        type: "daily_digest",
+        title: "الملخص الأسبوعي",
+        body: `${completed} مهمة مكتملة هذا الأسبوع • ${overdue} مهمة متأخرة حالياً`,
+        sent_via: "in_app",
+      });
+    }
+
+    // --- Email ---
     const html = weeklySummaryTemplate({
-      totalCompleted: completedCount ?? 0,
-      totalOverdue: overdueCount ?? 0,
+      totalCompleted: completed,
+      totalOverdue: overdue,
       topProjects: (projects ?? []).map((p) => ({
         name: p.name,
         progress: Math.round(p.progress ?? 0),
