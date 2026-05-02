@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import { Cairo } from "next/font/google";
-import localFont from "next/font/local";
+import { Cairo, IBM_Plex_Sans_Arabic } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
 
@@ -10,11 +9,10 @@ const cairo = Cairo({
   weight: ["300", "400", "500", "600", "700", "800"],
 });
 
-const tsnas = localFont({
-  src: "./fonts/tsnas-bold.otf",
-  variable: "--font-tsnas",
-  weight: "700", // The font is already bold
-  display: "swap",
+const ibmPlex = IBM_Plex_Sans_Arabic({
+  subsets: ["arabic", "latin"],
+  variable: "--font-heading",
+  weight: ["400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -27,7 +25,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
-      <body className={`${cairo.variable} ${tsnas.variable} font-sans antialiased bg-background text-foreground`}>
+      <body className={`${cairo.variable} ${ibmPlex.variable} font-sans antialiased bg-background text-foreground`}>
         {children}
         <Toaster richColors position="top-center" expand />
       </body>

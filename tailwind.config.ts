@@ -11,7 +11,7 @@ const config: Config = {
     extend: {
       fontFamily: {
         sans: ["var(--font-cairo)", "Cairo", "sans-serif"],
-        heading: ["var(--font-tsnas)", "sans-serif"],
+        heading: ["var(--font-heading)", "sans-serif"],
       },
       colors: {
         border: "hsl(var(--border))",
