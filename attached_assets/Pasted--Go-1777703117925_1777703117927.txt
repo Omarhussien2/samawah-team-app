@@ -1,0 +1,567 @@
+أريد بناء تطبيق ويب داخلي لفريق سماوة لإدارة المشاريع والمهام والتحديات والمستندات، بناءً على ملف Google Sheet التالي:
+https://docs.google.com/spreadsheets/d/1_A-3hCx3x157aCqaLsHjWYeEEz2x0NGx/edit?gid=230887271#gid=230887271
+
+المهم جدًا:
+- ممنوع تشغيل التطبيق أو استضافته على سيرفرات Replit/Rebuilt أو أي مساحة داخلية للمنصة.
+- المنصة تستخدم فقط للبناء وتوليد الكود.
+- يجب إنشاء Repository على GitHub ورفع كل الكود عليه.
+- يجب ربط المشروع بـ Vercel للنشر الخارجي.
+- يجب أن يعمل التطبيق من Vercel فقط.
+- قاعدة البيانات تكون على Supabase.
+- أي Secrets أو Environment Variables تكون في Vercel وSupabase فقط، وليس داخل Replit/Rebuilt.
+- لا تستخدم SQLite أو تخزين محلي دائم داخل منصة البناء.
+- لا تعتمد على ملفات Excel/CSV كقاعدة بيانات نهائية. يتم استخدامها فقط للاستيراد الأولي.
+
+الهدف:
+بناء Web App مجاني/منخفض التكلفة لفريق صغير تقريبًا 6 أشخاص، يساعدهم على:
+1. إدارة المشاريع.
+2. إدارة المهام عبر Kanban Board.
+3. تقليل إدخال البيانات اليدوي.
+4. عرض لوحة تحكم واضحة.
+5. إرسال تنبيهات وتذكيرات آلية.
+6. تسهيل تحديث حالة المهام من أعضاء الفريق.
+7. دعم اللغة العربية بالكامل RTL.
+8. تصميم حديث قريب من Asana من حيث البساطة والنظافة، وليس نسخة حرفية.
+
+الـ Tech Stack المطلوب:
+- Next.js 15 App Router
+- TypeScript
+- Tailwind CSS
+- shadcn/ui
+- Supabase Postgres
+- Supabase Auth
+- Supabase Storage
+- Vercel Deployment
+- GitHub Repository
+- Vercel Cron Jobs
+- Nodemailer أو Resend للبريد، حسب الأسهل في الخطة المجانية
+- TanStack Table للجداول
+- dnd-kit للـ Kanban drag and drop
+- Recharts للرسوم البيانية
+- React Hook Form + Zod للنماذج والتحقق
+- date-fns للتواريخ
+
+التصميم:
+- عربي أولًا.
+- RTL كامل.
+- واجهة نظيفة تشبه Asana من حيث:
+  - Sidebar ثابت.
+  - Top bar للبحث والإجراءات السريعة.
+  - Cards للمشاريع.
+  - Board للمهام.
+  - ألوان هادئة.
+  - مساحات بيضاء جيدة.
+  - تجربة سهلة لأعضاء الفريق غير التقنيين.
+- لا تستخدم تصميم معقد.
+- يجب أن يكون التطبيق Mobile responsive.
+
+صفحات التطبيق:
+1. صفحة تسجيل الدخول
+2. Dashboard
+3. Projects
+4. Project Details
+5. Board
+6. Tasks Table
+7. My Tasks
+8. Challenges
+9. Documents
+10. Team
+11. Automations
+12. Settings
+13. Import Data
+
+الـ Sidebar:
+- الرئيسية
+- المشاريع
+- مهامي
+- اللوحة
+- التحديات
+- المستندات
+- الفريق
+- الأتمتة
+- الإعدادات
+
+البيانات الحالية:
+ملف Google Sheet يحتوي على مشاريع ومهام، ومن أمثلة حقول المشاريع:
+- Project_ID
+- Name
+- Manager
+- Project_Path
+- Current_Stage
+- Start_Date
+- End_Date
+- Total_Budget
+- Description
+- Logo_URL
+
+ومن أمثلة حقول المهام:
+- Task_ID
+- Project_ID
+- Task
+- Sub_Task
+- Category
+- Owner
+- Start_Date
+- End_Date
+- Cost
+- Quantity_Total
+- Quantity_Done
+- Status
+- Duration_Days
+- Auto_End_Date
+- Task_Progress
+- Project_Progress
+- Schedule_Status
+- Alert_Level
+- Alert_Message
+- Alert_Action
+- Days_To_Due
+
+المطلوب تحويل هذا الهيكل إلى Database Schema نظيف في Supabase.
+
+الجداول المطلوبة في Supabase:
+
+1. profiles
+- id uuid primary key references auth.users(id)
+- full_name text
+- email text unique
+- avatar_url text
+- role text check in ('admin','project_manager','member')
+- active boolean default true
+- created_at timestamptz default now()
+
+2. projects
+- id uuid primary key default gen_random_uuid()
+- legacy_project_id text unique
+- name text not null
+- manager_id uuid references profiles(id)
+- manager_name text
+- path text
+- current_stage text
+- status text default 'active'
+- start_date date
+- end_date date
+- total_budget numeric default 0
+- description text
+- logo_url text
+- progress numeric default 0
+- created_at timestamptz default now()
+- updated_at timestamptz default now()
+
+3. project_members
+- id uuid primary key default gen_random_uuid()
+- project_id uuid references projects(id) on delete cascade
+- user_id uuid references profiles(id) on delete cascade
+- role_in_project text default 'member'
+- created_at timestamptz default now()
+
+4. tasks
+- id uuid primary key default gen_random_uuid()
+- legacy_task_id text unique
+- project_id uuid references projects(id) on delete cascade
+- title text not null
+- sub_task text
+- category text
+- owner_id uuid references profiles(id)
+- owner_name text
+- status text
+- board_column text
+- priority text default 'medium'
+- start_date date
+- due_date date
+- cost numeric
+- quantity_total numeric
+- quantity_done numeric
+- progress numeric default 0
+- schedule_status text
+- alert_level text
+- alert_message text
+- alert_action text
+- days_to_due integer
+- sort_order integer default 0
+- created_at timestamptz default now()
+- updated_at timestamptz default now()
+
+5. challenges
+- id uuid primary key default gen_random_uuid()
+- project_id uuid references projects(id) on delete cascade
+- task_id uuid references tasks(id) on delete set null
+- title text not null
+- description text
+- status text default 'open'
+- owner_id uuid references profiles(id)
+- risk_impact text
+- risk_type text
+- resolution text
+- created_at timestamptz default now()
+- updated_at timestamptz default now()
+
+6. documents
+- id uuid primary key default gen_random_uuid()
+- project_id uuid references projects(id) on delete cascade
+- task_id uuid references tasks(id) on delete set null
+- title text not null
+- url text
+- file_path text
+- type text
+- created_by uuid references profiles(id)
+- created_at timestamptz default now()
+
+7. comments
+- id uuid primary key default gen_random_uuid()
+- task_id uuid references tasks(id) on delete cascade
+- user_id uuid references profiles(id)
+- body text not null
+- created_at timestamptz default now()
+
+8. notifications
+- id uuid primary key default gen_random_uuid()
+- user_id uuid references profiles(id)
+- project_id uuid references projects(id) on delete cascade
+- task_id uuid references tasks(id) on delete cascade
+- type text
+- title text
+- body text
+- sent_via text
+- sent_at timestamptz
+- read_at timestamptz
+- created_at timestamptz default now()
+
+9. automation_logs
+- id uuid primary key default gen_random_uuid()
+- type text
+- status text
+- payload jsonb
+- error text
+- created_at timestamptz default now()
+
+10. project_templates
+- id uuid primary key default gen_random_uuid()
+- name text not null
+- description text
+- category text
+- created_at timestamptz default now()
+
+11. task_templates
+- id uuid primary key default gen_random_uuid()
+- template_id uuid references project_templates(id) on delete cascade
+- title text not null
+- sub_task text
+- category text
+- default_duration_days integer
+- default_priority text default 'medium'
+- sort_order integer default 0
+
+قواعد تحويل الحالات:
+- "مكتمل" => Done
+- "قيد التنفيذ" => In Progress
+- "لم يبدء" أو "لم يبدأ" => To Do
+- "متأخر" => In Progress مع alert_level High
+- "ملغي" => Cancelled
+- أي حالة غير معروفة => Backlog
+
+أعمدة Kanban:
+- Backlog
+- To Do
+- In Progress
+- Review
+- Done
+- Cancelled
+
+مطلوب في Dashboard:
+- عدد المشاريع النشطة
+- عدد المشاريع المتوقفة
+- عدد المهام المفتوحة
+- عدد المهام المتأخرة
+- عدد المهام المستحقة اليوم
+- نسبة إنجاز كل مشروع
+- توزيع المهام حسب الحالة
+- توزيع المهام حسب المسؤول
+- آخر التحديات المفتوحة
+- آخر المستندات المضافة
+- أهم 5 مهام تحتاج إجراء اليوم
+
+مطلوب في صفحة Projects:
+- عرض Card View و Table View
+- البحث بالاسم
+- فلترة حسب المدير
+- فلترة حسب المرحلة
+- فلترة حسب الحالة
+- عرض نسبة الإنجاز
+- عرض تاريخ البداية والنهاية
+- زر إنشاء مشروع جديد
+- زر إنشاء مشروع من Template
+
+مطلوب في صفحة Project Details:
+Tabs:
+- Overview
+- Board
+- Tasks
+- Challenges
+- Documents
+- Activity
+
+مطلوب في Board:
+- Kanban drag and drop
+- تغيير حالة المهمة بالسحب
+- كل بطاقة مهمة تعرض:
+  - اسم المهمة
+  - المهمة الفرعية
+  - المسؤول
+  - تاريخ الاستحقاق
+  - نسبة الإنجاز
+  - Alert Level
+  - Project
+- عند فتح المهمة يظهر Modal فيه:
+  - كل التفاصيل
+  - تعديل الحالة
+  - تعديل المسؤول
+  - تعديل التاريخ
+  - تعديل نسبة الإنجاز
+  - إضافة تعليق
+  - ربط مستند
+  - إضافة تحدي
+
+مطلوب في My Tasks:
+- كل مستخدم يشوف مهامه فقط
+- فلتر: اليوم، هذا الأسبوع، المتأخرة، المكتملة
+- تحديث سريع للحالة
+- تحديث سريع للنسبة
+- زر "أنجزت المهمة"
+- زر "أحتاج مساعدة" يفتح challenge مرتبط بالمهمة
+
+مطلوب لتقليل إدخال البيانات:
+1. Quick Add Task:
+- اسم المهمة
+- المشروع
+- المسؤول
+- تاريخ الاستحقاق
+وباقي الحقول اختيارية.
+
+2. Project Templates:
+أنشئ قوالب جاهزة:
+- Landing Page
+- Web App
+- Media Report
+- Marketing Campaign
+- Event
+- Research Project
+
+3. Task Templates:
+لكل قالب، أنشئ مهام افتراضية.
+مثال Web App:
+- تحليل المتطلبات
+- تصميم قاعدة البيانات
+- تصميم الواجهة
+- بناء Authentication
+- بناء Dashboard
+- بناء CRUD
+- اختبار داخلي
+- نشر على Vercel
+- مراجعة الأمان
+- تسليم النسخة الأولى
+
+4. Smart Defaults:
+- إذا لم يتم اختيار status اجعله To Do
+- إذا لم يتم اختيار priority اجعله medium
+- إذا لم يتم اختيار owner، اجعله غير مخصص
+- إذا كانت due_date أقل من اليوم ولم تكن مكتملة، اجعل alert_level High
+- احسب progress تلقائيًا من quantity_done / quantity_total إن وجدت
+
+5. Bulk Import:
+- صفحة Import Data تقرأ CSV exported من Google Sheet
+- تعمل preview قبل الإدخال
+- تعرض الأخطاء قبل الحفظ
+- تمنع تكرار Project_ID و Task_ID
+- تدعم تحديث البيانات الموجودة وليس فقط إدخال جديد
+
+الأتمتة المطلوبة:
+استخدم Vercel Cron Jobs وليس سيرفر داخلي.
+
+1. Daily Digest
+- Endpoint: /api/cron/daily-digest
+- يعمل يوميًا 8 صباحًا بتوقيت السعودية
+- يرسل لكل Project Manager ملخص:
+  - المهام المتأخرة
+  - المهام المستحقة اليوم
+  - التحديات المفتوحة
+  - المشاريع التي تحتاج انتباه
+
+2. Task Reminder
+- Endpoint: /api/cron/task-reminders
+- يعمل يوميًا
+- يرسل للمستخدمين تذكير بمهامهم المستحقة اليوم أو المتأخرة
+
+3. Weekly Summary
+- Endpoint: /api/cron/weekly-summary
+- يعمل كل أحد صباحًا
+- يرسل ملخص أسبوعي:
+  - إنجاز الأسبوع
+  - المهام المكتملة
+  - المهام المتأخرة
+  - المشاريع الأعلى خطرًا
+
+4. In-app Notifications
+- عند تغيير حالة مهمة
+- عند إضافة تحدي
+- عند اقتراب موعد مهمة
+- عند تعيين مهمة لشخص
+
+5. Automation Logs
+- كل تشغيل cron يتم تسجيله في automation_logs
+- أي خطأ يتم تسجيله
+
+مهم:
+- لا تستخدم Novu الآن.
+- اجعل النظام قابلًا لإضافة Novu لاحقًا فقط.
+- استخدم abstraction بسيط:
+  - lib/notifications/send-email.ts
+  - lib/notifications/create-notification.ts
+  - lib/notifications/templates.ts
+
+الأمان:
+- Supabase Row Level Security يجب أن يكون مفعّلًا.
+- Admin يرى كل شيء.
+- Project Manager يرى مشاريعه ومهامها.
+- Member يرى المشاريع التي هو عضو فيها ومهامه.
+- لا تعرض Service Role Key في الواجهة.
+- Service Role يستخدم فقط في API routes الآمنة وCron.
+- تحقق من CRON_SECRET في كل cron endpoint.
+- لا تضع أي secrets في GitHub.
+- أضف .env.example فقط.
+
+ملفات البيئة المطلوبة:
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+CRON_SECRET=
+SMTP_HOST=
+SMTP_PORT=
+SMTP_USER=
+SMTP_PASS=
+SMTP_FROM=
+NEXT_PUBLIC_APP_URL=
+
+مطلوب إنشاء:
+1. مشروع Next.js كامل
+2. Supabase schema SQL
+3. Supabase RLS policies
+4. Seed data للقوالب
+5. Import script من CSV
+6. واجهات كاملة
+7. API routes للأتمتة
+8. Email templates عربية
+9. README عربي يشرح:
+   - طريقة تشغيل المشروع محليًا
+   - طريقة إنشاء Supabase
+   - طريقة تشغيل SQL
+   - طريقة رفع GitHub
+   - طريقة ربط Vercel
+   - طريقة إضافة Environment Variables
+   - طريقة تفعيل Vercel Cron
+   - طريقة استيراد بيانات Google Sheet
+10. ملف DEPLOYMENT.md فيه خطوات النشر بالتفصيل
+11. ملف SECURITY.md فيه ملاحظات الأمان
+12. ملف .env.example
+13. ملف vercel.json يحتوي cron jobs
+
+هيكل المشروع المطلوب:
+- app/
+  - login/
+  - dashboard/
+  - projects/
+  - projects/[id]/
+  - tasks/
+  - my-tasks/
+  - board/
+  - challenges/
+  - documents/
+  - team/
+  - automations/
+  - settings/
+  - import/
+  - api/
+    - cron/
+      - daily-digest/
+      - task-reminders/
+      - weekly-summary/
+    - import/
+- components/
+  - layout/
+  - dashboard/
+  - projects/
+  - board/
+  - tasks/
+  - forms/
+  - ui/
+- lib/
+  - supabase/
+  - notifications/
+  - import/
+  - auth/
+  - utils/
+- supabase/
+  - schema.sql
+  - rls.sql
+  - seed.sql
+- scripts/
+  - import-csv.ts
+- docs/
+  - DEPLOYMENT.md
+  - SECURITY.md
+
+مطلوب في vercel.json:
+- cron daily-digest
+- cron task-reminders
+- cron weekly-summary
+
+مطلوب في README:
+ابدأ بتحذير واضح:
+"هذا المشروع لا يُنشر على Replit/Rebuilt. المنصة تُستخدم فقط لتوليد الكود. النشر الرسمي يجب أن يكون عبر GitHub + Vercel + Supabase."
+
+مطلوب GitHub:
+- جهز المشروع ليكون قابلًا للدفع إلى GitHub.
+- أضف .gitignore صحيح.
+- لا ترفع .env.
+- أضف GitHub Actions بسيط يفحص lint و typecheck إن أمكن.
+
+مطلوب Vercel:
+- اشرح خطوات ربط GitHub repo بـ Vercel.
+- اشرح إضافة Environment Variables.
+- اشرح أن Production Domain من Vercel هو رابط التطبيق الرسمي.
+- اشرح عدم استخدام أي Webview أو Preview داخلي من Rebuilt كنسخة تشغيل للفريق.
+
+مطلوب UX إضافي:
+- زر "إضافة مهمة سريعة" ظاهر دائمًا.
+- زر "تحديث حالتي اليوم" لكل عضو.
+- صفحة My Tasks تكون أسهل صفحة للفريق.
+- لا تجعل الفريق يدخل بيانات كثيرة.
+- استخدم Modals وDropdowns بدل النماذج الطويلة.
+- أضف Empty States عربية واضحة.
+- أضف Loading Skeletons.
+
+مطلوب دعم العربية:
+- html dir="rtl" lang="ar"
+- خطوط مناسبة مثل Tajawal أو IBM Plex Sans Arabic أو Cairo
+- كل النصوص بالعربية
+- تنسيق التاريخ بالعربية
+- أرقام ونسب واضحة
+
+مطلوب جودة:
+- TypeScript strict
+- ESLint
+- Zod validation
+- Error boundaries
+- Toast notifications
+- Responsive design
+- لا توجد بيانات وهمية في الإنتاج إلا seed للقوالب
+- لا توجد مفاتيح سرية داخل الكود
+
+في نهاية التنفيذ:
+أعطني:
+1. رابط GitHub repo أو خطوات رفعه.
+2. رابط Vercel production أو خطوات ربطه.
+3. قائمة Environment Variables المطلوبة.
+4. SQL الذي يجب تشغيله في Supabase.
+5. طريقة استيراد بيانات الشيت.
+6. أي قيود أو أشياء تحتاج إعداد يدوي.

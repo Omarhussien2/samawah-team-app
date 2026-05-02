@@ -1,0 +1,267 @@
+-- ============================================================
+-- سماوة - سياسات Row Level Security
+-- تشغيله بعد schema.sql في Supabase SQL Editor
+-- ============================================================
+
+-- تفعيل RLS على جميع الجداول
+ALTER TABLE profiles         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE projects         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE project_members  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tasks            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE challenges       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE documents        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE comments         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notifications    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE automation_logs  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE project_templates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE task_templates   ENABLE ROW LEVEL SECURITY;
+
+-- ============================================================
+-- Helper Functions
+-- ============================================================
+
+-- دالة للتحقق من دور المستخدم
+CREATE OR REPLACE FUNCTION get_my_role()
+RETURNS TEXT AS $$
+  SELECT role FROM profiles WHERE id = auth.uid();
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- دالة للتحقق من عضوية المستخدم في المشروع
+CREATE OR REPLACE FUNCTION is_project_member(p_project_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM project_members
+    WHERE project_id = p_project_id AND user_id = auth.uid()
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- دالة للتحقق من كون المستخدم مدير المشروع
+CREATE OR REPLACE FUNCTION is_project_manager(p_project_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM projects
+    WHERE id = p_project_id AND manager_id = auth.uid()
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- ============================================================
+-- Profiles Policies
+-- ============================================================
+DROP POLICY IF EXISTS "profiles_select" ON profiles;
+CREATE POLICY "profiles_select" ON profiles
+  FOR SELECT USING (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "profiles_update_own" ON profiles;
+CREATE POLICY "profiles_update_own" ON profiles
+  FOR UPDATE USING (auth.uid() = id);
+
+DROP POLICY IF EXISTS "profiles_insert_own" ON profiles;
+CREATE POLICY "profiles_insert_own" ON profiles
+  FOR INSERT WITH CHECK (auth.uid() = id);
+
+-- Admin يمكنه تعديل أي profile
+DROP POLICY IF EXISTS "profiles_admin_update" ON profiles;
+CREATE POLICY "profiles_admin_update" ON profiles
+  FOR UPDATE USING (get_my_role() = 'admin');
+
+-- ============================================================
+-- Projects Policies
+-- ============================================================
+
+-- القراءة: Admin يرى الكل، Project Manager يرى مشاريعه، Member يرى ما هو عضو فيه
+DROP POLICY IF EXISTS "projects_select" ON projects;
+CREATE POLICY "projects_select" ON projects
+  FOR SELECT USING (
+    get_my_role() = 'admin'
+    OR manager_id = auth.uid()
+    OR is_project_member(id)
+  );
+
+-- الإنشاء: Admin و Project Manager فقط
+DROP POLICY IF EXISTS "projects_insert" ON projects;
+CREATE POLICY "projects_insert" ON projects
+  FOR INSERT WITH CHECK (
+    get_my_role() IN ('admin', 'project_manager')
+  );
+
+-- التحديث: Admin أو مدير المشروع
+DROP POLICY IF EXISTS "projects_update" ON projects;
+CREATE POLICY "projects_update" ON projects
+  FOR UPDATE USING (
+    get_my_role() = 'admin'
+    OR manager_id = auth.uid()
+  );
+
+-- الحذف: Admin فقط
+DROP POLICY IF EXISTS "projects_delete" ON projects;
+CREATE POLICY "projects_delete" ON projects
+  FOR DELETE USING (get_my_role() = 'admin');
+
+-- ============================================================
+-- Project Members Policies
+-- ============================================================
+DROP POLICY IF EXISTS "project_members_select" ON project_members;
+CREATE POLICY "project_members_select" ON project_members
+  FOR SELECT USING (
+    get_my_role() = 'admin'
+    OR user_id = auth.uid()
+    OR is_project_manager(project_id)
+  );
+
+DROP POLICY IF EXISTS "project_members_insert" ON project_members;
+CREATE POLICY "project_members_insert" ON project_members
+  FOR INSERT WITH CHECK (
+    get_my_role() = 'admin'
+    OR is_project_manager(project_id)
+  );
+
+DROP POLICY IF EXISTS "project_members_delete" ON project_members;
+CREATE POLICY "project_members_delete" ON project_members
+  FOR DELETE USING (
+    get_my_role() = 'admin'
+    OR is_project_manager(project_id)
+  );
+
+-- ============================================================
+-- Tasks Policies
+-- ============================================================
+DROP POLICY IF EXISTS "tasks_select" ON tasks;
+CREATE POLICY "tasks_select" ON tasks
+  FOR SELECT USING (
+    get_my_role() = 'admin'
+    OR owner_id = auth.uid()
+    OR is_project_manager(project_id)
+    OR is_project_member(project_id)
+  );
+
+DROP POLICY IF EXISTS "tasks_insert" ON tasks;
+CREATE POLICY "tasks_insert" ON tasks
+  FOR INSERT WITH CHECK (
+    get_my_role() IN ('admin', 'project_manager')
+    OR is_project_manager(project_id)
+  );
+
+DROP POLICY IF EXISTS "tasks_update" ON tasks;
+CREATE POLICY "tasks_update" ON tasks
+  FOR UPDATE USING (
+    get_my_role() = 'admin'
+    OR owner_id = auth.uid()
+    OR is_project_manager(project_id)
+  );
+
+DROP POLICY IF EXISTS "tasks_delete" ON tasks;
+CREATE POLICY "tasks_delete" ON tasks
+  FOR DELETE USING (
+    get_my_role() = 'admin'
+    OR is_project_manager(project_id)
+  );
+
+-- ============================================================
+-- Challenges Policies
+-- ============================================================
+DROP POLICY IF EXISTS "challenges_select" ON challenges;
+CREATE POLICY "challenges_select" ON challenges
+  FOR SELECT USING (
+    get_my_role() = 'admin'
+    OR owner_id = auth.uid()
+    OR is_project_manager(project_id)
+    OR is_project_member(project_id)
+  );
+
+DROP POLICY IF EXISTS "challenges_insert" ON challenges;
+CREATE POLICY "challenges_insert" ON challenges
+  FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "challenges_update" ON challenges;
+CREATE POLICY "challenges_update" ON challenges
+  FOR UPDATE USING (
+    get_my_role() = 'admin'
+    OR owner_id = auth.uid()
+    OR is_project_manager(project_id)
+  );
+
+DROP POLICY IF EXISTS "challenges_delete" ON challenges;
+CREATE POLICY "challenges_delete" ON challenges
+  FOR DELETE USING (
+    get_my_role() = 'admin'
+    OR is_project_manager(project_id)
+  );
+
+-- ============================================================
+-- Documents Policies
+-- ============================================================
+DROP POLICY IF EXISTS "documents_select" ON documents;
+CREATE POLICY "documents_select" ON documents
+  FOR SELECT USING (
+    get_my_role() = 'admin'
+    OR created_by = auth.uid()
+    OR is_project_manager(project_id)
+    OR is_project_member(project_id)
+  );
+
+DROP POLICY IF EXISTS "documents_insert" ON documents;
+CREATE POLICY "documents_insert" ON documents
+  FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "documents_delete" ON documents;
+CREATE POLICY "documents_delete" ON documents
+  FOR DELETE USING (
+    get_my_role() = 'admin'
+    OR created_by = auth.uid()
+    OR is_project_manager(project_id)
+  );
+
+-- ============================================================
+-- Comments Policies
+-- ============================================================
+DROP POLICY IF EXISTS "comments_select" ON comments;
+CREATE POLICY "comments_select" ON comments
+  FOR SELECT USING (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "comments_insert" ON comments;
+CREATE POLICY "comments_insert" ON comments
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "comments_delete" ON comments;
+CREATE POLICY "comments_delete" ON comments
+  FOR DELETE USING (
+    get_my_role() = 'admin'
+    OR user_id = auth.uid()
+  );
+
+-- ============================================================
+-- Notifications Policies
+-- ============================================================
+DROP POLICY IF EXISTS "notifications_select" ON notifications;
+CREATE POLICY "notifications_select" ON notifications
+  FOR SELECT USING (user_id = auth.uid() OR get_my_role() = 'admin');
+
+DROP POLICY IF EXISTS "notifications_update" ON notifications;
+CREATE POLICY "notifications_update" ON notifications
+  FOR UPDATE USING (user_id = auth.uid());
+
+-- ============================================================
+-- Automation Logs - Admin فقط
+-- ============================================================
+DROP POLICY IF EXISTS "automation_logs_select" ON automation_logs;
+CREATE POLICY "automation_logs_select" ON automation_logs
+  FOR SELECT USING (get_my_role() = 'admin');
+
+-- ============================================================
+-- Templates - قراءة للجميع، كتابة للـ Admin
+-- ============================================================
+DROP POLICY IF EXISTS "project_templates_select" ON project_templates;
+CREATE POLICY "project_templates_select" ON project_templates
+  FOR SELECT USING (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "project_templates_insert" ON project_templates;
+CREATE POLICY "project_templates_insert" ON project_templates
+  FOR INSERT WITH CHECK (get_my_role() = 'admin');
+
+DROP POLICY IF EXISTS "task_templates_select" ON task_templates;
+CREATE POLICY "task_templates_select" ON task_templates
+  FOR SELECT USING (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "task_templates_insert" ON task_templates;
+CREATE POLICY "task_templates_insert" ON task_templates
+  FOR INSERT WITH CHECK (get_my_role() = 'admin');

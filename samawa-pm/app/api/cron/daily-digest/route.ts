@@ -1,0 +1,111 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createServiceClient } from "@/lib/supabase/server";
+import { sendEmail } from "@/lib/notifications/send-email";
+import { dailyDigestTemplate } from "@/lib/notifications/templates";
+import { format } from "date-fns";
+import { ar } from "date-fns/locale";
+
+export async function GET(request: NextRequest) {
+  const secret = request.headers.get("authorization")?.replace("Bearer ", "");
+  if (secret !== process.env.CRON_SECRET) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const supabase = createServiceClient();
+  const today = new Date().toISOString().split("T")[0];
+
+  try {
+    // Log start
+    const { data: log } = await supabase
+      .from("automation_logs")
+      .insert({ type: "daily-digest", status: "running", payload: { date: today } })
+      .select()
+      .single();
+
+    // Get all project managers
+    const { data: managers } = await supabase
+      .from("profiles")
+      .select("id, full_name, email")
+      .eq("role", "project_manager")
+      .eq("active", true);
+
+    if (!managers || managers.length === 0) {
+      await supabase.from("automation_logs").update({ status: "success", payload: { message: "No managers found" } }).eq("id", log?.id ?? "");
+      return NextResponse.json({ success: true, sent: 0 });
+    }
+
+    let sentCount = 0;
+
+    for (const manager of managers) {
+      if (!manager.email) continue;
+
+      // Get projects managed by this manager
+      const { data: projects } = await supabase
+        .from("projects")
+        .select("id, name")
+        .eq("manager_id", manager.id)
+        .eq("status", "active");
+
+      if (!projects || projects.length === 0) continue;
+
+      const projectIds = projects.map((p) => p.id);
+      const projectMap = new Map(projects.map((p) => [p.id, p.name]));
+
+      // Get overdue tasks
+      const { data: overdueTasks } = await supabase
+        .from("tasks")
+        .select("id, title, project_id, due_date")
+        .in("project_id", projectIds)
+        .lt("due_date", today)
+        .not("status", "in", '("Done","Cancelled")');
+
+      // Get today's tasks
+      const { data: todayTasks } = await supabase
+        .from("tasks")
+        .select("id, title, project_id")
+        .in("project_id", projectIds)
+        .eq("due_date", today)
+        .not("status", "in", '("Done","Cancelled")');
+
+      // Get open challenges
+      const { data: challenges } = await supabase
+        .from("challenges")
+        .select("id, title, project_id")
+        .in("project_id", projectIds)
+        .eq("status", "open");
+
+      const html = dailyDigestTemplate({
+        managerName: manager.full_name ?? manager.email,
+        overdueTasks: (overdueTasks ?? []).map((t) => ({
+          title: t.title,
+          project: projectMap.get(t.project_id) ?? "—",
+          dueDate: t.due_date ? format(new Date(t.due_date), "d MMMM", { locale: ar }) : "—",
+        })),
+        todayTasks: (todayTasks ?? []).map((t) => ({
+          title: t.title,
+          project: projectMap.get(t.project_id) ?? "—",
+        })),
+        openChallenges: (challenges ?? []).map((c) => ({
+          title: c.title,
+          project: projectMap.get(c.project_id) ?? "—",
+        })),
+      });
+
+      const { success } = await sendEmail({
+        to: manager.email,
+        subject: `📋 ملخص يومي - سماوة | ${format(new Date(), "d MMMM yyyy", { locale: ar })}`,
+        html,
+      });
+
+      if (success) sentCount++;
+    }
+
+    await supabase.from("automation_logs").update({ status: "success", payload: { sent: sentCount, date: today } }).eq("id", log?.id ?? "");
+    return NextResponse.json({ success: true, sent: sentCount });
+
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    await supabase.from("automation_logs").insert({ type: "daily-digest", status: "error", error: errorMessage });
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
+  }
+}
