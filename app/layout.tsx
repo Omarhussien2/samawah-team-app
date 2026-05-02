@@ -11,7 +11,7 @@ const cairo = Cairo({
 });
 
 const tsnas = localFont({
-  src: "./fonts/TSNAS-BOLD.OTF",
+  src: "./fonts/tsnas-bold.otf",
   variable: "--font-tsnas",
   weight: "700", // The font is already bold
   display: "swap",
