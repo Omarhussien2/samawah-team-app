@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, LogOut, Menu, Plus, Search, User } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { cn, getAvatarUrl, avatarFallback } from "@/lib/utils";
+import { getAvatarUrl } from "@/lib/utils";
 import type { Profile } from "@/lib/supabase/types";
 import { QuickAddTaskModal } from "@/components/tasks/quick-add-task-modal";
 

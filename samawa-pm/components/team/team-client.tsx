@@ -4,8 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { Plus, Search, UserCog, Mail, Shield, CheckCircle, XCircle } from "lucide-react";
-import { getAvatarUrl, avatarFallback, cn } from "@/lib/utils";
+import { Plus, Search } from "lucide-react";
+import { getAvatarUrl, cn } from "@/lib/utils";
 import type { Profile } from "@/lib/supabase/types";
 
 const ROLE_LABELS: Record<string, string> = {

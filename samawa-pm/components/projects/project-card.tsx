@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { formatDateShort, getProjectStatusLabel, getAvatarUrl, cn } from "@/lib/utils";
+import { formatDateShort, getProjectStatusLabel, cn } from "@/lib/utils";
 import type { Profile, Project } from "@/lib/supabase/types";
 import { CalendarDays, User } from "lucide-react";
 

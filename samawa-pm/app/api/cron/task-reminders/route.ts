@@ -22,12 +22,13 @@ export async function GET(request: NextRequest) {
       .single();
 
     // Get all tasks due today or overdue (not done/cancelled), grouped by owner
-    const { data: tasks } = await supabase
+    type TaskReminder = { id: string; title: string; due_date: string | null; project_id: string | null; owner_id: string | null; owner_name: string | null; project: { name: string } | null };
+    const { data: tasks } = (await supabase
       .from("tasks")
       .select("id, title, due_date, project_id, owner_id, owner_name, project:projects(name)")
       .not("owner_id", "is", null)
       .lte("due_date", today)
-      .not("status", "in", '("Done","Cancelled")');
+      .not("status", "in", '("Done","Cancelled")')) as unknown as { data: TaskReminder[] | null };
 
     if (!tasks || tasks.length === 0) {
       await supabase.from("automation_logs").update({ status: "success", payload: { sent: 0 } }).eq("id", log?.id ?? "");

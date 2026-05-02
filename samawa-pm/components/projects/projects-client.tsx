@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { LayoutGrid, List, Plus, Search, Filter } from "lucide-react";
+import { LayoutGrid, List, Plus, Search } from "lucide-react";
 import { ProjectCard } from "./project-card";
 import { ProjectRow } from "./project-row";
 import { CreateProjectModal } from "./create-project-modal";
@@ -17,7 +17,7 @@ interface Props {
 
 const STATUSES = ["active", "paused", "completed", "cancelled"];
 
-export function ProjectsClient({ projects, profiles, templates, currentUser }: Props) {
+export function ProjectsClient({ projects, profiles, templates, currentUser: _currentUser }: Props) {
   const [view, setView] = useState<"card" | "list">("card");
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("");

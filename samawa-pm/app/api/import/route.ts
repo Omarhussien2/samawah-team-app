@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ success: successCount, errors: errorCount });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: "فشل الاستيراد" }, { status: 500 });
   }
 }

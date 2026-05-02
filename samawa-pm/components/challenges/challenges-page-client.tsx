@@ -32,7 +32,7 @@ const STATUS_COLORS: Record<string, string> = {
   closed: "bg-gray-100 text-gray-500",
 };
 
-export function ChallengesPageClient({ challenges, profiles, projects, currentUser }: Props) {
+export function ChallengesPageClient({ challenges, profiles: _profiles, projects, currentUser }: Props) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("");

@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Search, FileText, ExternalLink, Upload } from "lucide-react";
+import { Plus, Search, ExternalLink } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { formatRelativeAr } from "@/lib/utils";

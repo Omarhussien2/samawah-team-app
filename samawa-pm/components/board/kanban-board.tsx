@@ -6,10 +6,8 @@ import {
   DndContext, DragEndEvent, DragOverlay, DragStartEvent,
   PointerSensor, useSensor, useSensors, closestCorners,
 } from "@dnd-kit/core";
-import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { Plus } from "lucide-react";
 import { KanbanColumn } from "./kanban-column";
 import { KanbanCard } from "./kanban-card";
 import { TaskModal } from "@/components/tasks/task-modal";
@@ -72,7 +70,7 @@ export function KanbanBoard({ tasks: initialTasks, projectId, profiles }: Props)
     const supabase = createClient();
     const { error } = await supabase
       .from("tasks")
-      .update({ board_column: targetColumn, status: targetColumn })
+      .update({ board_column: targetColumn, status: targetColumn as Task["status"] })
       .eq("id", draggedTask.id);
 
     if (error) {

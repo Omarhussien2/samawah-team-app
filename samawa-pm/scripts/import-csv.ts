@@ -117,7 +117,7 @@ async function importTasks(filePath: string) {
       board_column: mapArabicStatus(arabicStatus),
       priority: "medium",
       start_date: row["Start_Date"] || null,
-      due_date: row["End_Date"] ?? row["Due_Date"] || null,
+      due_date: row["End_Date"] ?? (row["Due_Date"] || null),
       cost: parseFloat(row["Cost"] ?? "0") || null,
       quantity_total: parseFloat(row["Quantity_Total"] ?? "0") || null,
       quantity_done: parseFloat(row["Quantity_Done"] ?? "0") || null,

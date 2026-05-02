@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { formatDateShort, getStatusColor, getStatusLabel, getAlertLevelColor, isOverdue, isDueToday, cn } from "@/lib/utils";
+import { formatDateShort, getStatusColor, getStatusLabel, isOverdue, isDueToday, cn } from "@/lib/utils";
 import { TaskModal } from "./task-modal";
 import { CheckCircle2, AlertCircle, Clock, CalendarCheck, List } from "lucide-react";
 import type { Profile, Task } from "@/lib/supabase/types";
@@ -34,9 +34,12 @@ export function MyTasksClient({ tasks: initialTasks, currentUser, profiles }: Pr
   const [filter, setFilter] = useState<Filter>("all");
   const [selectedTask, setSelectedTask] = useState<typeof initialTasks[0] | null>(null);
 
-  const today = new Date();
-  const weekEnd = new Date(today);
-  weekEnd.setDate(today.getDate() + 7);
+  const todayStr = new Date().toISOString().split("T")[0];
+  const weekEnd = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    return d;
+  }, [todayStr]);
 
   const filtered = useMemo(() => {
     return tasks.filter((t) => {
@@ -46,7 +49,7 @@ export function MyTasksClient({ tasks: initialTasks, currentUser, profiles }: Pr
       if (filter === "done") return t.status === "Done";
       return true;
     });
-  }, [tasks, filter]);
+  }, [tasks, filter, weekEnd]);
 
   const handleMarkDone = async (taskId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -79,7 +82,7 @@ export function MyTasksClient({ tasks: initialTasks, currentUser, profiles }: Pr
     week: tasks.filter((t) => t.due_date && new Date(t.due_date) <= weekEnd && !["Done","Cancelled"].includes(t.status)).length,
     overdue: tasks.filter((t) => isOverdue(t.due_date, t.status)).length,
     done: tasks.filter((t) => t.status === "Done").length,
-  }), [tasks]);
+  }), [tasks, weekEnd]);
 
   return (
     <>

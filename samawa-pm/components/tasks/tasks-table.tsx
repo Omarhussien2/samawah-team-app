@@ -2,11 +2,9 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import { toast } from "sonner";
 import { formatDateShort, getStatusLabel, getStatusColor, getPriorityColor, getPriorityLabel, getAlertLevelColor, cn } from "@/lib/utils";
 import { TaskModal } from "./task-modal";
-import { Plus, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import type { Profile, Task } from "@/lib/supabase/types";
 
 interface Props {
@@ -15,9 +13,9 @@ interface Props {
   projectId?: string;
 }
 
-export function TasksTable({ tasks: initialTasks, profiles, projectId }: Props) {
+export function TasksTable({ tasks: initialTasks, profiles, projectId: _projectId }: Props) {
   const router = useRouter();
-  const [tasks, setTasks] = useState(initialTasks);
+  const [tasks] = useState(initialTasks);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [selectedTask, setSelectedTask] = useState<typeof initialTasks[0] | null>(null);
@@ -29,15 +27,6 @@ export function TasksTable({ tasks: initialTasks, profiles, projectId }: Props) 
       return true;
     });
   }, [tasks, search, filterStatus]);
-
-  const handleQuickStatus = async (taskId: string, status: string) => {
-    const supabase = createClient();
-    const { error } = await supabase.from("tasks").update({ status, board_column: status }).eq("id", taskId);
-    if (error) toast.error("فشل التحديث");
-    else {
-      setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: status as Task["status"], board_column: status } : t));
-    }
-  };
 
   return (
     <>

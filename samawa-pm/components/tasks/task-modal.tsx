@@ -2,14 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { X, Loader2, MessageSquare, Paperclip, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { X, Loader2, AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { formatDateShort, getStatusLabel, getPriorityLabel, getAlertLevelColor, getStatusColor, cn } from "@/lib/utils";
+import { getStatusLabel, getAlertLevelColor, cn } from "@/lib/utils";
 import type { Profile, Task } from "@/lib/supabase/types";
 
 const STATUSES = ["Backlog", "To Do", "In Progress", "Review", "Done", "Cancelled"];
-const PRIORITIES = ["low", "medium", "high", "critical"];
 
 interface Props {
   task: Task & { owner?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null };

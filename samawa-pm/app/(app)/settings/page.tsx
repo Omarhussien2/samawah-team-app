@@ -19,7 +19,7 @@ export default function SettingsPage() {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return;
-      supabase.from("profiles").select("*").eq("id", user.id).single().then(({ data }) => {
+      supabase.from("profiles").select("*").eq("id", user.id).single().then(({ data }: { data: Profile | null }) => {
         if (data) { setProfile(data); setFullName(data.full_name ?? ""); }
         setLoading(false);
       });
@@ -144,7 +144,7 @@ export default function SettingsPage() {
               <Shield size={18} className="text-blue-600 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="font-medium text-blue-800 text-sm">تغيير كلمة المرور</p>
-                <p className="text-xs text-blue-600 mt-1">لتغيير كلمة المرور، استخدم خيار "نسيت كلمة المرور" في صفحة الدخول</p>
+                <p className="text-xs text-blue-600 mt-1">لتغيير كلمة المرور، استخدم خيار &ldquo;نسيت كلمة المرور&rdquo; في صفحة الدخول</p>
               </div>
             </div>
             <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">

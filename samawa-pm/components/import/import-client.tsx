@@ -4,7 +4,7 @@ import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Papa from "papaparse";
 import { toast } from "sonner";
-import { Upload, CheckCircle, AlertCircle, Loader2, FileText, X } from "lucide-react";
+import { Upload, CheckCircle, AlertCircle, Loader2, X } from "lucide-react";
 import { mapArabicStatus } from "@/lib/utils";
 import type { Profile } from "@/lib/supabase/types";
 
@@ -47,7 +47,7 @@ interface Props {
 
 type ImportStep = "upload" | "preview" | "importing" | "done";
 
-export function ImportClient({ currentUser }: Props) {
+export function ImportClient({ currentUser: _currentUser }: Props) {
   const router = useRouter();
   const [step, setStep] = useState<ImportStep>("upload");
   const [importType, setImportType] = useState<"projects" | "tasks">("projects");

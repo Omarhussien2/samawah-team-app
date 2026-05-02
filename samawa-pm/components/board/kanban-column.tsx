@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
+
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { KanbanCard } from "./kanban-card";
-import { Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Profile, Task } from "@/lib/supabase/types";
 
@@ -22,7 +21,7 @@ interface Props {
   profiles: Pick<Profile, "id" | "full_name" | "avatar_url">[];
 }
 
-export function KanbanColumn({ column, tasks, onTaskClick, projectId }: Props) {
+export function KanbanColumn({ column, tasks, onTaskClick, projectId: _projectId }: Props) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
   return (

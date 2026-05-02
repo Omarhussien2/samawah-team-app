@@ -71,7 +71,6 @@ export function CreateProjectModal({ open, onClose, profiles, templates }: Props
     if (data.template_id && project) {
       const template = templates.find((t) => t.id === data.template_id);
       if (template?.task_templates) {
-        const startDate = data.start_date ? new Date(data.start_date) : new Date();
         const tasks = template.task_templates.map((tt, idx) => ({
           project_id: project.id,
           title: tt.title,

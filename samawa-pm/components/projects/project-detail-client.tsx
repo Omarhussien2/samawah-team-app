@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { ArrowRight, Edit, MoreHorizontal } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { formatDateShort, getProjectStatusLabel, cn } from "@/lib/utils";
 import { KanbanBoard } from "@/components/board/kanban-board";

@@ -1,6 +1,6 @@
 "use client";
 
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { getStatusLabel } from "@/lib/utils";
 
 const STATUS_COLORS: Record<string, string> = {

@@ -21,7 +21,7 @@ const STATUS_COLORS: Record<string, string> = {
   closed: "bg-gray-100 text-gray-500",
 };
 
-export function ChallengesList({ challenges, profiles, projectId }: Props) {
+export function ChallengesList({ challenges, profiles: _profiles, projectId }: Props) {
   const router = useRouter();
   const [showAdd, setShowAdd] = useState(false);
   const [title, setTitle] = useState("");
