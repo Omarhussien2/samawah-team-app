@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { Plus, Search } from "lucide-react";
 import { getAvatarUrl, cn } from "@/lib/utils";
+import Image from "next/image";
 import type { Profile } from "@/lib/supabase/types";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -103,9 +104,11 @@ export function TeamClient({ profiles, currentUser }: Props) {
         {filtered.map((profile) => (
           <div key={profile.id} className={cn("bg-white rounded-xl border p-5 transition-all", profile.active ? "border-border" : "border-border opacity-60")}>
             <div className="flex items-center gap-3 mb-4">
-              <img
+              <Image
                 src={profile.avatar_url ?? getAvatarUrl(profile.full_name)}
                 alt={profile.full_name ?? ""}
+                width={48}
+                height={48}
                 className="w-12 h-12 rounded-full object-cover"
               />
               <div className="flex-1 min-w-0">

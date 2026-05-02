@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { formatDateShort, getProjectStatusLabel, cn } from "@/lib/utils";
+import Image from "next/image";
 import type { Profile, Project } from "@/lib/supabase/types";
 import { CalendarDays, User } from "lucide-react";
 
@@ -24,7 +25,7 @@ export function ProjectCard({ project }: Props) {
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex items-center gap-3">
             {project.logo_url ? (
-              <img src={project.logo_url} alt="" className="w-10 h-10 rounded-lg object-cover" />
+              <Image src={project.logo_url} alt="" width={40} height={40} className="w-10 h-10 rounded-lg object-cover" />
             ) : (
               <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center text-primary font-bold text-lg">
                 {project.name[0]}

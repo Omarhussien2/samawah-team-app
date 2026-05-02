@@ -4,6 +4,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { formatDateShort, getAlertLevelColor, getPriorityColor, getAvatarUrl, cn } from "@/lib/utils";
 import { CalendarDays, AlertTriangle } from "lucide-react";
+import Image from "next/image";
 import type { Profile, Task } from "@/lib/supabase/types";
 
 interface Props {
@@ -66,8 +67,8 @@ export function KanbanCard({ task, onTaskClick, isDragging }: Props) {
       <div className="flex items-center justify-between mt-2">
         <div className="flex items-center gap-1.5">
           {task.owner && (
-            <img
-              src={task.owner.avatar_url ?? getAvatarUrl(task.owner.full_name)}
+            <Image
+              src={task.owner.avatar_url ?? getAvatarUrl(task.owner.full_name)} width={24} height={24}
               alt={task.owner.full_name ?? ""}
               title={task.owner.full_name ?? ""}
               className="w-6 h-6 rounded-full border border-white shadow-sm object-cover"

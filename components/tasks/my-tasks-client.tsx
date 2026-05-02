@@ -1,12 +1,11 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
+import { CheckCircle2, AlertCircle, Clock, CalendarCheck, List } from "lucide-react";
 import { formatDateShort, getStatusColor, getStatusLabel, isOverdue, isDueToday, cn } from "@/lib/utils";
 import { TaskModal } from "./task-modal";
-import { CheckCircle2, AlertCircle, Clock, CalendarCheck, List } from "lucide-react";
 import type { Profile, Task } from "@/lib/supabase/types";
 
 type Filter = "all" | "today" | "week" | "overdue" | "done";
@@ -28,18 +27,16 @@ const FILTERS: { key: Filter; label: string; icon: React.ElementType }[] = [
   { key: "done",    label: "المكتملة",   icon: CheckCircle2 },
 ];
 
-export function MyTasksClient({ tasks: initialTasks, currentUser, profiles }: Props) {
-  const router = useRouter();
+export function MyTasksClient({ tasks: initialTasks, currentUser: _currentUser, profiles }: Props) {
   const [tasks, setTasks] = useState(initialTasks);
   const [filter, setFilter] = useState<Filter>("all");
   const [selectedTask, setSelectedTask] = useState<typeof initialTasks[0] | null>(null);
 
-  const todayStr = new Date().toISOString().split("T")[0];
   const weekEnd = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() + 7);
     return d;
-  }, [todayStr]);
+  }, []);
 
   const filtered = useMemo(() => {
     return tasks.filter((t) => {
@@ -50,6 +47,14 @@ export function MyTasksClient({ tasks: initialTasks, currentUser, profiles }: Pr
       return true;
     });
   }, [tasks, filter, weekEnd]);
+
+  const counts = useMemo(() => ({
+    all: tasks.length,
+    today: tasks.filter((t) => t.due_date && isDueToday(t.due_date) && !["Done","Cancelled"].includes(t.status)).length,
+    week: tasks.filter((t) => t.due_date && new Date(t.due_date) <= weekEnd && !["Done","Cancelled"].includes(t.status)).length,
+    overdue: tasks.filter((t) => isOverdue(t.due_date, t.status)).length,
+    done: tasks.filter((t) => t.status === "Done").length,
+  }), [tasks, weekEnd]);
 
   const handleMarkDone = async (taskId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -70,19 +75,11 @@ export function MyTasksClient({ tasks: initialTasks, currentUser, profiles }: Pr
       task_id: task.id,
       title: `أحتاج مساعدة: ${task.title}`,
       status: "open",
-      owner_id: currentUser.id,
+      owner_id: _currentUser?.id ?? "",
     });
     if (error) toast.error("فشل إنشاء التحدي");
     else toast.success("تم إنشاء طلب المساعدة");
   };
-
-  const counts = useMemo(() => ({
-    all: tasks.length,
-    today: tasks.filter((t) => t.due_date && isDueToday(t.due_date) && !["Done","Cancelled"].includes(t.status)).length,
-    week: tasks.filter((t) => t.due_date && new Date(t.due_date) <= weekEnd && !["Done","Cancelled"].includes(t.status)).length,
-    overdue: tasks.filter((t) => isOverdue(t.due_date, t.status)).length,
-    done: tasks.filter((t) => t.status === "Done").length,
-  }), [tasks, weekEnd]);
 
   return (
     <>
@@ -203,7 +200,7 @@ export function MyTasksClient({ tasks: initialTasks, currentUser, profiles }: Pr
       )}
 
       {selectedTask && (
-        <TaskModal task={selectedTask} profiles={profiles} onClose={() => { setSelectedTask(null); router.refresh(); }} />
+        <TaskModal task={selectedTask} profiles={profiles} onClose={() => setSelectedTask(null)} />
       )}
     </>
   );

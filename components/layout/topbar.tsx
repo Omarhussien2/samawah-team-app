@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Bell, LogOut, Menu, Plus, Search, User } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { getAvatarUrl } from "@/lib/utils";
+import Image from "next/image";
 import type { Profile } from "@/lib/supabase/types";
 import { QuickAddTaskModal } from "@/components/tasks/quick-add-task-modal";
 
@@ -68,9 +69,11 @@ export function Topbar({ user, onMenuClick }: TopbarProps) {
               onClick={() => setShowUserMenu(!showUserMenu)}
               className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-accent"
             >
-              <img
+              <Image
                 src={user.avatar_url ?? getAvatarUrl(user.full_name)}
                 alt={user.full_name ?? ""}
+                width={32}
+                height={32}
                 className="w-8 h-8 rounded-full object-cover"
               />
               <span className="hidden sm:inline text-sm font-medium text-foreground">
