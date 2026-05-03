@@ -1,14 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
-import { CheckCircle2, Clock, AlertTriangle, FolderKanban, ArrowUpRight, MessageSquare, CheckSquare } from "lucide-react";
+import { CheckCircle2, Clock, AlertTriangle, FolderKanban, ArrowUpRight, MessageSquare, CheckSquare, X, ListFilter } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, getStatusColor, getStatusLabel, getPriorityColor, getPriorityLabel, formatDateShort, getAlertLevelColor } from "@/lib/utils";
+import type { Task, Profile } from "@/lib/supabase/types";
 
 interface Props {
   user: any;
@@ -17,23 +19,47 @@ interface Props {
   comments: any[];
 }
 
+type DrillDownType = "overdue" | "today" | "week-done" | "active" | null;
+
 export function DashboardClient({ user, projects, tasks, comments }: Props) {
   const [localTasks, setLocalTasks] = useState(tasks);
+  const [drillDown, setDrillDown] = useState<DrillDownType>(null);
 
-  // Greeting logic
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "صباح الخير" : hour < 18 ? "مساء الخير" : "طاب مساؤك";
   const todayStr = new Date().toISOString().split("T")[0];
 
-  // Calculate metrics
   const activeProjectsCount = projects.filter(p => p.status === "active").length;
-  
+   
   const todayTasks = localTasks.filter(t => t.due_date === todayStr && !["Done", "Cancelled"].includes(t.status));
   const overdueTasks = localTasks.filter(t => t.due_date && t.due_date < todayStr && !["Done", "Cancelled"].includes(t.status));
-  
+   
   const weekAgo = new Date();
   weekAgo.setDate(weekAgo.getDate() - 7);
-  const completedThisWeek = localTasks.filter(t => t.status === "Done" && new Date(t.updated_at) >= weekAgo).length;
+  const completedThisWeek = localTasks.filter(t => t.status === "Done" && new Date(t.updated_at) >= weekAgo);
+
+  const drillDownTasks = useMemo(() => {
+    if (!drillDown) return [];
+    if (drillDown === "overdue") return overdueTasks;
+    if (drillDown === "today") return todayTasks;
+    if (drillDown === "week-done") return completedThisWeek;
+    if (drillDown === "active") return localTasks.filter(t => !["Done", "Cancelled"].includes(t.status));
+    return [];
+  }, [drillDown, overdueTasks, todayTasks, completedThisWeek, localTasks]);
+
+  const drillDownTitle: Record<string, string> = {
+    overdue: "المهام المتأخرة",
+    today: "مهام اليوم",
+    "week-done": "مهام مكتملة هذا الأسبوع",
+    active: "المهام المفتوحة",
+  };
+
+  const statsConfig = [
+    { label: "المشاريع النشطة", value: activeProjectsCount, icon: FolderKanban, color: "text-blue-600", bg: "bg-blue-50", drill: null as DrillDownType },
+    { label: "مهام اليوم", value: todayTasks.length, icon: Clock, color: "text-amber-600", bg: "bg-amber-50", drill: "today" as DrillDownType },
+    { label: "مهام متأخرة", value: overdueTasks.length, icon: AlertTriangle, color: "text-red-600", bg: "bg-red-50", drill: "overdue" as DrillDownType },
+    { label: "إنجاز الأسبوع", value: completedThisWeek.length, icon: CheckCircle2, color: "text-emerald-600", bg: "bg-emerald-50", drill: "week-done" as DrillDownType },
+  ];
 
   // Chart data: tasks created vs completed last 7 days
   const chartData = useMemo(() => {
@@ -78,13 +104,18 @@ export function DashboardClient({ user, projects, tasks, comments }: Props) {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "المشاريع النشطة", value: activeProjectsCount, icon: FolderKanban, color: "text-blue-600", bg: "bg-blue-50" },
-          { label: "مهام اليوم", value: todayTasks.length, icon: Clock, color: "text-amber-600", bg: "bg-amber-50" },
-          { label: "مهام متأخرة", value: overdueTasks.length, icon: AlertTriangle, color: "text-red-600", bg: "bg-red-50" },
-          { label: "إنجاز الأسبوع", value: completedThisWeek, icon: CheckCircle2, color: "text-emerald-600", bg: "bg-emerald-50" },
-        ].map((stat, i) => (
-          <div key={i} className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+        {statsConfig.map((stat, i) => (
+          <button
+            key={i}
+            onClick={() => stat.drill && setDrillDown(drillDown === stat.drill ? null : stat.drill)}
+            className={cn(
+              "bg-white rounded-2xl p-5 border shadow-sm transition-all text-right w-full",
+              drillDown === stat.drill
+                ? "border-primary ring-2 ring-primary/20 shadow-md"
+                : "border-slate-200 hover:shadow-md",
+              stat.drill && "cursor-pointer"
+            )}
+          >
             <div className="flex justify-between items-start">
               <div>
                 <p className="text-sm font-medium text-slate-500">{stat.label}</p>
@@ -94,9 +125,82 @@ export function DashboardClient({ user, projects, tasks, comments }: Props) {
                 <stat.icon size={20} />
               </div>
             </div>
-          </div>
+            {stat.drill && (
+              <p className="text-xs text-primary mt-2 font-medium flex items-center gap-1">
+                <ListFilter size={11} />
+                اضغط للعرض
+              </p>
+            )}
+          </button>
         ))}
       </div>
+
+      {/* Drill-Down Panel */}
+      {drillDown && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm animate-in slide-in-from-top-2 duration-200">
+          <div className="flex items-center justify-between p-5 border-b border-slate-100">
+            <h2 className="text-lg font-bold text-slate-800">{drillDownTitle[drillDown]}</h2>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-muted-foreground">{drillDownTasks.length} مهمة</span>
+              <button onClick={() => setDrillDown(null)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600">
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+          <div className="max-h-[400px] overflow-y-auto">
+            {drillDownTasks.length === 0 ? (
+              <div className="py-12 text-center text-muted-foreground">
+                <CheckCircle2 size={32} className="mx-auto mb-3 text-slate-300" />
+                <p className="font-medium">لا توجد مهام</p>
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 sticky top-0">
+                  <tr>
+                    <th className="text-right px-5 py-3 font-medium text-slate-500">المهمة</th>
+                    <th className="text-right px-5 py-3 font-medium text-slate-500 hidden md:table-cell">المشروع</th>
+                    <th className="text-right px-5 py-3 font-medium text-slate-500 hidden lg:table-cell">الحالة</th>
+                    <th className="text-right px-5 py-3 font-medium text-slate-500 hidden lg:table-cell">الاستحقاق</th>
+                    <th className="text-right px-5 py-3 font-medium text-slate-500 hidden xl:table-cell">الإنجاز</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {drillDownTasks.map((task: any) => {
+                    const proj = projects.find((p: any) => p.id === task.project_id);
+                    return (
+                      <tr key={task.id} className="hover:bg-slate-50 cursor-pointer transition-colors" onClick={() => handleMarkDone(task.id)}>
+                        <td className="px-5 py-3">
+                          <p className="font-medium text-slate-800 line-clamp-1">{task.title}</p>
+                          {task.alert_level && task.alert_level !== "Low" && (
+                            <span className={cn("text-xs px-1.5 py-0.5 rounded-full mt-1 inline-block", getAlertLevelColor(task.alert_level))}>
+                              {task.alert_level}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3 text-slate-600 hidden md:table-cell">{proj?.name ?? "—"}</td>
+                        <td className="px-5 py-3 hidden lg:table-cell">
+                          <span className={cn("text-xs px-2 py-1 rounded-full font-medium", getStatusColor(task.status))}>
+                            {getStatusLabel(task.status)}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 text-slate-600 hidden lg:table-cell">{formatDateShort(task.due_date)}</td>
+                        <td className="px-5 py-3 hidden xl:table-cell">
+                          <div className="flex items-center gap-2">
+                            <div className="w-16 h-1.5 bg-slate-100 rounded-full">
+                              <div className="h-full bg-primary rounded-full" style={{ width: `${task.progress ?? 0}%` }} />
+                            </div>
+                            <span className="text-xs text-muted-foreground">{task.progress ?? 0}%</span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
