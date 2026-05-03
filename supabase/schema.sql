@@ -237,6 +237,8 @@ RETURNS TRIGGER AS $$
 BEGIN
   IF NEW.quantity_total IS NOT NULL AND NEW.quantity_total > 0 THEN
     NEW.progress = ROUND((COALESCE(NEW.quantity_done, 0) / NEW.quantity_total) * 100);
+  ELSIF NEW.status = 'Done' THEN
+    NEW.progress = 100;
   END IF;
   -- تفعيل تنبيه التأخر التلقائي
   IF NEW.due_date IS NOT NULL AND NEW.due_date < CURRENT_DATE AND NEW.status NOT IN ('Done', 'Cancelled') THEN
@@ -252,6 +254,35 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+-- ============================================================
+-- Trigger: تحديث progress المشروع تلقائياً
+-- ============================================================
+CREATE OR REPLACE FUNCTION update_project_progress()
+RETURNS TRIGGER AS $$
+DECLARE
+  proj_id UUID;
+  total_count INT;
+  done_count INT;
+BEGIN
+  proj_id := COALESCE(NEW.project_id, OLD.project_id);
+  IF proj_id IS NULL THEN RETURN COALESCE(NEW, OLD); END IF;
+
+  SELECT COUNT(*), COUNT(*) FILTER (WHERE status = 'Done')
+  INTO total_count, done_count
+  FROM tasks WHERE project_id = proj_id;
+
+  UPDATE projects SET progress = CASE WHEN total_count > 0 THEN ROUND((done_count::NUMERIC / total_count) * 100) ELSE 0 END
+  WHERE id = proj_id;
+
+  RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS update_project_progress_trigger ON tasks;
+CREATE TRIGGER update_project_progress_trigger
+  AFTER INSERT OR UPDATE OF status OR DELETE ON tasks
+  FOR EACH ROW EXECUTE FUNCTION update_project_progress();
 
 DROP TRIGGER IF EXISTS calc_task_progress_trigger ON tasks;
 CREATE TRIGGER calc_task_progress_trigger

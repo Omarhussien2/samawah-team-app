@@ -8,6 +8,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { X, Loader2, Zap } from "lucide-react";
+import { recalcProjectProgress } from "@/lib/utils/recalc-progress";
 
 const schema = z.object({
   title: z.string().min(1, "اسم المهمة مطلوب"),
@@ -66,7 +67,8 @@ export function QuickAddTaskModal({ open, onClose }: Props) {
 
     if (error) toast.error("فشل إضافة المهمة");
     else {
-      toast.success("تمت إضافة المهمة بنجاح");
+      toast.success("تمت إضافة المهمة");
+      recalcProjectProgress(data.project_id);
       reset();
       onClose();
       router.refresh();

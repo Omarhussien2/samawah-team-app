@@ -47,7 +47,7 @@ export function DocumentsPageClient({ documents, projects, currentUser }: Props)
       title: form.title, project_id: form.project_id, url: form.url || null, type: form.type,
       created_by: currentUser.id,
     });
-    if (error) toast.error("فشل إنشاء المستند");
+    if (error) toast.error("ما نجح إنشاء المستند");
     else { toast.success("تم إنشاء المستند"); setShowCreate(false); setForm({ title: "", project_id: "", url: "", type: "أخرى" }); router.refresh(); }
     setSaving(false);
   };
@@ -67,7 +67,7 @@ export function DocumentsPageClient({ documents, projects, currentUser }: Props)
       <div className="flex gap-3 mb-6">
         <div className="relative flex-1 max-w-xs">
           <Search size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input type="text" placeholder="البحث..." value={search} onChange={(e) => setSearch(e.target.value)}
+          <input type="text"                  placeholder="ابحث..." value={search} onChange={(e) => setSearch(e.target.value)}
             className="w-full pr-9 pl-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
         </div>
         <select value={filterType} onChange={(e) => setFilterType(e.target.value)}
@@ -80,7 +80,7 @@ export function DocumentsPageClient({ documents, projects, currentUser }: Props)
       {filtered.length === 0 ? (
         <div className="text-center py-20 text-muted-foreground">
           <div className="text-5xl mb-4">📂</div>
-          <p className="font-medium">لا توجد مستندات</p>
+           <p className="font-medium">ما فيه مستندات</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -132,7 +132,7 @@ export function DocumentsPageClient({ documents, projects, currentUser }: Props)
             <div className="flex gap-3 mt-5">
               <button onClick={() => setShowCreate(false)} className="flex-1 py-2.5 border border-border rounded-lg text-sm">إلغاء</button>
               <button onClick={handleCreate} disabled={saving} className="flex-1 py-2.5 bg-primary text-white rounded-lg text-sm font-medium disabled:opacity-60">
-                {saving ? "جارٍ الحفظ..." : "إنشاء"}
+                {saving ? "جاري الحفظ..." : "إنشاء"}
               </button>
             </div>
           </div>

@@ -53,7 +53,7 @@ export function DashboardCharts({ tasks, projects }: ChartsProps) {
           </ResponsiveContainer>
         ) : (
           <div className="flex items-center justify-center h-[220px] text-muted-foreground text-sm">
-            لا توجد مهام حتى الآن
+            ما فيه مهام حتى الآن
           </div>
         )}
       </div>
@@ -72,7 +72,7 @@ export function DashboardCharts({ tasks, projects }: ChartsProps) {
           </ResponsiveContainer>
         ) : (
           <div className="flex items-center justify-center h-[220px] text-muted-foreground text-sm">
-            لا توجد مشاريع نشطة
+            ما فيه مشاريع نشطة
           </div>
         )}
       </div>

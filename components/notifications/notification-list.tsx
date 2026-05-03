@@ -82,7 +82,7 @@ export function NotificationList({
             <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center">
               <Bell size={20} className="text-muted-foreground" />
             </div>
-            <p className="text-sm text-muted-foreground">لا توجد إشعارات</p>
+            <p className="text-sm text-muted-foreground">ما فيه إشعارات</p>
           </div>
         ) : (
           notifications.map((notification) => {
@@ -143,7 +143,7 @@ export function NotificationList({
           onClick={onClose}
           className="block text-center text-sm text-primary font-medium py-3 hover:bg-primary/5 transition-colors"
         >
-          عرض جميع الإشعارات
+          عرض كل الإشعارات
         </Link>
       </div>
     </div>

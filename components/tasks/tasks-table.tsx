@@ -105,7 +105,7 @@ export function TasksTable({
             />
             <input
               type="text"
-              placeholder="البحث في المهام..."
+               placeholder="ابحث في المهام..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pr-9 pl-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -301,7 +301,7 @@ export function TasksTable({
                     colSpan={6}
                     className="text-center py-10 text-muted-foreground"
                   >
-                    لا توجد مهام مطابقة للفلاتر
+                    ما فيه مهام مطابقة للفلاتر
                   </td>
                 </tr>
               ) : (

@@ -20,7 +20,7 @@ export function RecentDocuments({ documents }: { documents: Document[] }) {
         <Link href="/documents" className="text-xs text-primary hover:underline">عرض الكل</Link>
       </div>
       {documents.length === 0 ? (
-        <p className="text-center text-muted-foreground text-sm py-6">لا توجد مستندات بعد</p>
+        <p className="text-center text-muted-foreground text-sm py-6">ما فيه مستندات بعد</p>
       ) : (
         <div className="space-y-2">
           {documents.map((doc) => (

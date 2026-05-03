@@ -21,7 +21,7 @@ export function RecentChallenges({ challenges }: { challenges: Challenge[] }) {
         <Link href="/challenges" className="text-xs text-primary hover:underline">عرض الكل</Link>
       </div>
       {challenges.length === 0 ? (
-        <p className="text-center text-muted-foreground text-sm py-6">لا توجد تحديات مفتوحة</p>
+        <p className="text-center text-muted-foreground text-sm py-6">ما فيه تحديات مفتوحة</p>
       ) : (
         <div className="space-y-2">
           {challenges.map((c) => (
