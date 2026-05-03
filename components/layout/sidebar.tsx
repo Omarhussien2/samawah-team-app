@@ -78,9 +78,8 @@ export function Sidebar({ onClose }: SidebarProps) {
     <div className="flex flex-col h-full bg-slate-50 border-l border-border select-none">
       {/* Logo */}
       <div className="flex items-center justify-between px-5 py-4">
-        <Link href="/dashboard" className="flex items-center gap-2.5 transition-opacity hover:opacity-80">
-          <Image src="/logo.png" alt="شعار سماوة" width={32} height={32} className="w-8 h-8 object-contain" />
-          <span className="font-bold font-heading text-lg text-slate-800 tracking-tight">سماوة</span>
+        <Link href="/dashboard" className="flex items-center justify-center transition-opacity hover:opacity-80">
+          <Image src="/logo.png" alt="شعار سماوة" width={44} height={44} className="w-11 h-11 object-contain" />
         </Link>
         {onClose && (
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 lg:hidden p-1 rounded-md hover:bg-slate-200 transition-colors">
@@ -184,10 +183,8 @@ export function Sidebar({ onClose }: SidebarProps) {
       </nav>
 
       {/* Footer */}
-      <div className="px-4 py-4 border-t border-border bg-slate-50/50">
-        <p className="text-xs text-slate-400 font-medium text-center">
-          سماوة © {new Date().getFullYear()}
-        </p>
+      <div className="px-4 py-4 border-t border-border bg-slate-50/50 flex items-center justify-center">
+        <Image src="/logo.png" alt="سماوة" width={28} height={28} className="w-7 h-7 object-contain opacity-50" />
       </div>
     </div>
   );

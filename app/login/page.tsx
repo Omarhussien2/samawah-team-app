@@ -52,9 +52,8 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8 flex flex-col items-center">
-          <Image src="/logo.png" alt="شعار سماوة" width={80} height={80} className="w-20 h-20 object-contain mb-4" />
-          <h1 className="text-2xl font-bold font-heading text-foreground">سماوة</h1>
-          <p className="text-muted-foreground mt-1 text-sm">نظام إدارة المشاريع والمهام</p>
+          <Image src="/logo.png" alt="شعار سماوة" width={120} height={120} className="w-28 h-28 object-contain mb-3" />
+          <p className="text-muted-foreground text-sm">نظام إدارة المشاريع والمهام</p>
         </div>
 
         {/* Card */}
