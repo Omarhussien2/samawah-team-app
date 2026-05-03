@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { CheckCircle2, AlertCircle, Clock, CalendarCheck, List } from "lucide-react";
 import { formatDateShort, getStatusColor, getStatusLabel, isOverdue, isDueToday, cn } from "@/lib/utils";
+import { recalcProjectProgress } from "@/lib/utils/recalc-progress";
 import { TaskModal } from "./task-modal";
 import { useRealtimeSubscription } from "@/lib/supabase/realtime";
 import type { Profile, Task } from "@/lib/supabase/types";
@@ -83,11 +84,13 @@ export function MyTasksClient({ tasks: initialTasks, currentUser: _currentUser, 
   const handleMarkDone = async (taskId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const supabase = createClient();
-    const { error } = await supabase.from("tasks").update({ status: "Done", board_column: "Done", progress: 100 }).eq("id", taskId);
+    const { error } = await supabase.from("tasks").update({ status: "Done", board_column: "Done", progress: 100, quantity_done: 1, quantity_total: 1 }).eq("id", taskId);
     if (error) toast.error("فشل التحديث");
     else {
-      toast.success("تم إنجاز المهمة! 🎉");
+      toast.success("خلّصت المهمة! 🎉");
       setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "Done" as const, board_column: "Done", progress: 100 } : t));
+      const task = tasks.find(t => t.id === taskId);
+      if (task?.project_id) recalcProjectProgress(task.project_id);
     }
   };
 
@@ -97,11 +100,11 @@ export function MyTasksClient({ tasks: initialTasks, currentUser: _currentUser, 
     const { error } = await supabase.from("challenges").insert({
       project_id: task.project_id,
       task_id: task.id,
-      title: `أحتاج مساعدة: ${task.title}`,
+      title: `أبغى مساعدة: ${task.title}`,
       status: "open",
       owner_id: _currentUser?.id ?? "",
     });
-    if (error) toast.error("فشل إنشاء التحدي");
+    if (error) toast.error("ما نجح إنشاء التحدي");
     else toast.success("تم إنشاء طلب المساعدة");
   };
 
@@ -143,8 +146,8 @@ export function MyTasksClient({ tasks: initialTasks, currentUser: _currentUser, 
       {filtered.length === 0 ? (
         <div className="text-center py-20 text-muted-foreground">
           <div className="text-5xl mb-4">✅</div>
-          <p className="font-medium">لا توجد مهام في هذه الفئة</p>
-          <p className="text-sm mt-1">أحسنت! استمر في العمل</p>
+          <p className="font-medium">ما فيه مهام في هذي الفئة</p>
+          <p className="text-sm mt-1">يعطيك العافية! كمّل شغلك</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -212,7 +215,7 @@ export function MyTasksClient({ tasks: initialTasks, currentUser: _currentUser, 
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-700 text-xs rounded-lg hover:bg-amber-100 transition-colors font-medium"
                       >
                         <AlertCircle size={13} />
-                        أحتاج مساعدة
+                         أحتاج مساعدة
                       </button>
                     </div>
                   )}

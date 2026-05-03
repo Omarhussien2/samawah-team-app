@@ -115,7 +115,7 @@ export function Sidebar({ onClose }: SidebarProps) {
           {workspacesExpanded && (
             <div className="mt-1 space-y-0.5">
               {projects.length === 0 ? (
-                <div className="px-4 py-2 text-xs text-slate-400">لا توجد مشاريع نشطة</div>
+                 <div className="px-4 py-2 text-xs text-slate-400">ما فيه مشاريع نشطة</div>
               ) : (
                 projects.map((project) => {
                   const isExpanded = expandedProjects[project.id];

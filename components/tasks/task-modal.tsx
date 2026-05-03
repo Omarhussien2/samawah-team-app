@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { getStatusLabel, getAlertLevelColor, formatRelativeAr, cn, getAvatarUrl, getPriorityColor } from "@/lib/utils";
 import { useCommentsSubscription } from "@/lib/supabase/realtime";
+import { recalcProjectProgress } from "@/lib/utils/recalc-progress";
 import Image from "next/image";
 import type { Profile, Task } from "@/lib/supabase/types";
 
@@ -83,21 +84,25 @@ export function TaskModal({ task, profiles, onClose }: Props) {
     const owner = profiles.find((p) => p.id === ownerId);
     const previousOwnerId = task.owner_id;
 
+    const progressVal = status === "Done" ? 100 : progress;
     const { error } = await supabase.from("tasks").update({
       title,
       status,
       priority,
       board_column: status,
-      progress,
+      progress: progressVal,
+      quantity_done: status === "Done" ? 1 : undefined,
+      quantity_total: status === "Done" ? 1 : undefined,
       owner_id: ownerId || null,
       owner_name: owner?.full_name ?? null,
       due_date: dueDate || null,
     }).eq("id", task.id);
 
     if (error) {
-      toast.error("فشل حفظ التغييرات");
+      toast.error("ما نجح حفظ التغييرات");
     } else {
-      toast.success("تم الحفظ بنجاح");
+      toast.success("تم الحفظ");
+      recalcProjectProgress(task.project_id);
 
       // Send notifications for status change or assignment via API
       if (status !== task.status || (ownerId && ownerId !== previousOwnerId)) {
@@ -142,10 +147,10 @@ export function TaskModal({ task, profiles, onClose }: Props) {
         setComment("");
         toast.success("تم إرسال التعليق");
       } else {
-        toast.error("فشل إرسال التعليق");
+        toast.error("ما نجح إرسال التعليق");
       }
     } catch {
-      toast.error("فشل إرسال التعليق");
+      toast.error("ما نجح إرسال التعليق");
     } finally {
       setSendingComment(false);
     }
@@ -241,7 +246,7 @@ export function TaskModal({ task, profiles, onClose }: Props) {
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
                     rows={2}
-                    placeholder="أضف تعليقاً... (استخدم @ للإشارة إلى شخص)"
+                    placeholder="أضف تعليقاً..."
                     className="w-full px-4 py-3 text-sm bg-transparent border-none focus:ring-0 focus:outline-none resize-none"
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) handleComment();

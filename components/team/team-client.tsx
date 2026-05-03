@@ -44,7 +44,7 @@ export function TeamClient({ profiles, currentUser }: Props) {
     if (currentUser.role !== "admin") return;
     const supabase = createClient();
     const { error } = await supabase.from("profiles").update({ active: !profile.active }).eq("id", profile.id);
-    if (error) toast.error("فشل تحديث الحالة");
+    if (error) toast.error("ما نجح تحديث الحالة");
     else { toast.success("تم التحديث"); router.refresh(); }
   };
 
@@ -52,7 +52,7 @@ export function TeamClient({ profiles, currentUser }: Props) {
     if (currentUser.role !== "admin") return;
     const supabase = createClient();
     const { error } = await supabase.from("profiles").update({ role }).eq("id", profileId);
-    if (error) toast.error("فشل تغيير الدور");
+    if (error) toast.error("ما نجح تغيير الدور");
     else { toast.success("تم تغيير الدور"); router.refresh(); }
   };
 
@@ -61,10 +61,10 @@ export function TeamClient({ profiles, currentUser }: Props) {
     setSaving(true);
     const supabase = createClient();
     const { error } = await supabase.auth.admin.inviteUserByEmail(inviteEmail.trim());
-    if (error) {
-      toast.error("يرجى إرسال رابط الدعوة يدوياً من Supabase Dashboard");
-    } else {
-      toast.success("تم إرسال الدعوة");
+     if (error) {
+       toast.error("أرسل رابط الدعوة يدوياً من Supabase Dashboard");
+     } else {
+       toast.success("تم إرسال الدعوة");
       setShowInvite(false);
       setInviteEmail("");
     }
@@ -93,7 +93,7 @@ export function TeamClient({ profiles, currentUser }: Props) {
         <Search size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <input
           type="text"
-          placeholder="البحث بالاسم أو البريد..."
+           placeholder="ابحث بالاسم أو الإيميل..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full pr-9 pl-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -157,13 +157,13 @@ export function TeamClient({ profiles, currentUser }: Props) {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
             <h2 className="text-lg font-bold mb-1">دعوة عضو جديد</h2>
-            <p className="text-sm text-muted-foreground mb-4">سيتلقى العضو رابط الدعوة عبر البريد الإلكتروني</p>
+            <p className="text-sm text-muted-foreground mb-4">بيوصل العضو رابط الدعوة على الإيميل</p>
             <div className="space-y-3">
               <input
                 type="email"
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder="البريد الإلكتروني *"
+                 placeholder="الإيميل *"
                 className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
               <select
@@ -182,7 +182,7 @@ export function TeamClient({ profiles, currentUser }: Props) {
             <div className="flex gap-3 mt-5">
               <button onClick={() => setShowInvite(false)} className="flex-1 py-2.5 border border-border rounded-lg text-sm">إلغاء</button>
               <button onClick={handleInvite} disabled={saving} className="flex-1 py-2.5 bg-primary text-white rounded-lg text-sm font-medium disabled:opacity-60">
-                {saving ? "جارٍ الإرسال..." : "إرسال الدعوة"}
+                {saving ? "جاري الإرسال..." : "إرسال الدعوة"}
               </button>
             </div>
           </div>

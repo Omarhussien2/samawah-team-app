@@ -24,9 +24,9 @@ export default function LoginPage() {
     if (isLogin) {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        toast.error("بيانات الدخول غير صحيحة");
+        toast.error("بيانات الدخول غلط");
       } else {
-        toast.success("تم الدخول بنجاح!");
+        toast.success("تم الدخول!");
         window.location.href = "/dashboard";
       }
     } else {
@@ -38,9 +38,9 @@ export default function LoginPage() {
         }
       });
       if (error) {
-        toast.error("حدث خطأ أثناء إنشاء الحساب");
+        toast.error("صار خطأ أثناء إنشاء الحساب");
       } else {
-        toast.success("تم إنشاء الحساب بنجاح! جاري الدخول...");
+        toast.success("تم إنشاء الحساب! جاري الدخول...");
         window.location.href = "/dashboard";
       }
     }
@@ -53,20 +53,20 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="text-center mb-8 flex flex-col items-center">
           <Image src="/logo.png" alt="شعار سماوة" width={120} height={120} className="w-28 h-28 object-contain mb-3" />
-          <p className="text-muted-foreground text-sm">نظام إدارة المشاريع والمهام</p>
-        </div>
+           <p className="text-muted-foreground text-sm">نظام إدارة المشاريع والمهام</p>
+         </div>
 
-        {/* Card */}
-        <div className="bg-white rounded-2xl shadow-xl border border-border p-8">
-          <h2 className="text-xl font-bold font-heading text-foreground mb-6">
-            {isLogin ? "تسجيل الدخول" : "إنشاء حساب جديد"}
+         {/* Card */}
+         <div className="bg-white rounded-2xl shadow-xl border border-border p-8">
+           <h2 className="text-xl font-bold font-heading text-foreground mb-6">
+             {isLogin ? "تسجيل دخول" : "حساب جديد"}
           </h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {!isLogin && (
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1.5">
-                  الاسم الكامل (مطابق لملف المهام)
+                  الاسم الكامل
                 </label>
                 <input
                   type="text"
@@ -80,7 +80,7 @@ export default function LoginPage() {
             )}
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">
-                البريد الإلكتروني
+                 البريد الإلكتروني (الإيميل)
               </label>
               <input
                 type="email"
@@ -94,7 +94,7 @@ export default function LoginPage() {
 
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">
-                كلمة المرور
+                 الرقم السري
               </label>
               <div className="relative">
                 <input
@@ -121,7 +121,7 @@ export default function LoginPage() {
               className="w-full py-2.5 bg-primary text-white font-medium rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
             >
               {loading ? <Loader2 size={18} className="animate-spin" /> : null}
-              {loading ? "انتظر لحظة..." : (isLogin ? "دخول" : "إنشاء الحساب")}
+               {loading ? "ثواني..." : (isLogin ? "دخول" : "إنشاء الحساب")}
             </button>
           </form>
 
@@ -131,12 +131,12 @@ export default function LoginPage() {
               onClick={() => setIsLogin(!isLogin)}
               className="text-primary hover:underline font-medium"
             >
-              {isLogin ? "ليس لديك حساب؟ إنشاء حساب جديد" : "لديك حساب بالفعل؟ تسجيل الدخول"}
+               {isLogin ? "ما عندك حساب؟ سجّل جديد" : "عندك حساب؟ سجّل دخول"}
             </button>
           </div>
 
           <p className="text-center text-xs text-muted-foreground mt-6">
-            هذا النظام مخصص لفريق سماوة الداخلي فقط
+             هذا النظام مخصص لفريق سماوة فقط
           </p>
         </div>
       </div>

@@ -37,11 +37,11 @@ export function isDueToday(dueDate: string | null | undefined): boolean {
 
 export function getStatusLabel(status: string): string {
   const map: Record<string, string> = {
-    "Backlog": "الأعمال المتراكمة",
-    "To Do": "قيد الانتظار",
-    "In Progress": "قيد التنفيذ",
+    "Backlog": "متراكم",
+    "To Do": "يُنتظر",
+    "In Progress": "جاري العمل",
     "Review": "تحت المراجعة",
-    "Done": "مكتمل",
+    "Done": "مخلّص",
     "Cancelled": "ملغي",
   };
   return map[status] ?? status;
@@ -70,7 +70,7 @@ export function getProjectStatusLabel(status: string): string {
 export function getChallengeStatusLabel(status: string): string {
   const map: Record<string, string> = {
     open: "مفتوح",
-    in_progress: "قيد المعالجة",
+    in_progress: "جاري المعالجة",
     resolved: "تم الحل",
     closed: "مغلق",
   };
@@ -111,8 +111,8 @@ export function getPriorityColor(priority: string): string {
 
 export function mapArabicStatus(arabicStatus: string): string {
   const status = arabicStatus.trim();
-  if (["مكتمل", "مكتملة"].includes(status)) return "Done";
-  if (["قيد التنفيذ", "جارى التنفيذ"].includes(status)) return "In Progress";
+  if (["مخلّص", "مخلّصة", "مكتمل", "مكتملة"].includes(status)) return "Done";
+  if (["جاري العمل", "جارى العمل", "قيد التنفيذ", "جارى التنفيذ"].includes(status)) return "In Progress";
   if (["لم يبدء", "لم يبدأ", "لم تبدء", "لم تبدأ"].includes(status)) return "To Do";
   if (["متأخر", "متأخرة"].includes(status)) return "In Progress";
   if (["ملغي", "ملغاة", "ملغى"].includes(status)) return "Cancelled";

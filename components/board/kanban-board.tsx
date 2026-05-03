@@ -14,14 +14,15 @@ import { TaskModal } from "@/components/tasks/task-modal";
 import { QuickAddTaskModal } from "@/components/tasks/quick-add-task-modal";
 import { useTasksSubscription } from "@/lib/supabase/realtime";
 import { Search, Filter, LayoutGrid, List, Calendar, Plus } from "lucide-react";
+import { recalcProjectProgress } from "@/lib/utils/recalc-progress";
 import type { Profile, Task } from "@/lib/supabase/types";
 
 export const COLUMNS = [
-  { id: "Backlog",     label: "الأعمال المتراكمة", color: "bg-slate-400" },
-  { id: "To Do",       label: "قيد الانتظار",      color: "bg-blue-500" },
-  { id: "In Progress", label: "قيد التنفيذ",       color: "bg-orange-500", limit: 5 },
+  { id: "Backlog",     label: "متراكم",           color: "bg-slate-400" },
+  { id: "To Do",       label: "يُنتظر",            color: "bg-blue-500" },
+  { id: "In Progress", label: "جاري العمل",       color: "bg-orange-500", limit: 5 },
   { id: "Review",      label: "تحت المراجعة",      color: "bg-purple-500" },
-  { id: "Done",        label: "مكتمل",             color: "bg-emerald-500" },
+  { id: "Done",        label: "مخلّص",             color: "bg-emerald-500" },
 ];
 
 interface Props {
@@ -104,15 +105,17 @@ export function KanbanBoard({ tasks: initialTasks, projectId, profiles }: Props)
     );
 
     const supabase = createClient();
+    const doneFix = targetColumn === "Done" ? { progress: 100, quantity_done: 1, quantity_total: 1 } : {};
     const { error } = await supabase
       .from("tasks")
-      .update({ board_column: targetColumn, status: targetColumn as Task["status"] })
+      .update({ board_column: targetColumn, status: targetColumn as Task["status"], ...doneFix })
       .eq("id", draggedTask.id);
 
     if (error) {
-      toast.error("فشل تحديث حالة المهمة");
+      toast.error("ما نجح تحديث حالة المهمة");
       setTasks(initialTasks);
     } else {
+      recalcProjectProgress(draggedTask.project_id);
       try {
         await fetch("/api/task-events", {
           method: "POST",
@@ -152,7 +155,7 @@ export function KanbanBoard({ tasks: initialTasks, projectId, profiles }: Props)
             <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="البحث في المهام..."
+               placeholder="ابحث في المهام..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-3 pr-9 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-64 shadow-sm"
@@ -208,7 +211,7 @@ export function KanbanBoard({ tasks: initialTasks, projectId, profiles }: Props)
         </DndContext>
       ) : (
         <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm flex items-center justify-center text-slate-500">
-          <p>طريقة العرض ({viewMode}) قيد التطوير...</p>
+           <p>عرض ({viewMode}) قيد التطوير...</p>
         </div>
       )}
 

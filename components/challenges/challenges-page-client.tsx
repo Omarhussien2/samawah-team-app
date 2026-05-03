@@ -64,7 +64,7 @@ export function ChallengesPageClient({ challenges, profiles: _profiles, projects
       owner_id: currentUser.id,
       status: "open",
     });
-    if (error) toast.error("فشل إنشاء التحدي");
+    if (error) toast.error("ما نجح إنشاء التحدي");
     else {
       toast.success("تم إنشاء التحدي");
       setShowCreate(false);
@@ -108,7 +108,7 @@ export function ChallengesPageClient({ challenges, profiles: _profiles, projects
       {filtered.length === 0 ? (
         <div className="text-center py-20 text-muted-foreground">
           <div className="text-5xl mb-4">🎯</div>
-          <p className="font-medium">لا توجد تحديات</p>
+           <p className="font-medium">ما فيه تحديات</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

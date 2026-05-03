@@ -10,6 +10,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { cn, getStatusColor, getStatusLabel, getPriorityColor, getPriorityLabel, formatDateShort, getAlertLevelColor } from "@/lib/utils";
+import { recalcProjectProgress } from "@/lib/utils/recalc-progress";
 import type { Task, Profile } from "@/lib/supabase/types";
 
 interface Props {
@@ -82,11 +83,12 @@ export function DashboardClient({ user, projects, tasks, comments }: Props) {
   }, [localTasks]);
 
   // Mark task as done
-  const handleMarkDone = async (taskId: string) => {
+  const handleMarkDone = async (taskId: string, projectId?: string) => {
     setLocalTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: "Done" } : t));
-    toast.success("تم إنجاز المهمة!");
+    toast.success("خلّصت المهمة!");
     const supabase = createClient();
-    await supabase.from("tasks").update({ status: "Done", board_column: "Done", progress: 100 }).eq("id", taskId);
+    await supabase.from("tasks").update({ status: "Done", board_column: "Done", progress: 100, quantity_done: 1, quantity_total: 1 }).eq("id", taskId);
+    if (projectId) recalcProjectProgress(projectId);
   };
 
   return (
@@ -98,7 +100,7 @@ export function DashboardClient({ user, projects, tasks, comments }: Props) {
           {format(new Date(), "EEEE، d MMMM yyyy", { locale: ar })}
         </p>
         <h1 className="text-3xl font-bold font-heading text-slate-900 tracking-tight">
-          {greeting}، {user.full_name?.split(" ")[0] || "مرحباً"}! 👋
+          {greeting}، {user.full_name?.split(" ")[0] || "هلا"}! 👋
         </h1>
       </div>
 
@@ -151,7 +153,7 @@ export function DashboardClient({ user, projects, tasks, comments }: Props) {
             {drillDownTasks.length === 0 ? (
               <div className="py-12 text-center text-muted-foreground">
                 <CheckCircle2 size={32} className="mx-auto mb-3 text-slate-300" />
-                <p className="font-medium">لا توجد مهام</p>
+                <p className="font-medium">ما فيه مهام</p>
               </div>
             ) : (
               <table className="w-full text-sm">
@@ -168,7 +170,7 @@ export function DashboardClient({ user, projects, tasks, comments }: Props) {
                   {drillDownTasks.map((task: any) => {
                     const proj = projects.find((p: any) => p.id === task.project_id);
                     return (
-                      <tr key={task.id} className="hover:bg-slate-50 cursor-pointer transition-colors" onClick={() => handleMarkDone(task.id)}>
+                       <tr key={task.id} className="hover:bg-slate-50 cursor-pointer transition-colors" onClick={() => handleMarkDone(task.id, task.project_id)}>
                         <td className="px-5 py-3">
                           <p className="font-medium text-slate-800 line-clamp-1">{task.title}</p>
                           {task.alert_level && task.alert_level !== "Low" && (
@@ -273,7 +275,7 @@ export function DashboardClient({ user, projects, tasks, comments }: Props) {
                   <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mb-3">
                     <CheckCircle2 size={24} className="text-slate-300" />
                   </div>
-                  <p className="text-sm text-slate-500 font-medium">لا توجد مهام مستحقة اليوم</p>
+                  <p className="text-sm text-slate-500 font-medium">ما فيه مهام مستحقة اليوم</p>
                 </div>
               ) : (
                 todayTasks.map((task) => (
@@ -310,7 +312,7 @@ export function DashboardClient({ user, projects, tasks, comments }: Props) {
                   </div>
                 ))}
                 {comments.length === 0 && (
-                  <p className="text-sm text-slate-400 pr-6">لا توجد نشاطات حديثة</p>
+                  <p className="text-sm text-slate-400 pr-6">ما فيه نشاطات جديدة</p>
                 )}
               </div>
             </div>

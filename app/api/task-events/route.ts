@@ -108,5 +108,18 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // --- Recalculate project progress ---
+  if (body.project_id && body.new_status && body.old_status && body.new_status !== body.old_status) {
+    const { data: projTasks } = await serviceClient
+      .from("tasks")
+      .select("status")
+      .eq("project_id", body.project_id);
+    if (projTasks && projTasks.length > 0) {
+      const doneCount = projTasks.filter((t) => t.status === "Done").length;
+      const newProgress = Math.round((doneCount / projTasks.length) * 100);
+      await serviceClient.from("projects").update({ progress: newProgress }).eq("id", body.project_id);
+    }
+  }
+
   return NextResponse.json({ success: true });
 }

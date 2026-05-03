@@ -85,7 +85,7 @@ export function NotificationsPageClient({ initialNotifications, totalCount, user
         prev.map((n) => (n.id === id ? { ...n, read_at: new Date().toISOString() } : n))
       );
     } catch {
-      toast.error("فشل تحديث الإشعار");
+      toast.error("ما نجح تحديث الإشعار");
     }
   };
 
@@ -102,7 +102,7 @@ export function NotificationsPageClient({ initialNotifications, totalCount, user
       );
       toast.success("تم تحديد الكل كمقروء");
     } catch {
-      toast.error("فشل تحديث الإشعارات");
+      toast.error("ما نجح تحديث الإشعارات");
     } finally {
       setMarkingAll(false);
     }
@@ -119,7 +119,7 @@ export function NotificationsPageClient({ initialNotifications, totalCount, user
         setTotal(data.total);
       }
     } catch {
-      toast.error("فشل تحميل المزيد");
+      toast.error("ما نجح التحميل");
     } finally {
       setLoadingMore(false);
     }
@@ -175,7 +175,7 @@ export function NotificationsPageClient({ initialNotifications, totalCount, user
               <Inbox size={28} className="text-muted-foreground" />
             </div>
             <p className="text-muted-foreground text-sm">
-              {filter === "unread" ? "لا توجد إشعارات غير مقروءة" : "لا توجد إشعارات"}
+              {filter === "unread" ? "ما فيه إشعارات جديدة" : "ما فيه إشعارات"}
             </p>
           </div>
         ) : (
@@ -250,7 +250,7 @@ export function NotificationsPageClient({ initialNotifications, totalCount, user
             {loadingMore ? (
               <Loader2 size={14} className="animate-spin inline ml-2" />
             ) : null}
-            تحميل المزيد
+            حمّل المزيد
           </button>
         </div>
       )}

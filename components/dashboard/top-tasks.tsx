@@ -20,7 +20,7 @@ export function TopTasks({ tasks }: { tasks: Task[] }) {
       </h3>
       {tasks.length === 0 ? (
         <p className="text-center text-muted-foreground text-sm py-6">
-          لا توجد مهام عاجلة 🎉
+          ما فيه مهام عاجلة 🎉
         </p>
       ) : (
         <div className="space-y-2">

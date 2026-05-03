@@ -27,7 +27,7 @@ export function DocumentsList({ documents, projectId, currentUser }: Props) {
     const { error } = await supabase.from("documents").insert({
       title: form.title, project_id: projectId, url: form.url || null, type: form.type, created_by: currentUser.id,
     });
-    if (error) toast.error("فشل إنشاء المستند");
+    if (error) toast.error("ما نجح إنشاء المستند");
     else { toast.success("تم إنشاء المستند"); setShowAdd(false); setForm({ title: "", url: "", type: "أخرى" }); router.refresh(); }
     setSaving(false);
   };
@@ -40,7 +40,7 @@ export function DocumentsList({ documents, projectId, currentUser }: Props) {
         </button>
       </div>
       {documents.length === 0 ? (
-        <div className="text-center py-10 text-muted-foreground">لا توجد مستندات في هذا المشروع</div>
+         <div className="text-center py-10 text-muted-foreground">ما فيه مستندات في هذا المشروع</div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {documents.map((doc) => (
