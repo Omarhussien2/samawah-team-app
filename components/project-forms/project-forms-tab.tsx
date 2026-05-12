@@ -12,7 +12,7 @@ import { mapInstanceToCard, type ProjectFormInstanceWithRelations, type ProjectF
 import { ProjectFormEditor } from "./project-form-editor";
 import { ProjectFormPreview } from "./project-form-preview";
 import { ProjectFormShareModal } from "./project-form-share-modal";
-import { buildPrintableHtml, downloadHtml } from "@/lib/project-forms/export";
+import { downloadFormDocx, downloadFormPdf } from "@/lib/project-forms/export";
 
 interface Props {
   project: Project & { manager?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null };
@@ -47,6 +47,7 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
   const [editorForm, setEditorForm] = useState<ProjectFormTemplateWithInstance | null>(null);
   const [previewForm, setPreviewForm] = useState<ProjectFormTemplateWithInstance | null>(null);
   const [shareInstance, setShareInstance] = useState<ProjectFormInstanceWithRelations | null>(null);
+  const [exporting, setExporting] = useState<string | null>(null);
 
   const isAdmin = currentUser.role === "admin";
   const isManager = project.manager_id === currentUser.id;
@@ -167,11 +168,22 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
     setSaving(false);
   };
 
-  const handleDownload = (form: ProjectFormTemplateWithInstance) => {
+  const handleExport = async (form: ProjectFormTemplateWithInstance, format: "pdf" | "docx") => {
     const data = form.instance?.data_json && typeof form.instance.data_json === "object" && !Array.isArray(form.instance.data_json)
       ? form.instance.data_json as Record<string, unknown>
       : {};
-    downloadHtml(`${form.template.name}.html`, buildPrintableHtml(projectForForms, form, data));
+    const exportKey = `${form.id}-${format}`;
+    setExporting(exportKey);
+
+    try {
+      if (format === "pdf") await downloadFormPdf({ project: projectForForms, form, data, profiles });
+      else await downloadFormDocx({ project: projectForForms, form, data, profiles });
+      toast.success(format === "pdf" ? "تم تحميل ملف PDF" : "تم تحميل ملف Word");
+    } catch (error) {
+      toast.error(`تعذر تصدير النموذج: ${error instanceof Error ? error.message : "خطأ غير معروف"}`);
+    } finally {
+      setExporting(null);
+    }
   };
 
   return (
@@ -333,9 +345,13 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
                   <Eye size={14} />
                   معاينة
                 </button>
-                <button onClick={() => handleDownload(form)} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">
-                  <Download size={14} />
-                  تحميل
+                <button onClick={() => handleExport(form, "pdf")} disabled={exporting === `${form.id}-pdf`} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-60">
+                  {exporting === `${form.id}-pdf` ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                  PDF
+                </button>
+                <button onClick={() => handleExport(form, "docx")} disabled={exporting === `${form.id}-docx`} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-60">
+                  {exporting === `${form.id}-docx` ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                  Word
                 </button>
                 <button onClick={() => form.instance ? setShareInstance(instances.find((item) => item.id === form.instance?.id) ?? null) : toast.error("احفظ النموذج أولًا قبل المشاركة")} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">
                   <Share2 size={14} />
@@ -361,6 +377,7 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
         project={projectForForms}
         form={previewForm as ProjectFormTemplateWithInstance}
         data={(previewForm?.instance?.data_json && typeof previewForm.instance.data_json === "object" && !Array.isArray(previewForm.instance.data_json) ? previewForm.instance.data_json : {}) as Record<string, unknown>}
+        profiles={profiles}
         open={!!previewForm}
         onClose={() => setPreviewForm(null)}
       />
