@@ -145,7 +145,7 @@ export function ProjectFormEditor({ open, project, form, profiles, currentUser, 
         </div>
       </div>
 
-      <ProjectFormPreview project={project} form={{ ...form, completion }} data={data} open={previewOpen} onClose={() => setPreviewOpen(false)} />
+      <ProjectFormPreview project={project} form={{ ...form, completion }} data={data} profiles={profiles} open={previewOpen} onClose={() => setPreviewOpen(false)} />
     </>
   );
 }
