@@ -9,7 +9,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const supabase = await createClient();
 
   const [{ data: project }, { data: tasks }, { data: challenges }, { data: documents }, { data: profiles }] = await Promise.all([
-    supabase.from("projects").select("*, manager:profiles(id,full_name,avatar_url)").eq("id", id).single(),
+    supabase.from("projects").select("*, manager:profiles!projects_manager_id_fkey(id,full_name,avatar_url)").eq("id", id).single(),
     supabase.from("tasks").select("*, owner:profiles(id,full_name,avatar_url)").eq("project_id", id).order("sort_order"),
     supabase.from("challenges").select("*, owner:profiles(id,full_name)").eq("project_id", id).order("created_at", { ascending: false }),
     supabase.from("documents").select("*, creator:profiles(id,full_name)").eq("project_id", id).order("created_at", { ascending: false }),
