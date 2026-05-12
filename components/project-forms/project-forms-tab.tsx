@@ -63,7 +63,7 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
       supabase.from("project_form_templates").select("*").eq("active", true).order("sort_order"),
       supabase
         .from("project_form_instances")
-        .select("*, template:project_form_templates(*), assigned_owner:profiles(id,full_name,avatar_url)")
+        .select("*, template:project_form_templates(*), assigned_owner:profiles!project_form_instances_assigned_owner_id_fkey(id,full_name,avatar_url)")
         .eq("project_id", project.id)
         .order("updated_at", { ascending: false }),
     ]);
