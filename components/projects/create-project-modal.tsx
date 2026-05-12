@@ -45,6 +45,10 @@ export function CreateProjectModal({ open, onClose, profiles, templates }: Props
     const supabase = createClient();
     const manager = profiles.find((p) => p.id === data.manager_id);
 
+    const budget = typeof data.total_budget === "number" && !isNaN(data.total_budget)
+      ? data.total_budget
+      : 0;
+
     const { data: project, error } = await supabase
       .from("projects")
       .insert({
@@ -54,7 +58,7 @@ export function CreateProjectModal({ open, onClose, profiles, templates }: Props
         current_stage: data.current_stage || null,
         start_date: data.start_date || null,
         end_date: data.end_date || null,
-        total_budget: data.total_budget ?? 0,
+        total_budget: budget,
         description: data.description || null,
         status: "active",
       })
@@ -62,7 +66,7 @@ export function CreateProjectModal({ open, onClose, profiles, templates }: Props
       .single();
 
     if (error) {
-      toast.error("فشل إنشاء المشروع");
+      toast.error(`فشل إنشاء المشروع: ${error.message}`);
       setLoading(false);
       return;
     }

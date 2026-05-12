@@ -54,7 +54,7 @@ export function ImportClient({ currentUser: _currentUser }: Props) {
   const [parsedProjects, setParsedProjects] = useState<ParsedProject[]>([]);
   const [parsedTasks, setParsedTasks] = useState<ParsedTask[]>([]);
   const [importing, setImporting] = useState(false);
-  const [result, setResult] = useState<{ success: number; errors: number } | null>(null);
+  const [result, setResult] = useState<{ success: number; errors: number; errorDetails?: string[] } | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
   const parseProjectCSV = (data: Record<string, string>[]): ParsedProject[] => {
@@ -334,12 +334,20 @@ export function ImportClient({ currentUser: _currentUser }: Props) {
         <div className="text-center py-12">
           <CheckCircle size={48} className="text-green-500 mx-auto mb-4" />
           <h2 className="text-xl font-bold text-foreground mb-2">اكتمل الاستيراد</h2>
-          <p className="text-muted-foreground mb-6">
+          <p className="text-muted-foreground mb-2">
             تم استيراد <span className="font-bold text-green-600">{result.success}</span> سجل بنجاح
             {result.errors > 0 && (
               <span> وفشل استيراد <span className="font-bold text-red-600">{result.errors}</span> سجل</span>
             )}
           </p>
+          {result.errorDetails && result.errorDetails.length > 0 && (
+            <div className="mt-4 mb-6 bg-red-50 border border-red-200 rounded-xl p-4 text-right max-w-xl mx-auto">
+              <h4 className="text-sm font-semibold text-red-700 mb-2">تفاصيل الأخطاء:</h4>
+              <ul className="text-xs text-red-600 space-y-1 max-h-40 overflow-y-auto">
+                {result.errorDetails.map((d, i) => <li key={i}>{d}</li>)}
+              </ul>
+            </div>
+          )}
           <div className="flex gap-3 justify-center">
             <button onClick={() => { setStep("upload"); setParsedProjects([]); setParsedTasks([]); setResult(null); }}
               className="px-5 py-2.5 border border-border rounded-lg text-sm hover:bg-accent">
