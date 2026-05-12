@@ -9,7 +9,7 @@ export default async function ProjectsPage() {
   const [{ data: projects }, { data: profiles }, { data: templates }] = await Promise.all([
     supabase
       .from("projects")
-      .select("*, manager:profiles(id,full_name,avatar_url)")
+      .select("*, manager:profiles!projects_manager_id_fkey(id,full_name,avatar_url)")
       .order("created_at", { ascending: false }),
     supabase.from("profiles").select("id, full_name, email, avatar_url").eq("active", true),
     supabase.from("project_templates").select("*, task_templates(*)"),
