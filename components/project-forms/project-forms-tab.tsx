@@ -1,18 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Image from "next/image";
-import { FileText, Filter, Loader2, Plus, Search, Share2, Download, Eye, Pencil, PackagePlus, UserCog } from "lucide-react";
+import { FileText, Filter, Loader2, Plus, Search, Eye, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
-import { cn, formatRelativeAr, getAvatarUrl } from "@/lib/utils";
+import { cn, formatRelativeAr } from "@/lib/utils";
 import type { Profile, Project, ProjectFormTemplate } from "@/lib/supabase/types";
 import { FORM_STATUS_COLORS, FORM_STATUS_LABELS, type ProjectFormStatus } from "@/lib/project-forms/schema";
 import { mapInstanceToCard, type ProjectFormInstanceWithRelations, type ProjectFormTemplateWithInstance } from "@/lib/project-forms/types";
 import { ProjectFormEditor } from "./project-form-editor";
 import { ProjectFormPreview } from "./project-form-preview";
-import { ProjectFormShareModal } from "./project-form-share-modal";
-import { buildPrintableHtml, downloadHtml } from "@/lib/project-forms/export";
 
 interface Props {
   project: Project & { manager?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null };
@@ -21,14 +18,12 @@ interface Props {
 }
 
 const BASIC_TEMPLATE_NAMES = ["ميثاق المشروع", "SLA اتفاقية مستوى الخدمة", "RACI Matrix"];
-const TRAINING_TEMPLATE_NAMES = ["خطة التدريب", "متابعة التدريب", "تقييم التدريب"];
 const STATUSES: Array<"all" | ProjectFormStatus> = ["all", "not_started", "draft", "completed"];
-const STAGES = ["all", "بدء المشروع", "التخطيط", "التنفيذ", "الإغلاق", "التدريب"];
-const CATEGORIES = ["all", "عام", "تدريب", "مصفوفة", "اتفاقية"];
+const STAGES = ["all", "بدء المشروع", "التخطيط", "التنفيذ", "الإغلاق"];
+const CATEGORIES = ["all", "عام", "مصفوفة", "اتفاقية"];
 
-function isTrainingProject(project: Project) {
-  const haystack = `${project.path ?? ""} ${project.current_stage ?? ""}`.toLowerCase();
-  return haystack.includes("training") || haystack.includes("تدريب");
+function isTrainingTemplate(template: Pick<ProjectFormTemplate, "category" | "applies_to_path">) {
+  return template.category === "تدريب" || template.applies_to_path === "training";
 }
 
 export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
@@ -36,9 +31,6 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
   const [instances, setInstances] = useState<ProjectFormInstanceWithRelations[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [ownerPickerOpen, setOwnerPickerOpen] = useState(false);
-  const [currentFormsOwnerId, setCurrentFormsOwnerId] = useState(project.forms_owner_id ?? "");
-  const [selectedOwnerId, setSelectedOwnerId] = useState(project.forms_owner_id ?? "");
   const [statusFilter, setStatusFilter] = useState<"all" | ProjectFormStatus>("all");
   const [stageFilter, setStageFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -46,15 +38,9 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
   const [manualTemplateId, setManualTemplateId] = useState("");
   const [editorForm, setEditorForm] = useState<ProjectFormTemplateWithInstance | null>(null);
   const [previewForm, setPreviewForm] = useState<ProjectFormTemplateWithInstance | null>(null);
-  const [shareInstance, setShareInstance] = useState<ProjectFormInstanceWithRelations | null>(null);
 
-  const isAdmin = currentUser.role === "admin";
   const isManager = project.manager_id === currentUser.id;
-  const isFormsOwner = currentFormsOwnerId === currentUser.id;
-  const canEdit = isAdmin || isManager || isFormsOwner;
-  const formsOwner = profiles.find((profile) => profile.id === currentFormsOwnerId) ?? null;
-  const projectForForms = useMemo(() => ({ ...project, forms_owner_id: currentFormsOwnerId || null }), [project, currentFormsOwnerId]);
-  const trainingProject = isTrainingProject(project);
+  const canEdit = isManager;
 
   const fetchForms = useCallback(async () => {
     setLoading(true);
@@ -71,7 +57,7 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
     if (templateError) toast.error(`تعذر تحميل قوالب النماذج: ${templateError.message}`);
     if (instanceError) toast.error(`تعذر تحميل نماذج المشروع: ${instanceError.message}`);
 
-    setTemplates((templateRows ?? []) as ProjectFormTemplate[]);
+    setTemplates(((templateRows ?? []) as ProjectFormTemplate[]).filter((template) => !isTrainingTemplate(template)));
     setInstances((instanceRows ?? []) as ProjectFormInstanceWithRelations[]);
     setLoading(false);
   }, [project.id]);
@@ -80,14 +66,9 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
     fetchForms();
   }, [fetchForms]);
 
-  useEffect(() => {
-    setCurrentFormsOwnerId(project.forms_owner_id ?? "");
-    setSelectedOwnerId(project.forms_owner_id ?? "");
-  }, [project.forms_owner_id]);
-
   const forms = useMemo(() => {
     return instances
-      .filter((instance) => instance.template)
+      .filter((instance) => instance.template && !isTrainingTemplate(instance.template as ProjectFormTemplate))
       .map((instance) => mapInstanceToCard(instance.template as ProjectFormTemplate, instance));
   }, [instances]);
 
@@ -109,16 +90,12 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
     return { total, completed, drafts, average };
   }, [forms]);
 
-  const trainingSummary = useMemo(() => {
-    const trainingForms = forms.filter((form) => form.template.category === "تدريب");
-    return {
-      total: trainingForms.length,
-      completed: trainingForms.filter((form) => form.status === "completed").length,
-      completion: trainingForms.length ? Math.round(trainingForms.reduce((sum, form) => sum + form.completion, 0) / trainingForms.length) : 0,
-    };
-  }, [forms]);
-
   const createInstances = async (templateNames: string[]) => {
+    if (!canEdit) {
+      toast.error("تعبئة نماذج المشروع متاحة لمدير المشروع فقط");
+      return;
+    }
+
     const selectedTemplates = templates.filter((template) => templateNames.includes(template.name));
     if (selectedTemplates.length === 0) {
       toast.error("لم يتم العثور على القوالب المطلوبة. تأكد من تشغيل seed.sql");
@@ -130,7 +107,7 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
     const payload = selectedTemplates.map((template) => ({
       project_id: project.id,
       template_id: template.id,
-      assigned_owner_id: currentFormsOwnerId || project.manager_id || currentUser.id,
+      assigned_owner_id: project.manager_id ?? currentUser.id,
       created_by: currentUser.id,
       updated_by: currentUser.id,
     }));
@@ -154,26 +131,6 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
     setManualTemplateId("");
   };
 
-  const updateFormsOwner = async () => {
-    setSaving(true);
-    const supabase = createClient();
-    const { error } = await supabase.from("projects").update({ forms_owner_id: selectedOwnerId || null }).eq("id", project.id);
-    if (error) toast.error(`ما نجح تحديث مسؤول النماذج: ${error.message}`);
-    else {
-      toast.success("تم تحديث مسؤول النماذج");
-      setCurrentFormsOwnerId(selectedOwnerId);
-      setOwnerPickerOpen(false);
-    }
-    setSaving(false);
-  };
-
-  const handleDownload = (form: ProjectFormTemplateWithInstance) => {
-    const data = form.instance?.data_json && typeof form.instance.data_json === "object" && !Array.isArray(form.instance.data_json)
-      ? form.instance.data_json as Record<string, unknown>
-      : {};
-    downloadHtml(`${form.template.name}.html`, buildPrintableHtml(projectForForms, form, data));
-  };
-
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -183,27 +140,12 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
             <p className="mt-1 text-sm text-slate-500">إدارة وتعبئة النماذج المرتبطة بهذا المشروع</p>
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
-                {formsOwner ? (
-                  <>
-                    <Image src={formsOwner.avatar_url ?? getAvatarUrl(formsOwner.full_name)} alt="" width={28} height={28} className="h-7 w-7 rounded-full object-cover" />
-                    <div>
-                      <p className="text-[11px] font-bold text-slate-400">مسؤول النماذج</p>
-                      <p className="text-sm font-bold text-slate-700">{formsOwner.full_name}</p>
-                    </div>
-                  </>
-                ) : (
-                  <div>
-                    <p className="text-[11px] font-bold text-slate-400">مسؤول النماذج</p>
-                    <p className="text-sm font-bold text-slate-500">غير محدد</p>
-                  </div>
-                )}
+                <div>
+                  <p className="text-[11px] font-bold text-slate-400">صلاحية التعبئة</p>
+                  <p className="text-sm font-bold text-slate-700">{project.manager?.full_name ?? "مدير المشروع"}</p>
+                </div>
               </div>
-              {(isAdmin || isManager) && (
-                <button onClick={() => setOwnerPickerOpen((value) => !value)} className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50">
-                  <UserCog size={16} />
-                  تعيين/تغيير المسؤول
-                </button>
-              )}
+              {!canEdit && <span className="text-xs font-bold text-amber-600">يمكنك العرض فقط. التعبئة متاحة لمدير المشروع.</span>}
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -211,25 +153,8 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
               {saving ? <Loader2 size={15} className="animate-spin" /> : <Plus size={16} />}
               إضافة النماذج الأساسية
             </button>
-            <button onClick={() => createInstances(TRAINING_TEMPLATE_NAMES)} disabled={saving || !canEdit} className={cn("flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold disabled:opacity-60", trainingProject ? "bg-emerald-600 text-white hover:bg-emerald-700" : "border border-slate-200 text-slate-600 hover:bg-slate-50")}>
-              <PackagePlus size={16} />
-              إضافة حزمة التدريب
-            </button>
           </div>
         </div>
-
-        {ownerPickerOpen && (
-          <div className="mt-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-end">
-            <label className="flex-1">
-              <span className="mb-1 block text-xs font-bold text-slate-500">اختر مسؤول النماذج</span>
-              <select value={selectedOwnerId} onChange={(e) => setSelectedOwnerId(e.target.value)} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100">
-                <option value="">بدون مسؤول</option>
-                {profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.full_name}</option>)}
-              </select>
-            </label>
-            <button onClick={updateFormsOwner} disabled={saving} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-60">حفظ المسؤول</button>
-          </div>
-        )}
       </div>
 
       <div className="grid gap-3 md:grid-cols-4">
@@ -245,18 +170,6 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
           </div>
         ))}
       </div>
-
-      {(trainingProject || trainingSummary.total > 0) && (
-        <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-5">
-          <h3 className="mb-3 text-sm font-black text-emerald-900">ملخص التدريب</h3>
-          <div className="grid gap-3 md:grid-cols-4">
-            <div><p className="text-xs text-emerald-700">إجمالي البرامج التدريبية</p><p className="text-xl font-black">{trainingSummary.total}</p></div>
-            <div><p className="text-xs text-emerald-700">البرامج المنفذة</p><p className="text-xl font-black">{trainingSummary.completed}</p></div>
-            <div><p className="text-xs text-emerald-700">نسبة تنفيذ الخطة</p><p className="text-xl font-black">{trainingSummary.completion}%</p></div>
-            <div><p className="text-xs text-emerald-700">إحصاءات متقدمة</p><p className="text-sm font-bold">مؤجلة للنسخة التالية</p></div>
-          </div>
-        </div>
-      )}
 
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="grid gap-3 lg:grid-cols-[1fr_160px_160px_160px_240px]">
@@ -321,7 +234,7 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
                 </div>
               </div>
               <div className="mb-4 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
-                <span>المسؤول: {form.owner?.full_name ?? formsOwner?.full_name ?? "غير محدد"}</span>
+                <span>مدير المشروع: {project.manager?.full_name ?? "-"}</span>
                 <span>آخر تحديث: {form.updatedAt ? formatRelativeAr(form.updatedAt) : "-"}</span>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -333,14 +246,6 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
                   <Eye size={14} />
                   معاينة
                 </button>
-                <button onClick={() => handleDownload(form)} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">
-                  <Download size={14} />
-                  تحميل
-                </button>
-                <button onClick={() => form.instance ? setShareInstance(instances.find((item) => item.id === form.instance?.id) ?? null) : toast.error("احفظ النموذج أولًا قبل المشاركة")} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">
-                  <Share2 size={14} />
-                  مشاركة
-                </button>
               </div>
             </div>
           ))}
@@ -349,7 +254,7 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
 
       <ProjectFormEditor
         open={!!editorForm}
-        project={projectForForms}
+        project={project}
         form={editorForm}
         profiles={profiles}
         currentUser={currentUser}
@@ -358,19 +263,11 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
         onSaved={fetchForms}
       />
       <ProjectFormPreview
-        project={projectForForms}
+        project={project}
         form={previewForm as ProjectFormTemplateWithInstance}
         data={(previewForm?.instance?.data_json && typeof previewForm.instance.data_json === "object" && !Array.isArray(previewForm.instance.data_json) ? previewForm.instance.data_json : {}) as Record<string, unknown>}
         open={!!previewForm}
         onClose={() => setPreviewForm(null)}
-      />
-      <ProjectFormShareModal
-        open={!!shareInstance}
-        instance={shareInstance}
-        profiles={profiles}
-        currentUser={currentUser}
-        onClose={() => setShareInstance(null)}
-        onShared={fetchForms}
       />
     </div>
   );

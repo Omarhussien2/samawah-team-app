@@ -1,9 +1,9 @@
 "use client";
 
-import { Printer, X, Download } from "lucide-react";
+import { Printer, X } from "lucide-react";
 import type { Project } from "@/lib/supabase/types";
 import { DynamicFormRenderer } from "./dynamic-form-renderer";
-import { buildPrintableHtml, downloadHtml } from "@/lib/project-forms/export";
+import { buildPrintableHtml } from "@/lib/project-forms/export";
 import { parseFormSchema, type ProjectFormData } from "@/lib/project-forms/schema";
 import type { ProjectFormTemplateWithInstance } from "@/lib/project-forms/types";
 
@@ -38,9 +38,6 @@ export function ProjectFormPreview({ project, form, data, open, onClose }: Props
             <p className="text-xs text-slate-500">معاينة قابلة للطباعة - {project.name}</p>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => downloadHtml(`${form.template.name}.html`, printableHtml())} className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50" title="تحميل HTML">
-              <Download size={18} />
-            </button>
             <button onClick={handlePrint} className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50" title="طباعة">
               <Printer size={18} />
             </button>

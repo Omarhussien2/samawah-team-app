@@ -57,10 +57,7 @@ $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
 CREATE OR REPLACE FUNCTION can_edit_project_forms(p_project_id UUID)
 RETURNS BOOLEAN AS $$
-  SELECT
-    get_my_role() = 'admin'
-    OR is_project_manager(p_project_id)
-    OR is_project_forms_owner(p_project_id);
+  SELECT is_project_manager(p_project_id);
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
 CREATE OR REPLACE FUNCTION has_project_form_share(p_form_instance_id UUID, p_permission TEXT DEFAULT NULL)
@@ -262,7 +259,6 @@ CREATE POLICY "project_form_instances_select" ON project_form_instances
     OR is_project_manager(project_id)
     OR is_project_member(project_id)
     OR assigned_owner_id = auth.uid()
-    OR has_project_form_share(project_form_instances.id)
   );
 
 DROP POLICY IF EXISTS "project_form_instances_insert" ON project_form_instances;
@@ -275,7 +271,6 @@ DROP POLICY IF EXISTS "project_form_instances_update" ON project_form_instances;
 CREATE POLICY "project_form_instances_update" ON project_form_instances
   FOR UPDATE USING (
     can_edit_project_forms(project_id)
-    OR has_project_form_share(project_form_instances.id, 'edit')
   );
 
 DROP POLICY IF EXISTS "project_form_instances_delete" ON project_form_instances;

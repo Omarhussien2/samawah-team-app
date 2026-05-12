@@ -8,8 +8,8 @@ Project forms are structured, fillable records attached to a project. They are s
 
 - `project_form_templates` stores active form definitions and their `schema_json`.
 - `project_form_instances` stores one filled form per project/template pair.
-- `project_form_shares` stores internal sharing permissions for a saved form instance.
-- `projects.forms_owner_id` identifies the person responsible for project forms.
+- `project_form_shares` is reserved for a future notification-backed sharing flow and is not exposed in the V1 UI.
+- `projects.forms_owner_id` is a legacy/reserved column. Project forms are filled by the project manager.
 - `documents.form_instance_id` can link future generated/uploaded files to the source form instance.
 
 ## UI Entry Point
@@ -19,17 +19,16 @@ Project forms live in the project detail page under the `نماذج المشرو
 - `components/project-forms/project-forms-tab.tsx` fetches templates and instances.
 - `components/project-forms/project-form-editor.tsx` edits a single form instance.
 - `components/project-forms/dynamic-form-renderer.tsx` renders fields from template JSON.
-- `components/project-forms/project-form-preview.tsx` previews and prints/downloads HTML output.
-- `components/project-forms/project-form-share-modal.tsx` shares a saved form internally.
+- `components/project-forms/project-form-preview.tsx` previews and prints the form.
 
 ## Permissions
 
 RLS allows:
 
-- admins to manage templates and project form data.
-- project managers and the assigned forms owner to create, update, share, and delete project forms.
+- admins to manage templates.
+- project managers to create and update project form instances.
 - project members to view forms for their projects.
-- explicitly shared users to view or edit a form instance based on `project_form_shares.permission`.
+- sharing is reserved for a future flow. It should not affect form access until it sends an in-app notification or email.
 
 Future SQL changes should update both `supabase/schema.sql` and `supabase/rls.sql`, then update `lib/supabase/types.ts` manually.
 
@@ -105,6 +104,6 @@ Examples:
 
 ## V1 Limitations
 
-- V1 exports printable HTML, not native DOCX/XLSX regeneration.
+- V1 supports print preview only. Native PDF/DOCX export should be implemented in a separate export service/PR.
 - The source DOCX/XLSX files are referenced by path but not parsed into binary templates at runtime.
-- Training analytics are summarized from form completion only; detailed dashboards can be added later.
+- Training forms should move into a dedicated training module with its own inputs, outputs, dashboards, and reports.
