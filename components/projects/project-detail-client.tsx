@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { ArrowRight, CalendarDays, Wallet, Target, Activity, Users, MoreHorizontal } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { ArrowRight, CalendarDays, Wallet, Target, Activity, Users, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { formatDateShort, getProjectStatusLabel, cn, getAvatarUrl } from "@/lib/utils";
@@ -10,6 +10,12 @@ import { TasksTable } from "@/components/tasks/tasks-table";
 import { ChallengesList } from "@/components/challenges/challenges-list";
 import { DocumentsList } from "@/components/documents/documents-list";
 import Image from "next/image";
+import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Loader2, X } from "lucide-react";
 import type { Profile, Project, Task, Challenge, Document } from "@/lib/supabase/types";
 
 const TABS = [
@@ -20,6 +26,19 @@ const TABS = [
   { key: "documents", label: "المستندات" },
   { key: "members", label: "الأعضاء" },
 ];
+
+const editSchema = z.object({
+  name: z.string().min(1, "اسم المشروع مطلوب"),
+  status: z.enum(["active", "paused", "completed", "cancelled"]),
+  current_stage: z.string().optional(),
+  start_date: z.string().optional(),
+  end_date: z.string().optional(),
+  total_budget: z.number().optional(),
+  description: z.string().optional(),
+  manager_id: z.string().optional(),
+});
+
+type EditFormData = z.infer<typeof editSchema>;
 
 interface Props {
   project: Project & { manager?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null };
@@ -37,6 +56,90 @@ export function ProjectDetailClient({ project, tasks, challenges, documents, pro
   const initialTab = searchParams.get("tab") || "overview";
   
   const [activeTab, setActiveTab] = useState(initialTab);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<EditFormData>({
+    resolver: zodResolver(editSchema),
+    defaultValues: {
+      name: project.name,
+      status: project.status as "active" | "paused" | "completed" | "cancelled",
+      current_stage: project.current_stage ?? "",
+      start_date: project.start_date ?? "",
+      end_date: project.end_date ?? "",
+      total_budget: project.total_budget ?? 0,
+      description: project.description ?? "",
+      manager_id: project.manager_id ?? "",
+    },
+  });
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleEdit = async (data: EditFormData) => {
+    setSaving(true);
+    const supabase = createClient();
+    const budget = typeof data.total_budget === "number" && !isNaN(data.total_budget) ? data.total_budget : 0;
+    const manager = profiles.find((p) => p.id === data.manager_id);
+
+    const { error } = await supabase.from("projects").update({
+      name: data.name,
+      status: data.status,
+      current_stage: data.current_stage || null,
+      start_date: data.start_date || null,
+      end_date: data.end_date || null,
+      total_budget: budget,
+      description: data.description || null,
+      manager_id: data.manager_id || null,
+      manager_name: manager?.full_name ?? null,
+    }).eq("id", project.id);
+
+    if (error) {
+      toast.error(`فشل التحديث: ${error.message}`);
+    } else {
+      toast.success("تم تحديث المشروع بنجاح");
+      setEditOpen(false);
+      router.refresh();
+    }
+    setSaving(false);
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    const supabase = createClient();
+    const { error } = await supabase.from("projects").delete().eq("id", project.id);
+    if (error) {
+      toast.error(`فشل الحذف: ${error.message}`);
+    } else {
+      toast.success("تم حذف المشروع");
+      router.push("/projects");
+    }
+    setDeleting(false);
+  };
+
+  const openEdit = () => {
+    reset({
+      name: project.name,
+      status: project.status as "active" | "paused" | "completed" | "cancelled",
+      current_stage: project.current_stage ?? "",
+      start_date: project.start_date ?? "",
+      end_date: project.end_date ?? "",
+      total_budget: project.total_budget ?? 0,
+      description: project.description ?? "",
+      manager_id: project.manager_id ?? "",
+    });
+    setMenuOpen(false);
+    setEditOpen(true);
+  };
 
   useEffect(() => {
     const tab = searchParams.get("tab");
@@ -140,10 +243,31 @@ export function ProjectDetailClient({ project, tasks, challenges, documents, pro
             
             <div className="w-px h-10 bg-slate-200 hidden sm:block" />
             
-            <div className="hidden sm:flex items-center gap-2">
-              <button className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 transition-colors shadow-sm">
+            <div className="hidden sm:flex items-center gap-2 relative" ref={menuRef}>
+              <button
+                onClick={() => setMenuOpen(!menuOpen)}
+                className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 transition-colors shadow-sm"
+              >
                 <MoreHorizontal size={20} />
               </button>
+              {menuOpen && (
+                <div className="absolute top-12 left-0 bg-white border border-slate-200 rounded-xl shadow-lg py-1 min-w-[160px] z-50">
+                  <button
+                    onClick={openEdit}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
+                  >
+                    <Pencil size={16} />
+                    تعديل المشروع
+                  </button>
+                  <button
+                    onClick={() => { setMenuOpen(false); setDeleteOpen(true); }}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                  >
+                    <Trash2 size={16} />
+                    حذف المشروع
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -289,6 +413,108 @@ export function ProjectDetailClient({ project, tasks, challenges, documents, pro
         )}
 
       </div>
+
+      {/* Edit Modal */}
+      {editOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <h2 className="text-lg font-bold">تعديل المشروع</h2>
+              <button onClick={() => setEditOpen(false)} className="text-muted-foreground hover:text-foreground">
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleSubmit(handleEdit)} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1.5">اسم المشروع *</label>
+                <input {...register("name")} className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary" />
+                {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name.message}</p>}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1.5">الحالة</label>
+                <select {...register("status")} className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white">
+                  <option value="active">نشط</option>
+                  <option value="paused">متوقف</option>
+                  <option value="completed">مكتمل</option>
+                  <option value="cancelled">ملغي</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1.5">مدير المشروع</label>
+                <select {...register("manager_id")} className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white">
+                  <option value="">اختر المدير</option>
+                  {profiles.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1.5">المرحلة الحالية</label>
+                <input {...register("current_stage")} className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" placeholder="مثال: التخطيط، التنفيذ..." />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">تاريخ البداية</label>
+                  <input type="date" {...register("start_date")} className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">تاريخ الانتهاء</label>
+                  <input type="date" {...register("end_date")} className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1.5">الميزانية الإجمالية</label>
+                <input type="number" {...register("total_budget", { valueAsNumber: true })} className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" placeholder="0" />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1.5">الوصف</label>
+                <textarea {...register("description")} rows={3} className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none" placeholder="وصف المشروع..." />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setEditOpen(false)} className="flex-1 py-2.5 border border-border rounded-lg text-sm hover:bg-accent transition-colors">
+                  إلغاء
+                </button>
+                <button type="submit" disabled={saving} className="flex-1 py-2.5 bg-primary text-white rounded-lg text-sm hover:bg-primary/90 transition-colors font-medium disabled:opacity-60 flex items-center justify-center gap-2">
+                  {saving && <Loader2 size={16} className="animate-spin" />}
+                  حفظ التعديلات
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirm Modal */}
+      {deleteOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="p-6 text-center">
+              <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 size={24} className="text-red-600" />
+              </div>
+              <h2 className="text-lg font-bold text-slate-800 mb-2">حذف المشروع</h2>
+              <p className="text-sm text-slate-500 mb-6">
+                هل أنت متأكد من حذف مشروع <span className="font-bold text-slate-700">"{project.name}"</span>؟
+                سيتم حذف جميع المهام والتحديات والمستندات المرتبطة بهذا المشروع.
+              </p>
+              <div className="flex gap-3">
+                <button onClick={() => setDeleteOpen(false)} className="flex-1 py-2.5 border border-border rounded-lg text-sm hover:bg-accent transition-colors">
+                  إلغاء
+                </button>
+                <button onClick={handleDelete} disabled={deleting} className="flex-1 py-2.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-60 flex items-center justify-center gap-2">
+                  {deleting && <Loader2 size={16} className="animate-spin" />}
+                  حذف
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
