@@ -126,7 +126,7 @@ export function TaskModal({ task, profiles, onClose, onTaskSaved }: Props) {
       .single();
 
     if (error) {
-      toast.error("ما نجح حفظ التغييرات");
+      toast.error(`ما نجح حفظ التغييرات: ${error.message}`);
     } else {
       toast.success("تم الحفظ");
       if (updatedTask) {
