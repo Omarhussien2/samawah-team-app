@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Cairo, IBM_Plex_Sans_Arabic } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
+import { QueryProvider } from "@/components/providers/query-provider";
 
 const cairo = Cairo({
   subsets: ["arabic", "latin"],
@@ -26,8 +27,10 @@ export default function RootLayout({
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
       <body className={`${cairo.variable} ${ibmPlex.variable} font-sans antialiased bg-background text-foreground`}>
-        {children}
-        <Toaster richColors position="top-center" expand />
+        <QueryProvider>
+          {children}
+          <Toaster richColors position="top-center" expand />
+        </QueryProvider>
       </body>
     </html>
   );

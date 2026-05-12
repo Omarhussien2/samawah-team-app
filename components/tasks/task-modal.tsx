@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { X, Loader2, AlertTriangle, Send, MessageSquare, CalendarDays, AlignLeft, CheckSquare, Paperclip, MoreHorizontal } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { getStatusLabel, getAlertLevelColor, formatRelativeAr, cn, getAvatarUrl, getPriorityColor } from "@/lib/utils";
 import { useCommentsSubscription } from "@/lib/supabase/realtime";
 import { recalcProjectProgress } from "@/lib/utils/recalc-progress";
+import { applyMyTaskRealtimeChange, taskKeys, updateTask } from "@/lib/queries/tasks";
 import Image from "next/image";
 import type { Database, Profile, Task, TaskProgressMode } from "@/lib/supabase/types";
 
@@ -28,12 +28,13 @@ interface Props {
   profiles: Pick<Profile, "id" | "full_name" | "avatar_url">[];
   onClose: () => void;
   onTaskSaved?: (task: Task) => void;
+  myTasksOwnerId?: string;
 }
 
 type TaskUpdate = Database["public"]["Tables"]["tasks"]["Update"];
 
-export function TaskModal({ task, profiles, onClose, onTaskSaved }: Props) {
-  const router = useRouter();
+export function TaskModal({ task, profiles, onClose, onTaskSaved, myTasksOwnerId }: Props) {
+  const queryClient = useQueryClient();
   const [title, setTitle] = useState(task.title);
   const [status, setStatus] = useState(task.status);
   const [priority, setPriority] = useState(task.priority || "medium");
@@ -46,7 +47,6 @@ export function TaskModal({ task, profiles, onClose, onTaskSaved }: Props) {
   
   const [comment, setComment] = useState("");
   const [comments, setComments] = useState<CommentWithUser[]>([]);
-  const [saving, setSaving] = useState(false);
   const [sendingComment, setSendingComment] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
 
@@ -84,6 +84,17 @@ export function TaskModal({ task, profiles, onClose, onTaskSaved }: Props) {
   );
   useCommentsSubscription(task.id, handleNewComment);
 
+  const updateTaskMutation = useMutation({
+    mutationFn: ({ taskId, payload }: { taskId: string; payload: TaskUpdate }) => updateTask(taskId, payload),
+    onSuccess: (updatedTask) => {
+      if (myTasksOwnerId) {
+        applyMyTaskRealtimeChange(queryClient, myTasksOwnerId, "UPDATE", updatedTask);
+        queryClient.invalidateQueries({ queryKey: taskKeys.myTasks(myTasksOwnerId) });
+      }
+      onTaskSaved?.(updatedTask);
+    },
+  });
+
   const calculatedProgress = useMemo(() => {
     if (status === "Done") return 100;
     if (progressMode === "manual") return progress;
@@ -96,8 +107,6 @@ export function TaskModal({ task, profiles, onClose, onTaskSaved }: Props) {
   }, [progress, progressMode, quantityDone, quantityTotal, status]);
 
   const handleSave = async () => {
-    setSaving(true);
-    const supabase = createClient();
     const owner = profiles.find((p) => p.id === ownerId);
     const previousOwnerId = task.owner_id;
 
@@ -118,21 +127,10 @@ export function TaskModal({ task, profiles, onClose, onTaskSaved }: Props) {
       due_date: dueDate || null,
     };
 
-    const { data: updatedTask, error } = await supabase
-      .from("tasks")
-      .update(updatePayload)
-      .eq("id", task.id)
-      .select()
-      .single();
-
-    if (error) {
-      toast.error(`ما نجح حفظ التغييرات: ${error.message}`);
-    } else {
+    try {
+      const updatedTask = await updateTaskMutation.mutateAsync({ taskId: task.id, payload: updatePayload });
       toast.success("تم الحفظ");
-      if (updatedTask) {
-        onTaskSaved?.(updatedTask);
-      }
-      recalcProjectProgress(task.project_id);
+      recalcProjectProgress(updatedTask.project_id);
 
       // Send notifications for status change or assignment via API
       if (status !== task.status || (ownerId && ownerId !== previousOwnerId)) {
@@ -153,10 +151,11 @@ export function TaskModal({ task, profiles, onClose, onTaskSaved }: Props) {
         } catch { }
       }
 
-      router.refresh();
       onClose();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      toast.error(`ما نجح حفظ التغييرات: ${message}`);
     }
-    setSaving(false);
   };
 
   const handleComment = async () => {
@@ -212,9 +211,9 @@ export function TaskModal({ task, profiles, onClose, onTaskSaved }: Props) {
           
           <div className="flex items-center gap-3">
             <button onClick={onClose} className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 font-medium transition-colors">إلغاء</button>
-            <button onClick={handleSave} disabled={saving}
+            <button onClick={handleSave} disabled={updateTaskMutation.isPending}
               className="px-6 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 font-medium disabled:opacity-60 flex items-center gap-2 transition-colors shadow-sm active:scale-95">
-              {saving && <Loader2 size={15} className="animate-spin" />}
+              {updateTaskMutation.isPending && <Loader2 size={15} className="animate-spin" />}
               حفظ التغييرات
             </button>
           </div>
