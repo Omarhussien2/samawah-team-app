@@ -1,4 +1,5 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+export type TaskProgressMode = "manual" | "quantity";
 
 export interface Database {
   public: {
@@ -132,6 +133,7 @@ export interface Database {
           cost: number | null;
           quantity_total: number | null;
           quantity_done: number | null;
+          progress_mode: TaskProgressMode;
           progress: number | null;
           schedule_status: string | null;
           alert_level: "Low" | "Medium" | "High" | "Critical" | null;
@@ -159,6 +161,7 @@ export interface Database {
           cost?: number | null;
           quantity_total?: number | null;
           quantity_done?: number | null;
+          progress_mode?: TaskProgressMode;
           progress?: number | null;
           schedule_status?: string | null;
           alert_level?: "Low" | "Medium" | "High" | "Critical" | null;
@@ -186,6 +189,7 @@ export interface Database {
           cost?: number | null;
           quantity_total?: number | null;
           quantity_done?: number | null;
+          progress_mode?: TaskProgressMode;
           progress?: number | null;
           schedule_status?: string | null;
           alert_level?: "Low" | "Medium" | "High" | "Critical" | null;

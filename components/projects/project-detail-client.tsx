@@ -499,6 +499,7 @@ export function ProjectDetailClient({ project, tasks, challenges, documents, pro
               </div>
               <h2 className="text-lg font-bold text-slate-800 mb-2">حذف المشروع</h2>
               <p className="text-sm text-slate-500 mb-6">
+                {/* eslint-disable-next-line react/no-unescaped-entities */}
                 هل أنت متأكد من حذف مشروع <span className="font-bold text-slate-700">"{project.name}"</span>؟
                 سيتم حذف جميع المهام والتحديات والمستندات المرتبطة بهذا المشروع.
               </p>

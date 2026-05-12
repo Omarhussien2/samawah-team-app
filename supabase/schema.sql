@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   cost            NUMERIC,
   quantity_total  NUMERIC,
   quantity_done   NUMERIC,
+  progress_mode   TEXT NOT NULL DEFAULT 'manual' CHECK (progress_mode IN ('manual', 'quantity')),
   progress        NUMERIC DEFAULT 0 CHECK (progress >= 0 AND progress <= 100),
   schedule_status TEXT,
   alert_level     TEXT CHECK (alert_level IN ('Low','Medium','High','Critical')),
@@ -83,6 +84,22 @@ CREATE TABLE IF NOT EXISTS tasks (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE tasks
+  ADD COLUMN IF NOT EXISTS progress_mode TEXT NOT NULL DEFAULT 'manual';
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'tasks_progress_mode_check'
+      AND conrelid = 'tasks'::regclass
+  ) THEN
+    ALTER TABLE tasks
+      ADD CONSTRAINT tasks_progress_mode_check CHECK (progress_mode IN ('manual', 'quantity'));
+  END IF;
+END $$;
 
 -- ============================================================
 -- 5. جدول التحديات (challenges)
@@ -235,10 +252,12 @@ CREATE OR REPLACE TRIGGER on_auth_user_created
 CREATE OR REPLACE FUNCTION calc_task_progress()
 RETURNS TRIGGER AS $$
 BEGIN
-  IF NEW.quantity_total IS NOT NULL AND NEW.quantity_total > 0 THEN
-    NEW.progress = ROUND((COALESCE(NEW.quantity_done, 0) / NEW.quantity_total) * 100);
-  ELSIF NEW.status = 'Done' THEN
+  IF NEW.status = 'Done' THEN
     NEW.progress = 100;
+  ELSIF NEW.progress_mode = 'quantity' AND NEW.quantity_total IS NOT NULL AND NEW.quantity_total > 0 THEN
+    NEW.progress = LEAST(100, GREATEST(0, ROUND((COALESCE(NEW.quantity_done, 0) / NEW.quantity_total) * 100)));
+  ELSIF NEW.progress_mode = 'manual' THEN
+    NEW.progress = COALESCE(NEW.progress, 0);
   END IF;
   -- تفعيل تنبيه التأخر التلقائي
   IF NEW.due_date IS NOT NULL AND NEW.due_date < CURRENT_DATE AND NEW.status NOT IN ('Done', 'Cancelled') THEN

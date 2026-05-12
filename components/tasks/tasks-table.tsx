@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   formatDateShort,
@@ -40,7 +40,7 @@ export function TasksTable({
   projectId: _projectId,
 }: Props) {
   const router = useRouter();
-  const [tasks] = useState(initialTasks);
+  const [tasks, setTasks] = useState(initialTasks);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterOwner, setFilterOwner] = useState("");
@@ -70,6 +70,13 @@ export function TasksTable({
     setDateFrom("");
     setDateTo("");
   };
+
+  const handleTaskSaved = useCallback((updatedTask: Task) => {
+    setTasks((prev) =>
+      prev.map((t) => (t.id === updatedTask.id ? { ...t, ...updatedTask } : t))
+    );
+    setSelectedTask((prev) => (prev?.id === updatedTask.id ? { ...prev, ...updatedTask } : prev));
+  }, []);
 
   const uniqueProjects = useMemo(() => {
     if (projects) return projects;
@@ -386,6 +393,7 @@ export function TasksTable({
             setSelectedTask(null);
             router.refresh();
           }}
+          onTaskSaved={handleTaskSaved}
         />
       )}
     </>

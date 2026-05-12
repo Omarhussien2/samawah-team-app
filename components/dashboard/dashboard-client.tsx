@@ -87,7 +87,7 @@ export function DashboardClient({ user, projects, tasks, comments }: Props) {
     setLocalTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: "Done" } : t));
     toast.success("خلّصت المهمة!");
     const supabase = createClient();
-    await supabase.from("tasks").update({ status: "Done", board_column: "Done", progress: 100, quantity_done: 1, quantity_total: 1 }).eq("id", taskId);
+    await supabase.from("tasks").update({ status: "Done", board_column: "Done", progress: 100 }).eq("id", taskId);
     if (projectId) recalcProjectProgress(projectId);
   };
 

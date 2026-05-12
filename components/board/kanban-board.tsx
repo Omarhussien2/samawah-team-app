@@ -71,6 +71,13 @@ export function KanbanBoard({ tasks: initialTasks, projectId, profiles }: Props)
 
   useTasksSubscription(projectId || null, handleTaskChange);
 
+  const handleTaskSaved = useCallback((updatedTask: Task) => {
+    setTasks((prev) =>
+      prev.map((t) => (t.id === updatedTask.id ? { ...t, ...updatedTask } : t))
+    );
+    setSelectedTask((prev) => (prev?.id === updatedTask.id ? { ...prev, ...updatedTask } : prev));
+  }, []);
+
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const task = tasks.find((t) => t.id === event.active.id);
     setActiveTask(task ?? null);
@@ -105,7 +112,7 @@ export function KanbanBoard({ tasks: initialTasks, projectId, profiles }: Props)
     );
 
     const supabase = createClient();
-    const doneFix = targetColumn === "Done" ? { progress: 100, quantity_done: 1, quantity_total: 1 } : {};
+    const doneFix = targetColumn === "Done" ? { progress: 100 } : {};
     const { error } = await supabase
       .from("tasks")
       .update({ board_column: targetColumn, status: targetColumn as Task["status"], ...doneFix })
@@ -224,6 +231,7 @@ export function KanbanBoard({ tasks: initialTasks, projectId, profiles }: Props)
             setSelectedTask(null);
             router.refresh();
           }}
+          onTaskSaved={handleTaskSaved}
         />
       )}
       <QuickAddTaskModal open={showQuickAdd} onClose={() => setShowQuickAdd(false)} />

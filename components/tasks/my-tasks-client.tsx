@@ -8,9 +8,10 @@ import { formatDateShort, getStatusColor, getStatusLabel, isOverdue, isDueToday,
 import { recalcProjectProgress } from "@/lib/utils/recalc-progress";
 import { TaskModal } from "./task-modal";
 import { useRealtimeSubscription } from "@/lib/supabase/realtime";
-import type { Profile, Task } from "@/lib/supabase/types";
+import type { Database, Profile, Task } from "@/lib/supabase/types";
 
 type Filter = "all" | "today" | "week" | "overdue" | "done";
+type TaskUpdate = Database["public"]["Tables"]["tasks"]["Update"];
 
 interface Props {
   tasks: (Task & {
@@ -57,6 +58,13 @@ export function MyTasksClient({ tasks: initialTasks, currentUser: _currentUser, 
   );
   useRealtimeSubscription("tasks", `owner_id=eq.${_currentUser.id}`, handleTaskChange);
 
+  const handleTaskSaved = useCallback((updatedTask: Task) => {
+    setTasks((prev) =>
+      prev.map((t) => (t.id === updatedTask.id ? { ...t, ...updatedTask } : t))
+    );
+    setSelectedTask((prev) => (prev?.id === updatedTask.id ? { ...prev, ...updatedTask } : prev));
+  }, []);
+
   const weekEnd = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() + 7);
@@ -84,11 +92,17 @@ export function MyTasksClient({ tasks: initialTasks, currentUser: _currentUser, 
   const handleMarkDone = async (taskId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const supabase = createClient();
-    const { error } = await supabase.from("tasks").update({ status: "Done", board_column: "Done", progress: 100, quantity_done: 1, quantity_total: 1 }).eq("id", taskId);
+    const updatePayload: TaskUpdate = { status: "Done", board_column: "Done", progress: 100 };
+    const { data: updatedTask, error } = await supabase
+      .from("tasks")
+      .update(updatePayload)
+      .eq("id", taskId)
+      .select()
+      .single();
     if (error) toast.error("فشل التحديث");
     else {
       toast.success("خلّصت المهمة! 🎉");
-      setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "Done" as const, board_column: "Done", progress: 100 } : t));
+      if (updatedTask) handleTaskSaved(updatedTask);
       const task = tasks.find(t => t.id === taskId);
       if (task?.project_id) recalcProjectProgress(task.project_id);
     }
@@ -227,7 +241,7 @@ export function MyTasksClient({ tasks: initialTasks, currentUser: _currentUser, 
       )}
 
       {selectedTask && (
-        <TaskModal task={selectedTask} profiles={profiles} onClose={() => setSelectedTask(null)} />
+        <TaskModal task={selectedTask} profiles={profiles} onClose={() => setSelectedTask(null)} onTaskSaved={handleTaskSaved} />
       )}
     </>
   );

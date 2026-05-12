@@ -247,7 +247,7 @@ async function main() {
         }
 
         // Map status
-        let status = taskStatusMap[rawStatus] || "To Do";
+        const status = taskStatusMap[rawStatus] || "To Do";
 
         return {
           id: seededUuid(`task:${legacyTaskId}`),

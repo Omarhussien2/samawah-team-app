@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { X, Loader2, AlertTriangle, Send, MessageSquare, CalendarDays, AlignLeft, CheckSquare, Paperclip, MoreHorizontal } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -9,7 +9,7 @@ import { getStatusLabel, getAlertLevelColor, formatRelativeAr, cn, getAvatarUrl,
 import { useCommentsSubscription } from "@/lib/supabase/realtime";
 import { recalcProjectProgress } from "@/lib/utils/recalc-progress";
 import Image from "next/image";
-import type { Profile, Task } from "@/lib/supabase/types";
+import type { Database, Profile, Task, TaskProgressMode } from "@/lib/supabase/types";
 
 const STATUSES = ["Backlog", "To Do", "In Progress", "Review", "Done", "Cancelled"];
 const PRIORITIES = ["low", "medium", "high", "critical"];
@@ -27,14 +27,20 @@ interface Props {
   task: Task & { owner?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null; project?: { id: string, name: string } | null };
   profiles: Pick<Profile, "id" | "full_name" | "avatar_url">[];
   onClose: () => void;
+  onTaskSaved?: (task: Task) => void;
 }
 
-export function TaskModal({ task, profiles, onClose }: Props) {
+type TaskUpdate = Database["public"]["Tables"]["tasks"]["Update"];
+
+export function TaskModal({ task, profiles, onClose, onTaskSaved }: Props) {
   const router = useRouter();
   const [title, setTitle] = useState(task.title);
   const [status, setStatus] = useState(task.status);
   const [priority, setPriority] = useState(task.priority || "medium");
   const [progress, setProgress] = useState(task.progress ?? 0);
+  const [progressMode, setProgressMode] = useState<TaskProgressMode>(task.progress_mode ?? "manual");
+  const [quantityDone, setQuantityDone] = useState(task.quantity_done?.toString() ?? "");
+  const [quantityTotal, setQuantityTotal] = useState(task.quantity_total?.toString() ?? "");
   const [ownerId, setOwnerId] = useState(task.owner_id ?? "");
   const [dueDate, setDueDate] = useState(task.due_date ?? "");
   
@@ -78,30 +84,54 @@ export function TaskModal({ task, profiles, onClose }: Props) {
   );
   useCommentsSubscription(task.id, handleNewComment);
 
+  const calculatedProgress = useMemo(() => {
+    if (status === "Done") return 100;
+    if (progressMode === "manual") return progress;
+
+    const done = Number(quantityDone) || 0;
+    const total = Number(quantityTotal) || 0;
+    if (total <= 0) return 0;
+
+    return Math.min(100, Math.max(0, Math.round((done / total) * 100)));
+  }, [progress, progressMode, quantityDone, quantityTotal, status]);
+
   const handleSave = async () => {
     setSaving(true);
     const supabase = createClient();
     const owner = profiles.find((p) => p.id === ownerId);
     const previousOwnerId = task.owner_id;
 
-    const progressVal = status === "Done" ? 100 : progress;
-    const { error } = await supabase.from("tasks").update({
+    const progressVal = status === "Done" ? 100 : progressMode === "quantity" ? calculatedProgress : progress;
+    const quantityDoneVal = quantityDone === "" ? null : Number(quantityDone);
+    const quantityTotalVal = quantityTotal === "" ? null : Number(quantityTotal);
+    const updatePayload: TaskUpdate = {
       title,
       status,
       priority,
       board_column: status,
+      progress_mode: progressMode,
       progress: progressVal,
-      quantity_done: status === "Done" ? 1 : undefined,
-      quantity_total: status === "Done" ? 1 : undefined,
+      quantity_done: progressMode === "quantity" ? quantityDoneVal : task.quantity_done,
+      quantity_total: progressMode === "quantity" ? quantityTotalVal : task.quantity_total,
       owner_id: ownerId || null,
       owner_name: owner?.full_name ?? null,
       due_date: dueDate || null,
-    }).eq("id", task.id);
+    };
+
+    const { data: updatedTask, error } = await supabase
+      .from("tasks")
+      .update(updatePayload)
+      .eq("id", task.id)
+      .select()
+      .single();
 
     if (error) {
       toast.error("ما نجح حفظ التغييرات");
     } else {
       toast.success("تم الحفظ");
+      if (updatedTask) {
+        onTaskSaved?.(updatedTask);
+      }
       recalcProjectProgress(task.project_id);
 
       // Send notifications for status change or assignment via API
@@ -368,12 +398,75 @@ export function TaskModal({ task, profiles, onClose }: Props) {
 
               {/* Progress Slider */}
               <div className="pt-2">
+                <label className="block text-xs font-semibold text-slate-600 mb-2">طريقة حساب الإنجاز</label>
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                  <button
+                    type="button"
+                    onClick={() => setProgressMode("manual")}
+                    className={cn(
+                      "px-3 py-2 text-xs font-bold rounded-lg border transition-colors",
+                      progressMode === "manual"
+                        ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                    )}
+                  >
+                    يدوي
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setProgressMode("quantity")}
+                    className={cn(
+                      "px-3 py-2 text-xs font-bold rounded-lg border transition-colors",
+                      progressMode === "quantity"
+                        ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                    )}
+                  >
+                    حسب الكمية
+                  </button>
+                </div>
+
+                {progressMode === "quantity" && (
+                  <div className="grid grid-cols-2 gap-2 mb-4">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-1">المنجز</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={quantityDone}
+                        onChange={(e) => setQuantityDone(e.target.value)}
+                        className="w-full px-3 py-2 text-sm font-medium border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white shadow-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-1">الإجمالي</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={quantityTotal}
+                        onChange={(e) => setQuantityTotal(e.target.value)}
+                        className="w-full px-3 py-2 text-sm font-medium border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white shadow-sm"
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between mb-2">
                   <label className="block text-xs font-semibold text-slate-600">نسبة الإنجاز</label>
-                  <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{progress}%</span>
+                  <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{calculatedProgress}%</span>
                 </div>
-                <input type="range" min={0} max={100} value={progress} onChange={(e) => setProgress(Number(e.target.value))}
-                  className="w-full accent-indigo-600" />
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={calculatedProgress}
+                  onChange={(e) => setProgress(Number(e.target.value))}
+                  disabled={progressMode === "quantity" || status === "Done"}
+                  className={cn("w-full accent-indigo-600", (progressMode === "quantity" || status === "Done") && "opacity-50 cursor-not-allowed")}
+                />
+                {progressMode === "quantity" && (
+                  <p className="mt-1 text-[11px] text-slate-400">يتم حساب النسبة تلقائياً من الكمية المنجزة.</p>
+                )}
               </div>
 
               {/* Sub-tasks / Checklists Placeholder */}
