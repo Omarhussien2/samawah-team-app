@@ -36,10 +36,14 @@ CREATE TABLE IF NOT EXISTS projects (
   total_budget      NUMERIC DEFAULT 0,
   description       TEXT,
   logo_url          TEXT,
+  forms_owner_id    UUID REFERENCES profiles(id) ON DELETE SET NULL,
   progress          NUMERIC DEFAULT 0 CHECK (progress >= 0 AND progress <= 100),
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE projects
+  ADD COLUMN IF NOT EXISTS forms_owner_id UUID REFERENCES profiles(id) ON DELETE SET NULL;
 
 -- ============================================================
 -- 3. جدول أعضاء المشروع (project_members)
@@ -126,6 +130,7 @@ CREATE TABLE IF NOT EXISTS documents (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id  UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   task_id     UUID REFERENCES tasks(id) ON DELETE SET NULL,
+  form_instance_id UUID,
   title       TEXT NOT NULL,
   url         TEXT,
   file_path   TEXT,
@@ -133,6 +138,68 @@ CREATE TABLE IF NOT EXISTS documents (
   created_by  UUID REFERENCES profiles(id) ON DELETE SET NULL,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- ============================================================
+-- 6.1. جداول نماذج المشروع (project forms)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS project_form_templates (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name              TEXT NOT NULL,
+  description       TEXT,
+  category          TEXT,
+  stage             TEXT,
+  applies_to_path   TEXT,
+  template_kind     TEXT NOT NULL DEFAULT 'form' CHECK (template_kind IN ('form', 'docx', 'xlsx', 'hybrid')),
+  schema_json       JSONB NOT NULL DEFAULT '{}'::jsonb,
+  source_file_path  TEXT,
+  active            BOOLEAN NOT NULL DEFAULT TRUE,
+  sort_order        INTEGER DEFAULT 0,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS project_form_instances (
+  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id            UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  template_id           UUID NOT NULL REFERENCES project_form_templates(id) ON DELETE CASCADE,
+  assigned_owner_id     UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  status                TEXT NOT NULL DEFAULT 'not_started' CHECK (status IN ('not_started', 'draft', 'completed')),
+  data_json             JSONB NOT NULL DEFAULT '{}'::jsonb,
+  completion_percentage NUMERIC DEFAULT 0 CHECK (completion_percentage >= 0 AND completion_percentage <= 100),
+  created_by            UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  updated_by            UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  completed_at          TIMESTAMPTZ,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(project_id, template_id)
+);
+
+CREATE TABLE IF NOT EXISTS project_form_shares (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  form_instance_id    UUID NOT NULL REFERENCES project_form_instances(id) ON DELETE CASCADE,
+  shared_with_user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  permission          TEXT NOT NULL DEFAULT 'view' CHECK (permission IN ('view', 'edit')),
+  created_by          UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(form_instance_id, shared_with_user_id)
+);
+
+ALTER TABLE documents
+  ADD COLUMN IF NOT EXISTS form_instance_id UUID;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'documents_form_instance_id_fkey'
+      AND conrelid = 'documents'::regclass
+  ) THEN
+    ALTER TABLE documents
+      ADD CONSTRAINT documents_form_instance_id_fkey
+      FOREIGN KEY (form_instance_id) REFERENCES project_form_instances(id) ON DELETE SET NULL;
+  END IF;
+END $$;
 
 -- ============================================================
 -- 7. جدول التعليقات (comments)
@@ -218,6 +285,16 @@ CREATE TRIGGER update_projects_updated_at
 DROP TRIGGER IF EXISTS update_tasks_updated_at ON tasks;
 CREATE TRIGGER update_tasks_updated_at
   BEFORE UPDATE ON tasks
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_project_form_templates_updated_at ON project_form_templates;
+CREATE TRIGGER update_project_form_templates_updated_at
+  BEFORE UPDATE ON project_form_templates
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_project_form_instances_updated_at ON project_form_instances;
+CREATE TRIGGER update_project_form_instances_updated_at
+  BEFORE UPDATE ON project_form_instances
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 DROP TRIGGER IF EXISTS update_challenges_updated_at ON challenges;
@@ -318,7 +395,20 @@ CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);
 CREATE INDEX IF NOT EXISTS idx_tasks_board_column ON tasks(board_column);
 CREATE INDEX IF NOT EXISTS idx_project_members_project ON project_members(project_id);
 CREATE INDEX IF NOT EXISTS idx_project_members_user ON project_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_project_form_templates_active ON project_form_templates(active);
+CREATE INDEX IF NOT EXISTS idx_project_form_instances_project ON project_form_instances(project_id);
+CREATE INDEX IF NOT EXISTS idx_project_form_instances_template ON project_form_instances(template_id);
+CREATE INDEX IF NOT EXISTS idx_project_form_instances_owner ON project_form_instances(assigned_owner_id);
+CREATE INDEX IF NOT EXISTS idx_project_form_shares_instance ON project_form_shares(form_instance_id);
+CREATE INDEX IF NOT EXISTS idx_project_form_shares_user ON project_form_shares(shared_with_user_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_challenges_project ON challenges(project_id);
 CREATE INDEX IF NOT EXISTS idx_documents_project ON documents(project_id);
 CREATE INDEX IF NOT EXISTS idx_comments_task ON comments(task_id);
+
+-- ============================================================
+-- Data API grants for authenticated users
+-- ============================================================
+GRANT SELECT ON project_form_templates TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON project_form_instances TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON project_form_shares TO authenticated;

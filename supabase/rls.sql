@@ -10,6 +10,9 @@ ALTER TABLE project_members  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tasks            ENABLE ROW LEVEL SECURITY;
 ALTER TABLE challenges       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE documents        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE project_form_templates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE project_form_instances ENABLE ROW LEVEL SECURITY;
+ALTER TABLE project_form_shares ENABLE ROW LEVEL SECURITY;
 ALTER TABLE comments         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE automation_logs  ENABLE ROW LEVEL SECURITY;
@@ -41,6 +44,32 @@ RETURNS BOOLEAN AS $$
   SELECT EXISTS (
     SELECT 1 FROM projects
     WHERE id = p_project_id AND manager_id = auth.uid()
+);
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+CREATE OR REPLACE FUNCTION is_project_forms_owner(p_project_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM projects
+    WHERE id = p_project_id AND forms_owner_id = auth.uid()
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+CREATE OR REPLACE FUNCTION can_edit_project_forms(p_project_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT
+    get_my_role() = 'admin'
+    OR is_project_manager(p_project_id)
+    OR is_project_forms_owner(p_project_id);
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+CREATE OR REPLACE FUNCTION has_project_form_share(p_form_instance_id UUID, p_permission TEXT DEFAULT NULL)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM project_form_shares
+    WHERE form_instance_id = p_form_instance_id
+      AND shared_with_user_id = auth.uid()
+      AND (p_permission IS NULL OR permission = p_permission)
   );
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
@@ -209,6 +238,95 @@ CREATE POLICY "documents_delete" ON documents
     get_my_role() = 'admin'
     OR created_by = auth.uid()
     OR is_project_manager(project_id)
+  );
+
+-- ============================================================
+-- Project Forms Policies
+-- ============================================================
+DROP POLICY IF EXISTS "project_form_templates_select" ON project_form_templates;
+CREATE POLICY "project_form_templates_select" ON project_form_templates
+  FOR SELECT USING (auth.uid() IS NOT NULL AND active = TRUE);
+
+DROP POLICY IF EXISTS "project_form_templates_admin_insert" ON project_form_templates;
+CREATE POLICY "project_form_templates_admin_insert" ON project_form_templates
+  FOR INSERT WITH CHECK (get_my_role() = 'admin');
+
+DROP POLICY IF EXISTS "project_form_templates_admin_update" ON project_form_templates;
+CREATE POLICY "project_form_templates_admin_update" ON project_form_templates
+  FOR UPDATE USING (get_my_role() = 'admin');
+
+DROP POLICY IF EXISTS "project_form_instances_select" ON project_form_instances;
+CREATE POLICY "project_form_instances_select" ON project_form_instances
+  FOR SELECT USING (
+    get_my_role() = 'admin'
+    OR is_project_manager(project_id)
+    OR is_project_member(project_id)
+    OR assigned_owner_id = auth.uid()
+    OR has_project_form_share(project_form_instances.id)
+  );
+
+DROP POLICY IF EXISTS "project_form_instances_insert" ON project_form_instances;
+CREATE POLICY "project_form_instances_insert" ON project_form_instances
+  FOR INSERT WITH CHECK (
+    can_edit_project_forms(project_id)
+  );
+
+DROP POLICY IF EXISTS "project_form_instances_update" ON project_form_instances;
+CREATE POLICY "project_form_instances_update" ON project_form_instances
+  FOR UPDATE USING (
+    can_edit_project_forms(project_id)
+    OR has_project_form_share(project_form_instances.id, 'edit')
+  );
+
+DROP POLICY IF EXISTS "project_form_instances_delete" ON project_form_instances;
+CREATE POLICY "project_form_instances_delete" ON project_form_instances
+  FOR DELETE USING (
+    get_my_role() = 'admin'
+    OR is_project_manager(project_id)
+  );
+
+DROP POLICY IF EXISTS "project_form_shares_select" ON project_form_shares;
+CREATE POLICY "project_form_shares_select" ON project_form_shares
+  FOR SELECT USING (
+    shared_with_user_id = auth.uid()
+    OR EXISTS (
+      SELECT 1 FROM project_form_instances pfi
+      WHERE pfi.id = project_form_shares.form_instance_id
+        AND (
+          can_edit_project_forms(pfi.project_id)
+          OR is_project_member(pfi.project_id)
+        )
+    )
+  );
+
+DROP POLICY IF EXISTS "project_form_shares_insert" ON project_form_shares;
+CREATE POLICY "project_form_shares_insert" ON project_form_shares
+  FOR INSERT WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM project_form_instances pfi
+      WHERE pfi.id = form_instance_id
+        AND can_edit_project_forms(pfi.project_id)
+    )
+  );
+
+DROP POLICY IF EXISTS "project_form_shares_update" ON project_form_shares;
+CREATE POLICY "project_form_shares_update" ON project_form_shares
+  FOR UPDATE USING (
+    EXISTS (
+      SELECT 1 FROM project_form_instances pfi
+      WHERE pfi.id = form_instance_id
+        AND can_edit_project_forms(pfi.project_id)
+    )
+  );
+
+DROP POLICY IF EXISTS "project_form_shares_delete" ON project_form_shares;
+CREATE POLICY "project_form_shares_delete" ON project_form_shares
+  FOR DELETE USING (
+    EXISTS (
+      SELECT 1 FROM project_form_instances pfi
+      WHERE pfi.id = form_instance_id
+        AND can_edit_project_forms(pfi.project_id)
+    )
   );
 
 -- ============================================================

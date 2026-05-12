@@ -49,6 +49,7 @@ export interface Database {
           total_budget: number | null;
           description: string | null;
           logo_url: string | null;
+          forms_owner_id: string | null;
           progress: number | null;
           created_at: string;
           updated_at: string;
@@ -67,6 +68,7 @@ export interface Database {
           total_budget?: number | null;
           description?: string | null;
           logo_url?: string | null;
+          forms_owner_id?: string | null;
           progress?: number | null;
           created_at?: string;
           updated_at?: string;
@@ -85,6 +87,7 @@ export interface Database {
           total_budget?: number | null;
           description?: string | null;
           logo_url?: string | null;
+          forms_owner_id?: string | null;
           progress?: number | null;
           created_at?: string;
           updated_at?: string;
@@ -207,6 +210,7 @@ export interface Database {
           id: string;
           project_id: string;
           task_id: string | null;
+          form_instance_id: string | null;
           title: string;
           description: string | null;
           status: "open" | "in_progress" | "resolved" | "closed";
@@ -221,6 +225,7 @@ export interface Database {
           id?: string;
           project_id?: string;
           task_id?: string | null;
+          form_instance_id?: string | null;
           title?: string;
           description?: string | null;
           status?: "open" | "in_progress" | "resolved" | "closed";
@@ -235,6 +240,7 @@ export interface Database {
           id?: string;
           project_id?: string;
           task_id?: string | null;
+          form_instance_id?: string | null;
           title?: string;
           description?: string | null;
           status?: "open" | "in_progress" | "resolved" | "closed";
@@ -278,6 +284,126 @@ export interface Database {
           url?: string | null;
           file_path?: string | null;
           type?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      project_form_templates: {
+        Row: {
+          id: string;
+          name: string;
+          description: string | null;
+          category: string | null;
+          stage: string | null;
+          applies_to_path: string | null;
+          template_kind: "form" | "docx" | "xlsx" | "hybrid";
+          schema_json: Json;
+          source_file_path: string | null;
+          active: boolean;
+          sort_order: number | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          description?: string | null;
+          category?: string | null;
+          stage?: string | null;
+          applies_to_path?: string | null;
+          template_kind?: "form" | "docx" | "xlsx" | "hybrid";
+          schema_json?: Json;
+          source_file_path?: string | null;
+          active?: boolean;
+          sort_order?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          description?: string | null;
+          category?: string | null;
+          stage?: string | null;
+          applies_to_path?: string | null;
+          template_kind?: "form" | "docx" | "xlsx" | "hybrid";
+          schema_json?: Json;
+          source_file_path?: string | null;
+          active?: boolean;
+          sort_order?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      project_form_instances: {
+        Row: {
+          id: string;
+          project_id: string;
+          template_id: string;
+          assigned_owner_id: string | null;
+          status: "not_started" | "draft" | "completed";
+          data_json: Json;
+          completion_percentage: number | null;
+          created_by: string | null;
+          updated_by: string | null;
+          completed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          template_id: string;
+          assigned_owner_id?: string | null;
+          status?: "not_started" | "draft" | "completed";
+          data_json?: Json;
+          completion_percentage?: number | null;
+          created_by?: string | null;
+          updated_by?: string | null;
+          completed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          project_id?: string;
+          template_id?: string;
+          assigned_owner_id?: string | null;
+          status?: "not_started" | "draft" | "completed";
+          data_json?: Json;
+          completion_percentage?: number | null;
+          created_by?: string | null;
+          updated_by?: string | null;
+          completed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      project_form_shares: {
+        Row: {
+          id: string;
+          form_instance_id: string;
+          shared_with_user_id: string | null;
+          permission: "view" | "edit";
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          form_instance_id: string;
+          shared_with_user_id?: string | null;
+          permission?: "view" | "edit";
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          form_instance_id?: string;
+          shared_with_user_id?: string | null;
+          permission?: "view" | "edit";
           created_by?: string | null;
           created_at?: string;
         };
@@ -446,6 +572,9 @@ export type ProjectMember = Database["public"]["Tables"]["project_members"]["Row
 export type Task = Database["public"]["Tables"]["tasks"]["Row"];
 export type Challenge = Database["public"]["Tables"]["challenges"]["Row"];
 export type Document = Database["public"]["Tables"]["documents"]["Row"];
+export type ProjectFormTemplate = Database["public"]["Tables"]["project_form_templates"]["Row"];
+export type ProjectFormInstance = Database["public"]["Tables"]["project_form_instances"]["Row"];
+export type ProjectFormShare = Database["public"]["Tables"]["project_form_shares"]["Row"];
 export type Comment = Database["public"]["Tables"]["comments"]["Row"];
 export type Notification = Database["public"]["Tables"]["notifications"]["Row"];
 export type AutomationLog = Database["public"]["Tables"]["automation_logs"]["Row"];

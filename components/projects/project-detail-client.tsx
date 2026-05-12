@@ -9,6 +9,7 @@ import { KanbanBoard } from "@/components/board/kanban-board";
 import { TasksTable } from "@/components/tasks/tasks-table";
 import { ChallengesList } from "@/components/challenges/challenges-list";
 import { DocumentsList } from "@/components/documents/documents-list";
+import { ProjectFormsTab } from "@/components/project-forms/project-forms-tab";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
@@ -23,6 +24,7 @@ const TABS = [
   { key: "tasks", label: "المهام" },
   { key: "board", label: "اللوحة" },
   { key: "challenges", label: "التحديات" },
+  { key: "forms", label: "نماذج المشروع" },
   { key: "documents", label: "المستندات" },
   { key: "members", label: "الأعضاء" },
 ];
@@ -374,6 +376,11 @@ export function ProjectDetailClient({ project, tasks, challenges, documents, pro
           <div className="animate-in fade-in duration-300">
             <ChallengesList challenges={challenges} profiles={profiles} projectId={project.id} />
           </div>
+        )}
+
+        {/* FORMS TAB */}
+        {activeTab === "forms" && (
+          <ProjectFormsTab project={project} profiles={profiles} currentUser={currentUser} />
         )}
 
         {/* DOCUMENTS TAB */}
