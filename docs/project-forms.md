@@ -84,6 +84,15 @@ Status values:
 
 The editor can save drafts or mark the instance completed. Required-field completion should stay in `lib/project-forms/completion.ts` so future views use the same logic.
 
+## Exporting
+
+Project form exports live in `lib/project-forms/export.ts`.
+
+- PDF export renders a print-ready HTML view to canvas and saves a real `.pdf` file. This preserves Arabic layout reliably because the browser renders the RTL text before the PDF is assembled.
+- Word export creates a real `.docx` file with OOXML paragraphs and tables using the same form schema/data.
+- Both exports should use normalized schema keys from `parseFormSchema`, because seed data may use either `id` or `key` for sections, fields, and table columns.
+- Avoid adding fake downloads such as `.html` files renamed as Word/PDF.
+
 ## Future Extensions
 
 When adding a new project form feature:
@@ -99,11 +108,12 @@ Examples:
 
 - Attachments: add a `project_form_attachments` table linked to `project_form_instances`.
 - Approval workflow: add status/audit columns or a `project_form_approvals` table.
-- Excel/PDF generation: create generated `documents` rows linked through `documents.form_instance_id`.
+- Generated export history: create generated `documents` rows linked through `documents.form_instance_id`.
 - Advanced analytics: denormalize reportable values into typed columns or materialized views instead of querying arbitrary JSON.
 
 ## V1 Limitations
 
-- V1 supports print preview only. Native PDF/DOCX export should be implemented in a separate export service/PR.
+- PDF export is layout-faithful, but text is rendered through canvas before being embedded into the PDF.
+- Word export is structured DOCX, but it does not yet recreate the original uploaded DOCX/XLSX templates pixel-for-pixel.
 - The source DOCX/XLSX files are referenced by path but not parsed into binary templates at runtime.
 - Training forms should move into a dedicated training module with its own inputs, outputs, dashboards, and reports.

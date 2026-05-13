@@ -1,9 +1,11 @@
 "use client";
 
-import { Printer, X } from "lucide-react";
-import type { Project } from "@/lib/supabase/types";
+import { Download, Loader2, Printer, X } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+import type { Profile, Project } from "@/lib/supabase/types";
 import { DynamicFormRenderer } from "./dynamic-form-renderer";
-import { buildPrintableHtml } from "@/lib/project-forms/export";
+import { buildPrintableHtml, downloadFormDocx, downloadFormPdf } from "@/lib/project-forms/export";
 import { parseFormSchema, type ProjectFormData } from "@/lib/project-forms/schema";
 import type { ProjectFormTemplateWithInstance } from "@/lib/project-forms/types";
 
@@ -11,15 +13,18 @@ interface Props {
   project: Project;
   form: ProjectFormTemplateWithInstance;
   data: ProjectFormData;
+  profiles?: Pick<Profile, "id" | "full_name" | "avatar_url">[];
   open: boolean;
   onClose: () => void;
 }
 
-export function ProjectFormPreview({ project, form, data, open, onClose }: Props) {
+export function ProjectFormPreview({ project, form, data, profiles = [], open, onClose }: Props) {
+  const [exporting, setExporting] = useState<"pdf" | "docx" | null>(null);
+
   if (!open) return null;
 
   const schema = parseFormSchema(form.template.schema_json);
-  const printableHtml = () => buildPrintableHtml(project, form, data);
+  const printableHtml = () => buildPrintableHtml(project, form, data, profiles);
 
   const handlePrint = () => {
     const printWindow = window.open("", "_blank", "noopener,noreferrer");
@@ -27,6 +32,19 @@ export function ProjectFormPreview({ project, form, data, open, onClose }: Props
     printWindow.document.write(printableHtml());
     printWindow.document.close();
     printWindow.focus();
+  };
+
+  const handleExport = async (format: "pdf" | "docx") => {
+    setExporting(format);
+    try {
+      if (format === "pdf") await downloadFormPdf({ project, form, data, profiles });
+      else await downloadFormDocx({ project, form, data, profiles });
+      toast.success(format === "pdf" ? "تم تحميل ملف PDF" : "تم تحميل ملف Word");
+    } catch (error) {
+      toast.error(`تعذر تصدير النموذج: ${error instanceof Error ? error.message : "خطأ غير معروف"}`);
+    } finally {
+      setExporting(null);
+    }
   };
 
   return (
@@ -38,6 +56,12 @@ export function ProjectFormPreview({ project, form, data, open, onClose }: Props
             <p className="text-xs text-slate-500">معاينة قابلة للطباعة - {project.name}</p>
           </div>
           <div className="flex items-center gap-2">
+            <button onClick={() => handleExport("pdf")} disabled={exporting === "pdf"} className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50 disabled:opacity-60" title="تحميل PDF">
+              {exporting === "pdf" ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+            </button>
+            <button onClick={() => handleExport("docx")} disabled={exporting === "docx"} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-60" title="تحميل Word">
+              {exporting === "docx" ? <Loader2 size={16} className="animate-spin" /> : "Word"}
+            </button>
             <button onClick={handlePrint} className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50" title="طباعة">
               <Printer size={18} />
             </button>
@@ -55,7 +79,7 @@ export function ProjectFormPreview({ project, form, data, open, onClose }: Props
               <div><span className="text-slate-400">آخر تحديث</span><p className="font-bold text-slate-800">{form.updatedAt ? new Date(form.updatedAt).toLocaleDateString("ar") : "-"}</p></div>
             </div>
           </div>
-          <DynamicFormRenderer schema={schema} data={data} profiles={[]} readOnly />
+          <DynamicFormRenderer schema={schema} data={data} profiles={profiles} readOnly />
         </div>
       </div>
     </div>

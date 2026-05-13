@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { FileText, Filter, Loader2, Plus, Search, Eye, Pencil } from "lucide-react";
+import { Download, FileText, Filter, Loader2, Plus, Search, Eye, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { cn, formatRelativeAr } from "@/lib/utils";
@@ -10,6 +10,7 @@ import { FORM_STATUS_COLORS, FORM_STATUS_LABELS, type ProjectFormStatus } from "
 import { mapInstanceToCard, type ProjectFormInstanceWithRelations, type ProjectFormTemplateWithInstance } from "@/lib/project-forms/types";
 import { ProjectFormEditor } from "./project-form-editor";
 import { ProjectFormPreview } from "./project-form-preview";
+import { downloadFormDocx, downloadFormPdf } from "@/lib/project-forms/export";
 
 interface Props {
   project: Project & { manager?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null };
@@ -38,6 +39,7 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
   const [manualTemplateId, setManualTemplateId] = useState("");
   const [editorForm, setEditorForm] = useState<ProjectFormTemplateWithInstance | null>(null);
   const [previewForm, setPreviewForm] = useState<ProjectFormTemplateWithInstance | null>(null);
+  const [exporting, setExporting] = useState<string | null>(null);
 
   const isManager = project.manager_id === currentUser.id;
   const canEdit = isManager;
@@ -131,6 +133,23 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
     setManualTemplateId("");
   };
 
+  const handleExport = async (form: ProjectFormTemplateWithInstance, format: "pdf" | "docx") => {
+    const data = form.instance?.data_json && typeof form.instance.data_json === "object" && !Array.isArray(form.instance.data_json)
+      ? form.instance.data_json as Record<string, unknown>
+      : {};
+    const exportKey = `${form.id}-${format}`;
+    setExporting(exportKey);
+
+    try {
+      if (format === "pdf") await downloadFormPdf({ project, form, data, profiles });
+      else await downloadFormDocx({ project, form, data, profiles });
+      toast.success(format === "pdf" ? "تم تحميل ملف PDF" : "تم تحميل ملف Word");
+    } catch (error) {
+      toast.error(`تعذر تصدير النموذج: ${error instanceof Error ? error.message : "خطأ غير معروف"}`);
+    } finally {
+      setExporting(null);
+    }
+  };
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -246,6 +265,14 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
                   <Eye size={14} />
                   معاينة
                 </button>
+                <button onClick={() => handleExport(form, "pdf")} disabled={exporting === `${form.id}-pdf`} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-60">
+                  {exporting === `${form.id}-pdf` ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                  PDF
+                </button>
+                <button onClick={() => handleExport(form, "docx")} disabled={exporting === `${form.id}-docx`} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-60">
+                  {exporting === `${form.id}-docx` ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                  Word
+                </button>
               </div>
             </div>
           ))}
@@ -266,6 +293,7 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
         project={project}
         form={previewForm as ProjectFormTemplateWithInstance}
         data={(previewForm?.instance?.data_json && typeof previewForm.instance.data_json === "object" && !Array.isArray(previewForm.instance.data_json) ? previewForm.instance.data_json : {}) as Record<string, unknown>}
+        profiles={profiles}
         open={!!previewForm}
         onClose={() => setPreviewForm(null)}
       />
