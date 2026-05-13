@@ -75,7 +75,7 @@ export function ProjectFormEditor({ open, project, form, profiles, currentUser, 
     const payload = {
       project_id: project.id,
       template_id: form.template.id,
-      assigned_owner_id: project.forms_owner_id ?? project.manager_id ?? currentUser.id,
+      assigned_owner_id: project.manager_id ?? currentUser.id,
       data_json: data as Json,
       completion_percentage: status === "completed" ? 100 : completion,
       status,
@@ -119,7 +119,7 @@ export function ProjectFormEditor({ open, project, form, profiles, currentUser, 
           <div className="flex-1 overflow-y-auto p-5">
             {!canEdit && (
               <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
-                يمكنك عرض النموذج فقط. التعديل متاح لمسؤول النماذج أو مدير المشروع أو مدير النظام.
+                يمكنك عرض النموذج فقط. تعبئة النماذج متاحة لمدير المشروع.
               </div>
             )}
             <DynamicFormRenderer schema={schema} data={data} profiles={profiles} readOnly={!canEdit} onChange={setData} />
