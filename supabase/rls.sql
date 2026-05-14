@@ -18,6 +18,11 @@ ALTER TABLE kpi_values      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE kpi_share_links ENABLE ROW LEVEL SECURITY;
 ALTER TABLE indicator_products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE project_performance_updates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE revenue_entries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE client_opportunities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audience_metrics ENABLE ROW LEVEL SECURITY;
+ALTER TABLE service_outputs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE partnership_activities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE comments         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE automation_logs  ENABLE ROW LEVEL SECURITY;
@@ -455,6 +460,47 @@ CREATE POLICY "project_performance_updates_delete" ON project_performance_update
     get_my_role() = 'admin'
     OR is_project_manager(project_id)
   );
+
+DROP POLICY IF EXISTS "revenue_entries_admin_manage" ON revenue_entries;
+CREATE POLICY "revenue_entries_admin_manage" ON revenue_entries
+  FOR ALL USING (get_my_role() = 'admin')
+  WITH CHECK (get_my_role() = 'admin');
+
+DROP POLICY IF EXISTS "client_opportunities_select" ON client_opportunities;
+CREATE POLICY "client_opportunities_select" ON client_opportunities
+  FOR SELECT USING (get_my_role() IN ('admin', 'project_manager'));
+
+DROP POLICY IF EXISTS "client_opportunities_manage" ON client_opportunities;
+CREATE POLICY "client_opportunities_manage" ON client_opportunities
+  FOR ALL USING (get_my_role() IN ('admin', 'project_manager'))
+  WITH CHECK (get_my_role() IN ('admin', 'project_manager'));
+
+DROP POLICY IF EXISTS "audience_metrics_select" ON audience_metrics;
+CREATE POLICY "audience_metrics_select" ON audience_metrics
+  FOR SELECT USING (get_my_role() IN ('admin', 'project_manager'));
+
+DROP POLICY IF EXISTS "audience_metrics_manage" ON audience_metrics;
+CREATE POLICY "audience_metrics_manage" ON audience_metrics
+  FOR ALL USING (get_my_role() IN ('admin', 'project_manager'))
+  WITH CHECK (get_my_role() IN ('admin', 'project_manager'));
+
+DROP POLICY IF EXISTS "service_outputs_select" ON service_outputs;
+CREATE POLICY "service_outputs_select" ON service_outputs
+  FOR SELECT USING (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "service_outputs_manage" ON service_outputs;
+CREATE POLICY "service_outputs_manage" ON service_outputs
+  FOR ALL USING (get_my_role() IN ('admin', 'project_manager'))
+  WITH CHECK (get_my_role() IN ('admin', 'project_manager'));
+
+DROP POLICY IF EXISTS "partnership_activities_select" ON partnership_activities;
+CREATE POLICY "partnership_activities_select" ON partnership_activities
+  FOR SELECT USING (get_my_role() IN ('admin', 'project_manager'));
+
+DROP POLICY IF EXISTS "partnership_activities_manage" ON partnership_activities;
+CREATE POLICY "partnership_activities_manage" ON partnership_activities
+  FOR ALL USING (get_my_role() IN ('admin', 'project_manager'))
+  WITH CHECK (get_my_role() IN ('admin', 'project_manager'));
 
 -- ============================================================
 -- Comments Policies

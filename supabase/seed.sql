@@ -455,3 +455,23 @@ ON CONFLICT (name, kpi_id) DO UPDATE SET
   status = EXCLUDED.status,
   notes = EXCLUDED.notes,
   updated_at = NOW();
+
+UPDATE kpi_definitions
+SET calculation_method = 'semi_auto', auto_source = 'revenue_entries', updated_at = NOW()
+WHERE code IN ('REV_GOV_ANNUAL', 'REV_NON_GOV', 'REV_PRODUCTS');
+
+UPDATE kpi_definitions
+SET calculation_method = 'semi_auto', auto_source = 'client_opportunities', updated_at = NOW()
+WHERE code IN ('CLIENT_STRATEGIC', 'CLIENT_NEW', 'CLIENT_PROPOSALS', 'CLIENT_SATISFACTION', 'CLIENT_REPEAT');
+
+UPDATE kpi_definitions
+SET calculation_method = 'semi_auto', auto_source = 'audience_metrics', updated_at = NOW()
+WHERE code IN ('AUD_YOUTUBE_SUBS', 'AUD_OTHER_PLATFORM_SUBS', 'AUD_PAID_VIEWS', 'AUD_ORGANIC_VIEWS', 'AUD_INFLUENCER_REACH', 'AUD_TOP_EPISODE');
+
+UPDATE kpi_definitions
+SET calculation_method = 'semi_auto', auto_source = 'service_outputs', updated_at = NOW()
+WHERE code IN ('SERV_PODCAST', 'SERV_YOUTUBE_PROGRAMS', 'SERV_MEDIA_REPORTS');
+
+UPDATE kpi_definitions
+SET calculation_method = 'semi_auto', auto_source = 'partnership_activities', updated_at = NOW()
+WHERE code IN ('PART_AWARDS', 'PART_SPONSORSHIPS', 'PART_EVENTS', 'PART_PRODUCT_SPONSORS', 'PART_INTEGRATIONS', 'PART_SPEAKING');

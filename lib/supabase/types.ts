@@ -675,6 +675,222 @@ export interface Database {
         };
         Relationships: [];
       };
+      revenue_entries: {
+        Row: {
+          id: string;
+          entry_date: string;
+          revenue_type: "government" | "non_government" | "product";
+          client_name: string | null;
+          project_id: string | null;
+          amount: number;
+          status: "expected" | "confirmed" | "collected";
+          notes: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          entry_date: string;
+          revenue_type: "government" | "non_government" | "product";
+          client_name?: string | null;
+          project_id?: string | null;
+          amount?: number;
+          status?: "expected" | "confirmed" | "collected";
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          entry_date?: string;
+          revenue_type?: "government" | "non_government" | "product";
+          client_name?: string | null;
+          project_id?: string | null;
+          amount?: number;
+          status?: "expected" | "confirmed" | "collected";
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      client_opportunities: {
+        Row: {
+          id: string;
+          client_name: string;
+          client_type: string | null;
+          record_type: "strategic_client" | "new_client" | "proposal" | "repeat_client" | "satisfaction";
+          project_id: string | null;
+          opportunity_value: number | null;
+          status: "contacted" | "proposal_submitted" | "won" | "lost" | "repeat";
+          submitted_at: string | null;
+          satisfaction_score: number | null;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_name: string;
+          client_type?: string | null;
+          record_type: "strategic_client" | "new_client" | "proposal" | "repeat_client" | "satisfaction";
+          project_id?: string | null;
+          opportunity_value?: number | null;
+          status?: "contacted" | "proposal_submitted" | "won" | "lost" | "repeat";
+          submitted_at?: string | null;
+          satisfaction_score?: number | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_name?: string;
+          client_type?: string | null;
+          record_type?: "strategic_client" | "new_client" | "proposal" | "repeat_client" | "satisfaction";
+          project_id?: string | null;
+          opportunity_value?: number | null;
+          status?: "contacted" | "proposal_submitted" | "won" | "lost" | "repeat";
+          submitted_at?: string | null;
+          satisfaction_score?: number | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      audience_metrics: {
+        Row: {
+          id: string;
+          metric_date: string;
+          platform: string;
+          subscribers: number;
+          paid_views_avg: number;
+          organic_views_avg: number;
+          top_episode_views: number;
+          influencer_reach: number;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          metric_date: string;
+          platform: string;
+          subscribers?: number;
+          paid_views_avg?: number;
+          organic_views_avg?: number;
+          top_episode_views?: number;
+          influencer_reach?: number;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          metric_date?: string;
+          platform?: string;
+          subscribers?: number;
+          paid_views_avg?: number;
+          organic_views_avg?: number;
+          top_episode_views?: number;
+          influencer_reach?: number;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      service_outputs: {
+        Row: {
+          id: string;
+          output_type: "podcast" | "youtube_program" | "media_report" | "other";
+          name: string;
+          project_id: string | null;
+          quantity: number;
+          status: "planned" | "in_progress" | "completed" | "cancelled";
+          delivery_date: string | null;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          output_type: "podcast" | "youtube_program" | "media_report" | "other";
+          name: string;
+          project_id?: string | null;
+          quantity?: number;
+          status?: "planned" | "in_progress" | "completed" | "cancelled";
+          delivery_date?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          output_type?: "podcast" | "youtube_program" | "media_report" | "other";
+          name?: string;
+          project_id?: string | null;
+          quantity?: number;
+          status?: "planned" | "in_progress" | "completed" | "cancelled";
+          delivery_date?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      partnership_activities: {
+        Row: {
+          id: string;
+          activity_type: "award" | "sponsorship" | "event" | "partnership" | "speaker" | "product_sponsor";
+          entity_name: string;
+          activity_date: string | null;
+          status: "planned" | "contacted" | "confirmed" | "completed" | "cancelled";
+          impact_value: number | null;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          activity_type: "award" | "sponsorship" | "event" | "partnership" | "speaker" | "product_sponsor";
+          entity_name: string;
+          activity_date?: string | null;
+          status?: "planned" | "contacted" | "confirmed" | "completed" | "cancelled";
+          impact_value?: number | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          activity_type?: "award" | "sponsorship" | "event" | "partnership" | "speaker" | "product_sponsor";
+          entity_name?: string;
+          activity_date?: string | null;
+          status?: "planned" | "contacted" | "confirmed" | "completed" | "cancelled";
+          impact_value?: number | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       comments: {
         Row: {
           id: string;
@@ -846,6 +1062,11 @@ export type KpiValue = Database["public"]["Tables"]["kpi_values"]["Row"];
 export type KpiShareLink = Database["public"]["Tables"]["kpi_share_links"]["Row"];
 export type IndicatorProduct = Database["public"]["Tables"]["indicator_products"]["Row"];
 export type ProjectPerformanceUpdate = Database["public"]["Tables"]["project_performance_updates"]["Row"];
+export type RevenueEntry = Database["public"]["Tables"]["revenue_entries"]["Row"];
+export type ClientOpportunity = Database["public"]["Tables"]["client_opportunities"]["Row"];
+export type AudienceMetric = Database["public"]["Tables"]["audience_metrics"]["Row"];
+export type ServiceOutput = Database["public"]["Tables"]["service_outputs"]["Row"];
+export type PartnershipActivity = Database["public"]["Tables"]["partnership_activities"]["Row"];
 export type Comment = Database["public"]["Tables"]["comments"]["Row"];
 export type Notification = Database["public"]["Tables"]["notifications"]["Row"];
 export type AutomationLog = Database["public"]["Tables"]["automation_logs"]["Row"];
