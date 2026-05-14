@@ -184,6 +184,70 @@ CREATE TABLE IF NOT EXISTS project_form_shares (
   UNIQUE(form_instance_id, shared_with_user_id)
 );
 
+-- ============================================================
+-- 6.2. جداول مركز المؤشرات (KPI Center)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS kpi_definitions (
+  id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code               TEXT UNIQUE NOT NULL,
+  name               TEXT NOT NULL,
+  description        TEXT,
+  perspective        TEXT NOT NULL,
+  strategic_goal     TEXT,
+  measurement_label  TEXT,
+  target_value       NUMERIC,
+  target_text        TEXT,
+  target_unit        TEXT,
+  direction          TEXT NOT NULL DEFAULT 'higher_is_better'
+    CHECK (direction IN ('higher_is_better', 'lower_is_better')),
+  calculation_method TEXT NOT NULL DEFAULT 'manual'
+    CHECK (calculation_method IN ('auto', 'manual', 'semi_auto')),
+  auto_source        TEXT,
+  frequency          TEXT NOT NULL DEFAULT 'monthly'
+    CHECK (frequency IN ('daily', 'weekly', 'monthly', 'quarterly', 'yearly')),
+  visibility         TEXT NOT NULL DEFAULT 'management'
+    CHECK (visibility IN ('management', 'project_managers', 'team')),
+  owner_id           UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  active             BOOLEAN NOT NULL DEFAULT TRUE,
+  sort_order         INTEGER DEFAULT 0,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS kpi_values (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  kpi_id        UUID NOT NULL REFERENCES kpi_definitions(id) ON DELETE CASCADE,
+  period_type   TEXT NOT NULL DEFAULT 'monthly'
+    CHECK (period_type IN ('monthly', 'quarterly')),
+  period_start  DATE NOT NULL,
+  period_end    DATE NOT NULL,
+  actual_value  NUMERIC,
+  actual_text   TEXT,
+  target_value  NUMERIC,
+  status        TEXT CHECK (status IN ('green', 'yellow', 'red', 'neutral')),
+  trend         TEXT CHECK (trend IN ('up', 'down', 'flat', 'unknown')),
+  source        TEXT NOT NULL DEFAULT 'manual'
+    CHECK (source IN ('auto', 'manual', 'semi_auto')),
+  notes         TEXT,
+  updated_by    UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(kpi_id, period_type, period_start, period_end)
+);
+
+CREATE TABLE IF NOT EXISTS kpi_share_links (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name           TEXT NOT NULL DEFAULT 'رابط مجلس الإدارة',
+  token_hash     TEXT UNIQUE NOT NULL,
+  active         BOOLEAN NOT NULL DEFAULT TRUE,
+  expires_at     TIMESTAMPTZ,
+  created_by     UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  last_viewed_at TIMESTAMPTZ,
+  views_count    INTEGER NOT NULL DEFAULT 0 CHECK (views_count >= 0),
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 ALTER TABLE documents
   ADD COLUMN IF NOT EXISTS form_instance_id UUID;
 
@@ -297,6 +361,21 @@ CREATE TRIGGER update_project_form_instances_updated_at
   BEFORE UPDATE ON project_form_instances
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_kpi_definitions_updated_at ON kpi_definitions;
+CREATE TRIGGER update_kpi_definitions_updated_at
+  BEFORE UPDATE ON kpi_definitions
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_kpi_values_updated_at ON kpi_values;
+CREATE TRIGGER update_kpi_values_updated_at
+  BEFORE UPDATE ON kpi_values
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_kpi_share_links_updated_at ON kpi_share_links;
+CREATE TRIGGER update_kpi_share_links_updated_at
+  BEFORE UPDATE ON kpi_share_links
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 DROP TRIGGER IF EXISTS update_challenges_updated_at ON challenges;
 CREATE TRIGGER update_challenges_updated_at
   BEFORE UPDATE ON challenges
@@ -401,6 +480,12 @@ CREATE INDEX IF NOT EXISTS idx_project_form_instances_template ON project_form_i
 CREATE INDEX IF NOT EXISTS idx_project_form_instances_owner ON project_form_instances(assigned_owner_id);
 CREATE INDEX IF NOT EXISTS idx_project_form_shares_instance ON project_form_shares(form_instance_id);
 CREATE INDEX IF NOT EXISTS idx_project_form_shares_user ON project_form_shares(shared_with_user_id);
+CREATE INDEX IF NOT EXISTS idx_kpi_definitions_perspective ON kpi_definitions(perspective);
+CREATE INDEX IF NOT EXISTS idx_kpi_definitions_visibility ON kpi_definitions(visibility);
+CREATE INDEX IF NOT EXISTS idx_kpi_values_kpi_period ON kpi_values(kpi_id, period_type, period_start, period_end);
+CREATE INDEX IF NOT EXISTS idx_kpi_values_updated_at ON kpi_values(updated_at);
+CREATE INDEX IF NOT EXISTS idx_kpi_share_links_hash ON kpi_share_links(token_hash);
+CREATE INDEX IF NOT EXISTS idx_kpi_share_links_active ON kpi_share_links(active);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_challenges_project ON challenges(project_id);
 CREATE INDEX IF NOT EXISTS idx_documents_project ON documents(project_id);
@@ -412,3 +497,6 @@ CREATE INDEX IF NOT EXISTS idx_comments_task ON comments(task_id);
 GRANT SELECT ON project_form_templates TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON project_form_instances TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON project_form_shares TO authenticated;
+GRANT SELECT ON kpi_definitions TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON kpi_values TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON kpi_share_links TO authenticated;
