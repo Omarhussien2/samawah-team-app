@@ -6,6 +6,7 @@ export interface KpiBoardSnapshot {
   link: Pick<KpiShareLink, "id" | "name" | "last_viewed_at" | "views_count" | "updated_at">;
   definitions: KpiDefinition[];
   values: KpiValue[];
+  year: number;
   generatedAt: string;
 }
 
@@ -31,6 +32,10 @@ export async function fetchKpiBoardSnapshot(token: string): Promise<KpiBoardSnap
   if (linkError || !link) return null;
   if (link.expires_at && new Date(link.expires_at).getTime() < Date.now()) return null;
 
+  const year = new Date().getFullYear();
+  const yearStart = `${year}-01-01`;
+  const yearEnd = `${year}-12-31`;
+
   const [{ data: definitions, error: definitionsError }, { data: values, error: valuesError }] = await Promise.all([
     supabase
       .from("kpi_definitions")
@@ -40,9 +45,11 @@ export async function fetchKpiBoardSnapshot(token: string): Promise<KpiBoardSnap
     supabase
       .from("kpi_values")
       .select("*")
+      .eq("period_type", "quarterly")
+      .gte("period_start", yearStart)
+      .lte("period_end", yearEnd)
       .order("period_start", { ascending: false })
-      .order("updated_at", { ascending: false })
-      .limit(500),
+      .order("updated_at", { ascending: false }),
   ]);
 
   if (definitionsError || valuesError) return null;
@@ -60,11 +67,12 @@ export async function fetchKpiBoardSnapshot(token: string): Promise<KpiBoardSnap
       id: link.id,
       name: link.name,
       last_viewed_at: link.last_viewed_at,
-      views_count: link.views_count,
+      views_count: (link.views_count ?? 0) + 1,
       updated_at: link.updated_at,
     },
     definitions: definitions ?? [],
     values: values ?? [],
+    year,
     generatedAt: new Date().toISOString(),
   };
 }
