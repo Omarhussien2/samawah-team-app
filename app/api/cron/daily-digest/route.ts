@@ -3,6 +3,8 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/notifications/send-email";
 import { dailyDigestTemplate } from "@/lib/notifications/templates";
 import { createNotification } from "@/lib/notifications/create-notification";
+import { runManagerFollowups } from "@/lib/notifications/manager-followups";
+import type { Json } from "@/lib/supabase/types";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 
@@ -114,8 +116,19 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    await supabase.from("automation_logs").update({ status: "success", payload: { sent: sentCount, date: today } }).eq("id", log?.id ?? "");
-    return NextResponse.json({ success: true, sent: sentCount });
+    const managerFollowups = await runManagerFollowups(supabase);
+    const payload: Json = {
+      sent: sentCount,
+      date: today,
+      managerFollowups: {
+        managersChecked: managerFollowups.managersChecked,
+        notificationsCreated: managerFollowups.notificationsCreated,
+        findingsCreated: managerFollowups.findingsCreated,
+      },
+    };
+
+    await supabase.from("automation_logs").update({ status: "success", payload }).eq("id", log?.id ?? "");
+    return NextResponse.json({ success: true, sent: sentCount, managerFollowups });
 
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
