@@ -2,13 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, CalendarDays, RefreshCw } from "lucide-react";
+import { BarChart3, CalendarDays, RefreshCw, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KpiBulkUpdateModal } from "@/components/kpis/kpi-bulk-update-modal";
 import { KpiCard } from "@/components/kpis/kpi-card";
 import { KpiExecutiveOverview } from "@/components/kpis/kpi-executive-overview";
+import { KpiTargetsModal } from "@/components/kpis/kpi-targets-modal";
 import { OperationsWorkspace } from "@/components/kpis/operations-workspace";
 import { ProductsWorkspace } from "@/components/kpis/products-workspace";
 import { ShareLinkPanel } from "@/components/kpis/share-link-panel";
@@ -65,6 +66,7 @@ export function KpiCenterClient({
   const [periodType, setPeriodType] = useState<KpiPeriodType>(initialPeriod.periodType);
   const [periodStart, setPeriodStart] = useState(initialPeriod.periodStart);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [targetsOpen, setTargetsOpen] = useState(false);
 
   const periodOptions = useMemo(() => getPeriodOptions(periodType), [periodType]);
   const selectedPeriod = findPeriodOption(periodType, periodStart);
@@ -215,10 +217,16 @@ export function KpiCenterClient({
                 </Select>
               </div>
               {isAdmin && (
-                <Button onClick={() => setBulkOpen(true)}>
-                  <CalendarDays size={16} />
-                  تحديث المؤشرات اليدوية
-                </Button>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button variant="outline" onClick={() => setTargetsOpen(true)}>
+                    <Target size={16} />
+                    تعديل المستهدفات
+                  </Button>
+                  <Button onClick={() => setBulkOpen(true)}>
+                    <CalendarDays size={16} />
+                    تحديث المؤشرات اليدوية
+                  </Button>
+                </div>
               )}
             </div>
           </div>
@@ -265,6 +273,7 @@ export function KpiCenterClient({
         periodEnd={selectedPeriod.periodEnd}
         periodLabel={selectedPeriod.label}
       />
+      <KpiTargetsModal open={targetsOpen} onOpenChange={setTargetsOpen} definitions={definitions} />
     </>
   );
 }

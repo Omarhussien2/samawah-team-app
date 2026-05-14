@@ -198,8 +198,12 @@ export function SimpleSectionWorkspace({
       await syncKpis(nextRecords);
       return saved;
     },
-    onSuccess: () => {
+    onSuccess: (saved) => {
       toast.success("تم حفظ السجل");
+      queryClient.setQueryData(kpiKeys.simpleWorkspace(kind), (current: SimpleWorkspaceRecord[] | undefined) => {
+        const next = current ?? records;
+        return draft.id ? next.map((item) => (item.id === saved.id ? saved : item)) : [saved, ...next];
+      });
       queryClient.invalidateQueries({ queryKey: kpiKeys.simpleWorkspace(kind) });
       queryClient.invalidateQueries({ queryKey: kpiKeys.values(periodType, periodStart, periodEnd) });
       setOpen(false);
@@ -212,8 +216,12 @@ export function SimpleSectionWorkspace({
       await deleteSimpleWorkspaceRecord(kind, record.id);
       await syncKpis(records.filter((item) => item.id !== record.id));
     },
-    onSuccess: () => {
+    onSuccess: (_data, deletedRecord) => {
       toast.success("تم حذف السجل");
+      queryClient.setQueryData(kpiKeys.simpleWorkspace(kind), (current: SimpleWorkspaceRecord[] | undefined) => {
+        const next = current ?? records;
+        return next.filter((item) => item.id !== deletedRecord.id);
+      });
       queryClient.invalidateQueries({ queryKey: kpiKeys.simpleWorkspace(kind) });
       queryClient.invalidateQueries({ queryKey: kpiKeys.values(periodType, periodStart, periodEnd) });
     },
@@ -277,7 +285,7 @@ export function SimpleSectionWorkspace({
                 <tr key={record.id}>
                   <td className="px-4 py-3">
                     <p className="font-bold text-slate-900">{row.title}</p>
-                    <p className="text-xs text-slate-500">{row.date || "بدون تاريخ"}</p>
+                    <p className="text-xs text-slate-500">{row.description || row.date || "بدون تاريخ"}</p>
                   </td>
                   <td className="px-4 py-3 text-slate-600">{row.type}</td>
                   <td className="px-4 py-3 font-bold">{formatKpiValue(row.value, row.unit)}</td>
@@ -420,6 +428,17 @@ function calculateActuals(kind: SimpleWorkspaceKind, records: SimpleWorkspaceRec
 }
 
 function summarizeRecords(kind: SimpleWorkspaceKind, records: SimpleWorkspaceRecord[]) {
+  if (kind === "audience") {
+    const rows = records.filter(isAudience);
+    return [
+      { name: "المشتركون", value: sum(rows, "subscribers") },
+      { name: "مشاهدات مدفوعة", value: average(rows.map((row) => row.paid_views_avg)) ?? 0 },
+      { name: "مشاهدات عضوية", value: average(rows.map((row) => row.organic_views_avg)) ?? 0 },
+      { name: "أعلى حلقة", value: Math.max(0, ...rows.map((row) => row.top_episode_views)) },
+      { name: "وصول المؤثرين", value: sum(rows, "influencer_reach") },
+    ];
+  }
+
   const grouped = records.reduce<Record<string, number>>((acc, record) => {
     const row = toRow(kind, record);
     acc[row.type] = (acc[row.type] ?? 0) + row.value;
@@ -447,12 +466,23 @@ function fromRecord(kind: SimpleWorkspaceKind, record: SimpleWorkspaceRecord) {
 }
 
 function toRow(kind: SimpleWorkspaceKind, record: SimpleWorkspaceRecord) {
-  if (kind === "revenue" && isRevenue(record)) return { title: record.client_name ?? "إيراد", type: record.revenue_type, value: record.amount, unit: "ريال", status: record.status, date: record.entry_date };
-  if (kind === "clients" && isClient(record)) return { title: record.client_name, type: record.record_type, value: record.satisfaction_score ?? record.opportunity_value ?? 1, unit: record.satisfaction_score !== null ? "%" : "", status: record.status, date: record.submitted_at };
-  if (kind === "audience" && isAudience(record)) return { title: record.platform, type: "جمهور", value: record.subscribers, unit: "مشترك", status: "محدث", date: record.metric_date };
-  if (kind === "services" && isService(record)) return { title: record.name, type: record.output_type, value: record.quantity, unit: "", status: record.status, date: record.delivery_date };
-  if (kind === "partnerships" && isPartnership(record)) return { title: record.entity_name, type: record.activity_type, value: record.impact_value ?? 1, unit: "", status: record.status, date: record.activity_date };
-  return { title: "سجل", type: "غير محدد", value: 0, unit: "", status: "", date: "" };
+  if (kind === "revenue" && isRevenue(record)) return { title: record.client_name ?? "إيراد", type: record.revenue_type, value: record.amount, unit: "ريال", status: record.status, date: record.entry_date, description: "" };
+  if (kind === "clients" && isClient(record)) return { title: record.client_name, type: record.record_type, value: record.satisfaction_score ?? record.opportunity_value ?? 1, unit: record.satisfaction_score !== null ? "%" : "", status: record.status, date: record.submitted_at, description: "" };
+  if (kind === "audience" && isAudience(record)) {
+    const metricValue = record.subscribers || record.paid_views_avg || record.organic_views_avg || record.top_episode_views || record.influencer_reach;
+    return {
+      title: record.platform,
+      type: "جمهور",
+      value: metricValue,
+      unit: record.subscribers ? "مشترك" : "",
+      status: "محدث",
+      date: record.metric_date,
+      description: `مشتركين: ${formatKpiValue(record.subscribers)} | مدفوع: ${formatKpiValue(record.paid_views_avg)} | عضوي: ${formatKpiValue(record.organic_views_avg)} | أعلى حلقة: ${formatKpiValue(record.top_episode_views)} | مؤثرين: ${formatKpiValue(record.influencer_reach)}`,
+    };
+  }
+  if (kind === "services" && isService(record)) return { title: record.name, type: record.output_type, value: record.quantity, unit: "", status: record.status, date: record.delivery_date, description: "" };
+  if (kind === "partnerships" && isPartnership(record)) return { title: record.entity_name, type: record.activity_type, value: record.impact_value ?? 1, unit: "", status: record.status, date: record.activity_date, description: "" };
+  return { title: "سجل", type: "غير محدد", value: 0, unit: "", status: "", date: "", description: "" };
 }
 
 function isValid(fields: Field[], draft: Record<string, string>) {

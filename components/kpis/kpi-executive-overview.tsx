@@ -53,7 +53,7 @@ export function KpiExecutiveOverview({ definitions, values }: Props) {
   const critical = definitions
     .map((definition) => {
       const value = getValueForKpi(values, definition.id);
-      const status = value?.status ?? calculateKpiStatus(definition, value?.actual_value);
+      const status = calculateKpiStatus(definition, value?.actual_value);
       return { definition, value, status };
     })
     .filter((item) => item.status === "red" || item.status === "yellow")

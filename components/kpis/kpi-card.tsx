@@ -18,7 +18,7 @@ interface KpiCardProps {
 
 export function KpiCard({ definition, value }: KpiCardProps) {
   const actualValue = value?.actual_value ?? null;
-  const status = value?.status ?? calculateKpiStatus(definition, actualValue);
+  const status = calculateKpiStatus(definition, actualValue);
   const achievement = calculateKpiAchievement(actualValue, definition.target_value, definition.direction);
   const progress = achievement === null ? 0 : Math.round(achievement);
 
