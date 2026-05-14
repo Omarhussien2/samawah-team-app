@@ -248,6 +248,41 @@ CREATE TABLE IF NOT EXISTS kpi_share_links (
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS indicator_products (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  kpi_id         UUID REFERENCES kpi_definitions(id) ON DELETE SET NULL,
+  name           TEXT NOT NULL,
+  category       TEXT,
+  description    TEXT,
+  current_value  NUMERIC NOT NULL DEFAULT 0,
+  target_value   NUMERIC,
+  unit           TEXT,
+  status         TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'archived')),
+  owner_id       UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  notes          TEXT,
+  created_by     UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(name, kpi_id)
+);
+
+CREATE TABLE IF NOT EXISTS project_performance_updates (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id       UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  period_type      TEXT NOT NULL DEFAULT 'monthly'
+    CHECK (period_type IN ('monthly', 'quarterly')),
+  period_start     DATE NOT NULL,
+  period_end       DATE NOT NULL,
+  planned_progress NUMERIC NOT NULL DEFAULT 0 CHECK (planned_progress >= 0 AND planned_progress <= 100),
+  actual_progress  NUMERIC NOT NULL DEFAULT 0 CHECK (actual_progress >= 0 AND actual_progress <= 100),
+  actual_cost      NUMERIC NOT NULL DEFAULT 0 CHECK (actual_cost >= 0),
+  notes            TEXT,
+  updated_by       UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(project_id, period_type, period_start, period_end)
+);
+
 ALTER TABLE documents
   ADD COLUMN IF NOT EXISTS form_instance_id UUID;
 
@@ -376,6 +411,16 @@ CREATE TRIGGER update_kpi_share_links_updated_at
   BEFORE UPDATE ON kpi_share_links
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_indicator_products_updated_at ON indicator_products;
+CREATE TRIGGER update_indicator_products_updated_at
+  BEFORE UPDATE ON indicator_products
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_project_performance_updates_updated_at ON project_performance_updates;
+CREATE TRIGGER update_project_performance_updates_updated_at
+  BEFORE UPDATE ON project_performance_updates
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 DROP TRIGGER IF EXISTS update_challenges_updated_at ON challenges;
 CREATE TRIGGER update_challenges_updated_at
   BEFORE UPDATE ON challenges
@@ -486,6 +531,10 @@ CREATE INDEX IF NOT EXISTS idx_kpi_values_kpi_period ON kpi_values(kpi_id, perio
 CREATE INDEX IF NOT EXISTS idx_kpi_values_updated_at ON kpi_values(updated_at);
 CREATE INDEX IF NOT EXISTS idx_kpi_share_links_hash ON kpi_share_links(token_hash);
 CREATE INDEX IF NOT EXISTS idx_kpi_share_links_active ON kpi_share_links(active);
+CREATE INDEX IF NOT EXISTS idx_indicator_products_kpi ON indicator_products(kpi_id);
+CREATE INDEX IF NOT EXISTS idx_indicator_products_status ON indicator_products(status);
+CREATE INDEX IF NOT EXISTS idx_project_performance_updates_project ON project_performance_updates(project_id);
+CREATE INDEX IF NOT EXISTS idx_project_performance_updates_period ON project_performance_updates(period_type, period_start, period_end);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_challenges_project ON challenges(project_id);
 CREATE INDEX IF NOT EXISTS idx_documents_project ON documents(project_id);
@@ -500,3 +549,5 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON project_form_shares TO authenticated;
 GRANT SELECT ON kpi_definitions TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON kpi_values TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON kpi_share_links TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON indicator_products TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON project_performance_updates TO authenticated;

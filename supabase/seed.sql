@@ -429,3 +429,29 @@ ON CONFLICT (code) DO UPDATE SET
   active = TRUE,
   sort_order = EXCLUDED.sort_order,
   updated_at = NOW();
+
+INSERT INTO indicator_products (
+  kpi_id,
+  name,
+  category,
+  description,
+  current_value,
+  target_value,
+  unit,
+  status,
+  notes
+) VALUES
+  ((SELECT id FROM kpi_definitions WHERE code = 'PROD_DIGITAL_PRODUCTS'), 'المنتجات الرقمية الجديدة', 'منتجات رقمية', 'مسار بناء وإطلاق المنتجات الرقمية ضمن خطة 2026.', 0, 2, 'منتج', 'active', 'مرتبط بمؤشر بناء وإطلاق منتجات رقمية'),
+  ((SELECT id FROM kpi_definitions WHERE code = 'PROD_HUDNA_MAGAZINE'), 'مجلة هدنة', 'منتجات تحريرية', 'متابعة مبيعات مجلة هدنة.', 0, 4000, 'بيع', 'active', 'مرتبط بمؤشر مبيعات مجلة هدنة'),
+  ((SELECT id FROM kpi_definitions WHERE code = 'PROD_TAQREERAK'), 'منصة تقريرك', 'منصات رقمية', 'متابعة مشتركي منصة تقريرك.', 0, 5000, 'مشترك', 'active', 'مرتبط بمؤشر منصة تقريرك'),
+  ((SELECT id FROM kpi_definitions WHERE code = 'PROD_OTHER_DIGITAL_PLATFORMS'), 'المنصات الرقمية الأخرى', 'منصات رقمية', 'متابعة مشتركي المنصات الرقمية الأخرى.', 0, 2000, 'مشترك', 'active', 'مرتبط بمؤشر المنصات الرقمية الأخرى'),
+  ((SELECT id FROM kpi_definitions WHERE code = 'PROD_JLAS_MEETINGS'), 'جلاس', 'منتجات معرفية', 'متابعة عدد لقاءات منتج جلاس.', 0, 10, 'لقاء', 'active', 'مرتبط بمؤشر لقاءات جلاس'),
+  ((SELECT id FROM kpi_definitions WHERE code = 'PROD_STATIONERY_SALES'), 'منتجات قرطاسية للمتجر', 'منتجات متجر', 'متابعة مبيعات المنتجات القرطاسية.', 0, 250, 'بيع', 'active', 'مرتبط بمؤشر مبيعات القرطاسية')
+ON CONFLICT (name, kpi_id) DO UPDATE SET
+  category = EXCLUDED.category,
+  description = EXCLUDED.description,
+  target_value = EXCLUDED.target_value,
+  unit = EXCLUDED.unit,
+  status = EXCLUDED.status,
+  notes = EXCLUDED.notes,
+  updated_at = NOW();
