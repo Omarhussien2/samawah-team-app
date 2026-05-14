@@ -16,7 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { calculateKpiStatus, formatKpiValue, getValueForKpi } from "@/lib/kpis/status";
-import { kpiKeys, upsertKpiValues, type KpiValueUpsert } from "@/lib/queries/kpis";
+import { kpiKeys, mergeKpiValuesByKpiId, upsertKpiValues, type KpiValueUpsert } from "@/lib/queries/kpis";
 import type { KpiDefinition, KpiPeriodType, KpiValue } from "@/lib/supabase/types";
 
 interface Props {
@@ -49,6 +49,7 @@ export function KpiBulkUpdateModal({
 }: Props) {
   const queryClient = useQueryClient();
   const [drafts, setDrafts] = useState<Record<string, DraftValue>>({});
+  const valuesQueryKey = kpiKeys.values(periodType, periodStart, periodEnd);
 
   useEffect(() => {
     if (!open) return;
@@ -65,9 +66,10 @@ export function KpiBulkUpdateModal({
 
   const mutation = useMutation({
     mutationFn: upsertKpiValues,
-    onSuccess: () => {
+    onSuccess: (updatedValues) => {
       toast.success("تم تحديث المؤشرات");
-      queryClient.invalidateQueries({ queryKey: kpiKeys.values(periodType, periodStart, periodEnd) });
+      queryClient.setQueryData(valuesQueryKey, (current: KpiValue[] | undefined) => mergeKpiValuesByKpiId(current, updatedValues));
+      queryClient.invalidateQueries({ queryKey: valuesQueryKey });
       onOpenChange(false);
     },
     onError: (error) => {
@@ -163,7 +165,7 @@ export function KpiBulkUpdateModal({
           </Button>
           <Button onClick={() => mutation.mutate(payload)} disabled={mutation.isPending || payload.length === 0}>
             <Save size={16} />
-            حفظ {payload.length > 0 ? `${payload.length} مؤشر` : ""}
+            {mutation.isPending ? "جاري الحفظ..." : `حفظ ${payload.length > 0 ? `${payload.length} مؤشر` : ""}`}
           </Button>
         </DialogFooter>
       </DialogContent>
