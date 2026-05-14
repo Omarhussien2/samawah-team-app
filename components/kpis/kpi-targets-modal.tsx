@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { calculateKpiStatus } from "@/lib/kpis/status";
 import { kpiKeys, updateKpiDefinitionTarget } from "@/lib/queries/kpis";
-import type { KpiDefinition } from "@/lib/supabase/types";
+import type { KpiDefinition, KpiValue } from "@/lib/supabase/types";
 
 interface Props {
   open: boolean;
@@ -76,7 +77,20 @@ export function KpiTargetsModal({ open, onOpenChange, definitions }: Props) {
         const currentDefinitions = current ?? definitions;
         return currentDefinitions.map((definition) => updatedDefinitions.find((item) => item.id === definition.id) ?? definition);
       });
+      queryClient.setQueriesData<KpiValue[]>({ queryKey: [...kpiKeys.all, "values"] }, (current) => {
+        if (!current) return current;
+        return current.map((value) => {
+          const definition = updatedDefinitions.find((item) => item.id === value.kpi_id);
+          if (!definition) return value;
+          return {
+            ...value,
+            target_value: definition.target_value,
+            status: calculateKpiStatus(definition, value.actual_value),
+          };
+        });
+      });
       queryClient.invalidateQueries({ queryKey: kpiKeys.definitions() });
+      queryClient.invalidateQueries({ queryKey: [...kpiKeys.all, "values"] });
       onOpenChange(false);
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "تعذر تحديث المستهدفات"),
@@ -147,7 +161,7 @@ export function KpiTargetsModal({ open, onOpenChange, definitions }: Props) {
           <Button variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
           <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
             <Save size={16} />
-            حفظ المستهدفات
+            {mutation.isPending ? "جاري الحفظ..." : "حفظ المستهدفات"}
           </Button>
         </DialogFooter>
       </DialogContent>

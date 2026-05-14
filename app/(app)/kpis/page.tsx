@@ -57,12 +57,37 @@ export default async function KpisPage() {
       .eq("period_end", initialPeriod.periodEnd)
       .order("updated_at", { ascending: false }),
     user.role === "admin"
-      ? supabase.from("revenue_entries").select("*").order("entry_date", { ascending: false })
+      ? supabase
+          .from("revenue_entries")
+          .select("*")
+          .gte("entry_date", initialPeriod.periodStart)
+          .lte("entry_date", initialPeriod.periodEnd)
+          .order("entry_date", { ascending: false })
       : Promise.resolve({ data: [] }),
-    supabase.from("client_opportunities").select("*").order("updated_at", { ascending: false }),
-    supabase.from("audience_metrics").select("*").order("metric_date", { ascending: false }),
-    supabase.from("service_outputs").select("*").order("updated_at", { ascending: false }),
-    supabase.from("partnership_activities").select("*").order("updated_at", { ascending: false }),
+    supabase
+      .from("client_opportunities")
+      .select("*")
+      .gte("submitted_at", initialPeriod.periodStart)
+      .lte("submitted_at", initialPeriod.periodEnd)
+      .order("updated_at", { ascending: false }),
+    supabase
+      .from("audience_metrics")
+      .select("*")
+      .gte("metric_date", initialPeriod.periodStart)
+      .lte("metric_date", initialPeriod.periodEnd)
+      .order("metric_date", { ascending: false }),
+    supabase
+      .from("service_outputs")
+      .select("*")
+      .gte("delivery_date", initialPeriod.periodStart)
+      .lte("delivery_date", initialPeriod.periodEnd)
+      .order("updated_at", { ascending: false }),
+    supabase
+      .from("partnership_activities")
+      .select("*")
+      .gte("activity_date", initialPeriod.periodStart)
+      .lte("activity_date", initialPeriod.periodEnd)
+      .order("updated_at", { ascending: false }),
   ]);
 
   return (

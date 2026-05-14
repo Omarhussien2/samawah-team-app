@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Edit, Save, Trash2 } from "lucide-react";
+import { AlertTriangle, Edit, RefreshCw, Save, Trash2 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -10,19 +10,20 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { buildOperationsKpiValues } from "@/lib/kpis/auto-calculations";
 import { averageMetric, calculateProjectPerformance } from "@/lib/kpis/operations";
-import { calculateKpiStatus, formatKpiValue, getKpiStatusStyle } from "@/lib/kpis/status";
+import { formatKpiValue, getKpiStatusStyle } from "@/lib/kpis/status";
 import {
   deleteProjectPerformanceUpdate,
   fetchActiveProjectsForPerformance,
   fetchProjectPerformanceUpdates,
   kpiKeys,
+  mergeKpiValuesByKpiId,
   saveProjectPerformanceUpdate,
   upsertKpiValues,
-  type KpiValueUpsert,
   type ProjectPerformanceRecord,
 } from "@/lib/queries/kpis";
-import type { KpiDefinition, KpiPeriodType, Profile, Project } from "@/lib/supabase/types";
+import type { KpiDefinition, KpiPeriodType, KpiValue, Profile, Project } from "@/lib/supabase/types";
 
 interface Props {
   currentUser: Profile;
@@ -58,6 +59,8 @@ export function OperationsWorkspace({
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(blankDraft);
   const canManage = currentUser.role === "admin" || currentUser.role === "project_manager";
+  const updatesQueryKey = kpiKeys.projectPerformance(periodType, periodStart, periodEnd);
+  const valuesQueryKey = kpiKeys.values(periodType, periodStart, periodEnd);
 
   const { data: projects = initialProjects } = useQuery({
     queryKey: [...kpiKeys.all, "performance-projects"],
@@ -65,40 +68,20 @@ export function OperationsWorkspace({
     initialData: initialProjects,
   });
 
-  const { data: updates = initialUpdates } = useQuery({
-    queryKey: kpiKeys.projectPerformance(periodType, periodStart, periodEnd),
+  const { data: updates = initialUpdates, isFetching: isFetchingUpdates } = useQuery({
+    queryKey: updatesQueryKey,
     queryFn: () => fetchProjectPerformanceUpdates(periodType, periodStart, periodEnd),
     initialData: initialUpdates,
   });
 
   const syncOperationalKpis = async (nextUpdates: ProjectPerformanceRecord[]) => {
-    const cpi = averageMetric(nextUpdates, "cpi");
-    const spi = averageMetric(nextUpdates, "spi");
-    const coverage = projects.length ? Math.round((nextUpdates.length / projects.length) * 100) : null;
-    const values = [
-      { code: "OPS_CPI", actual: cpi },
-      { code: "OPS_SPI", actual: spi },
-      { code: "OPS_UPDATED_REPORTS", actual: coverage },
-    ].reduce<KpiValueUpsert[]>((acc, { code, actual }) => {
-        const definition = definitions.find((item) => item.code === code);
-        if (!definition || actual === null) return acc;
-        acc.push({
-          kpi_id: definition.id,
-          period_type: periodType,
-          period_start: periodStart,
-          period_end: periodEnd,
-          actual_value: actual,
-          target_value: definition.target_value,
-          status: calculateKpiStatus(definition, actual),
-          trend: "unknown" as const,
-          source: "semi_auto" as const,
-          notes: "تحديث تلقائي من مساحة العمليات والمشاريع",
-          updated_by: currentUser.id,
-        });
-        return acc;
-      }, []);
-
-    if (values.length > 0) await upsertKpiValues(values);
+    const values = buildOperationsKpiValues(nextUpdates, definitions, projects.length, {
+      periodType,
+      periodStart,
+      periodEnd,
+      userId: currentUser.id,
+    });
+    return values.length > 0 ? upsertKpiValues(values) : [];
   };
 
   const saveMutation = useMutation({
@@ -117,14 +100,16 @@ export function OperationsWorkspace({
         updated_by: currentUser.id,
       });
       const record: ProjectPerformanceRecord = { ...saved, project: project ?? null };
-      const nextUpdates = draft.id ? updates.map((item) => (item.id === saved.id ? record : item)) : [record, ...updates];
-      await syncOperationalKpis(nextUpdates);
-      return saved;
+      const nextUpdates = mergePerformanceUpdate(updates, record);
+      const kpiValues = await syncOperationalKpis(nextUpdates);
+      return { kpiValues, nextUpdates };
     },
-    onSuccess: () => {
+    onSuccess: ({ kpiValues, nextUpdates }) => {
       toast.success("تم حفظ أداء المشروع");
-      queryClient.invalidateQueries({ queryKey: kpiKeys.projectPerformance(periodType, periodStart, periodEnd) });
-      queryClient.invalidateQueries({ queryKey: kpiKeys.values(periodType, periodStart, periodEnd) });
+      queryClient.setQueryData(updatesQueryKey, nextUpdates);
+      queryClient.setQueryData(valuesQueryKey, (current: KpiValue[] | undefined) => mergeKpiValuesByKpiId(current, kpiValues));
+      queryClient.invalidateQueries({ queryKey: updatesQueryKey });
+      queryClient.invalidateQueries({ queryKey: valuesQueryKey });
       setOpen(false);
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "تعذر حفظ أداء المشروع"),
@@ -133,12 +118,16 @@ export function OperationsWorkspace({
   const deleteMutation = useMutation({
     mutationFn: async (record: ProjectPerformanceRecord) => {
       await deleteProjectPerformanceUpdate(record.id);
-      await syncOperationalKpis(updates.filter((item) => item.id !== record.id));
+      const nextUpdates = updates.filter((item) => item.id !== record.id);
+      const kpiValues = await syncOperationalKpis(nextUpdates);
+      return { kpiValues, nextUpdates };
     },
-    onSuccess: () => {
+    onSuccess: ({ kpiValues, nextUpdates }) => {
       toast.success("تم حذف تحديث الأداء");
-      queryClient.invalidateQueries({ queryKey: kpiKeys.projectPerformance(periodType, periodStart, periodEnd) });
-      queryClient.invalidateQueries({ queryKey: kpiKeys.values(periodType, periodStart, periodEnd) });
+      queryClient.setQueryData(updatesQueryKey, nextUpdates);
+      queryClient.setQueryData(valuesQueryKey, (current: KpiValue[] | undefined) => mergeKpiValuesByKpiId(current, kpiValues));
+      queryClient.invalidateQueries({ queryKey: updatesQueryKey });
+      queryClient.invalidateQueries({ queryKey: valuesQueryKey });
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "تعذر حذف تحديث الأداء"),
   });
@@ -175,6 +164,13 @@ export function OperationsWorkspace({
         <Stat label="تقارير الأداء" value={`${updates.length}/${projects.length}`} />
         <Stat label="تحذيرات" value={warningCount} />
       </div>
+
+      {isFetchingUpdates && (
+        <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+          <RefreshCw size={14} className="animate-spin" />
+          يتم تحديث أداء المشاريع للفترة...
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -248,8 +244,8 @@ export function OperationsWorkspace({
                 {canManage && (
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => editRecord(update)}><Edit size={14} /></Button>
-                      <Button variant="outline" size="sm" onClick={() => deleteMutation.mutate(update)}><Trash2 size={14} /></Button>
+                      <Button variant="outline" size="sm" onClick={() => editRecord(update)} disabled={deleteMutation.isPending}><Edit size={14} /></Button>
+                      <Button variant="outline" size="sm" onClick={() => deleteMutation.mutate(update)} disabled={deleteMutation.isPending}><Trash2 size={14} /></Button>
                     </div>
                   </td>
                 )}
@@ -280,7 +276,7 @@ export function OperationsWorkspace({
             <Button variant="outline" onClick={() => setOpen(false)}>إلغاء</Button>
             <Button disabled={!draft.projectId || saveMutation.isPending} onClick={() => saveMutation.mutate()}>
               <Save size={16} />
-              حفظ
+              {saveMutation.isPending ? "جاري الحفظ..." : "حفظ"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -296,4 +292,12 @@ function Stat({ label, value }: { label: string; value: string | number }) {
       <p className="mt-2 text-3xl font-extrabold text-slate-900">{value}</p>
     </div>
   );
+}
+
+function mergePerformanceUpdate(records: ProjectPerformanceRecord[], record: ProjectPerformanceRecord) {
+  const exists = records.some((item) => item.id === record.id || item.project_id === record.project_id);
+  if (exists) {
+    return records.map((item) => (item.id === record.id || item.project_id === record.project_id ? record : item));
+  }
+  return [record, ...records];
 }

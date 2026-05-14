@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Edit, PackagePlus, Save, Trash2 } from "lucide-react";
+import { Edit, PackagePlus, RefreshCw, Save, Trash2 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -10,16 +10,17 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { calculateKpiStatus, formatKpiValue } from "@/lib/kpis/status";
+import { buildProductKpiValues } from "@/lib/kpis/auto-calculations";
+import { formatKpiValue } from "@/lib/kpis/status";
 import {
   deleteIndicatorProduct,
   fetchIndicatorProducts,
   kpiKeys,
+  mergeKpiValuesByKpiId,
   saveIndicatorProduct,
   upsertKpiValues,
-  type KpiValueUpsert,
 } from "@/lib/queries/kpis";
-import type { IndicatorProduct, KpiDefinition, KpiPeriodType, Profile } from "@/lib/supabase/types";
+import type { IndicatorProduct, KpiDefinition, KpiPeriodType, KpiValue, Profile } from "@/lib/supabase/types";
 
 interface Props {
   currentUser: Profile;
@@ -58,35 +59,22 @@ export function ProductsWorkspace({
   const [draft, setDraft] = useState<Draft>(blankDraft);
   const productDefinitions = definitions.filter((definition) => definition.auto_source === "indicator_products");
   const canManage = currentUser.role === "admin" || currentUser.role === "project_manager";
+  const valuesQueryKey = kpiKeys.values(periodType, periodStart, periodEnd);
 
-  const { data: products = initialProducts } = useQuery({
+  const { data: products = initialProducts, isFetching } = useQuery({
     queryKey: kpiKeys.products(),
     queryFn: fetchIndicatorProducts,
     initialData: initialProducts,
   });
 
   const syncLinkedKpi = async (nextProducts: IndicatorProduct[]) => {
-    const values = productDefinitions.reduce<KpiValueUpsert[]>((acc, definition) => {
-        const linked = nextProducts.filter((product) => product.kpi_id === definition.id && product.status !== "archived");
-        if (linked.length === 0) return acc;
-        const actual = linked.reduce((sum, product) => sum + Number(product.current_value ?? 0), 0);
-        acc.push({
-          kpi_id: definition.id,
-          period_type: periodType,
-          period_start: periodStart,
-          period_end: periodEnd,
-          actual_value: actual,
-          target_value: definition.target_value,
-          status: calculateKpiStatus(definition, actual),
-          trend: "unknown" as const,
-          source: "semi_auto" as const,
-          notes: "تحديث تلقائي من مساحة المنتجات",
-          updated_by: currentUser.id,
-        });
-        return acc;
-      }, []);
-
-    if (values.length > 0) await upsertKpiValues(values);
+    const values = buildProductKpiValues(nextProducts, definitions, {
+      periodType,
+      periodStart,
+      periodEnd,
+      userId: currentUser.id,
+    });
+    return values.length > 0 ? upsertKpiValues(values) : [];
   };
 
   const saveMutation = useMutation({
@@ -106,13 +94,15 @@ export function ProductsWorkspace({
       };
       const saved = await saveIndicatorProduct(payload);
       const nextProducts = draft.id ? products.map((item) => (item.id === saved.id ? saved : item)) : [saved, ...products];
-      await syncLinkedKpi(nextProducts);
-      return saved;
+      const kpiValues = await syncLinkedKpi(nextProducts);
+      return { kpiValues, nextProducts };
     },
-    onSuccess: () => {
+    onSuccess: ({ kpiValues, nextProducts }) => {
       toast.success("تم حفظ المنتج");
+      queryClient.setQueryData(kpiKeys.products(), nextProducts);
+      queryClient.setQueryData(valuesQueryKey, (current: KpiValue[] | undefined) => mergeKpiValuesByKpiId(current, kpiValues));
       queryClient.invalidateQueries({ queryKey: kpiKeys.products() });
-      queryClient.invalidateQueries({ queryKey: kpiKeys.values(periodType, periodStart, periodEnd) });
+      queryClient.invalidateQueries({ queryKey: valuesQueryKey });
       setOpen(false);
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "تعذر حفظ المنتج"),
@@ -121,12 +111,16 @@ export function ProductsWorkspace({
   const deleteMutation = useMutation({
     mutationFn: async (product: IndicatorProduct) => {
       await deleteIndicatorProduct(product.id);
-      await syncLinkedKpi(products.filter((item) => item.id !== product.id));
+      const nextProducts = products.filter((item) => item.id !== product.id);
+      const kpiValues = await syncLinkedKpi(nextProducts);
+      return { kpiValues, nextProducts };
     },
-    onSuccess: () => {
+    onSuccess: ({ kpiValues, nextProducts }) => {
       toast.success("تم حذف المنتج");
+      queryClient.setQueryData(kpiKeys.products(), nextProducts);
+      queryClient.setQueryData(valuesQueryKey, (current: KpiValue[] | undefined) => mergeKpiValuesByKpiId(current, kpiValues));
       queryClient.invalidateQueries({ queryKey: kpiKeys.products() });
-      queryClient.invalidateQueries({ queryKey: kpiKeys.values(periodType, periodStart, periodEnd) });
+      queryClient.invalidateQueries({ queryKey: valuesQueryKey });
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "تعذر حذف المنتج"),
   });
@@ -173,6 +167,13 @@ export function ProductsWorkspace({
           <p className="mt-2 text-3xl font-extrabold text-slate-900">{products.filter((product) => product.kpi_id).length}</p>
         </div>
       </div>
+
+      {isFetching && (
+        <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+          <RefreshCw size={14} className="animate-spin" />
+          يتم تحديث بيانات المنتجات...
+        </div>
+      )}
 
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-4 flex items-center justify-between gap-3">
@@ -222,8 +223,8 @@ export function ProductsWorkspace({
                 {canManage && (
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => editProduct(product)}><Edit size={14} /></Button>
-                      <Button variant="outline" size="sm" onClick={() => deleteMutation.mutate(product)}><Trash2 size={14} /></Button>
+                      <Button variant="outline" size="sm" onClick={() => editProduct(product)} disabled={deleteMutation.isPending}><Edit size={14} /></Button>
+                      <Button variant="outline" size="sm" onClick={() => deleteMutation.mutate(product)} disabled={deleteMutation.isPending}><Trash2 size={14} /></Button>
                     </div>
                   </td>
                 )}
@@ -258,7 +259,7 @@ export function ProductsWorkspace({
             <Button variant="outline" onClick={() => setOpen(false)}>إلغاء</Button>
             <Button disabled={!draft.name.trim() || saveMutation.isPending} onClick={() => saveMutation.mutate()}>
               <Save size={16} />
-              حفظ
+              {saveMutation.isPending ? "جاري الحفظ..." : "حفظ"}
             </Button>
           </DialogFooter>
         </DialogContent>

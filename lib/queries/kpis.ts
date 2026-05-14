@@ -65,8 +65,17 @@ export const kpiKeys = {
   products: () => [...kpiKeys.all, "products"] as const,
   projectPerformance: (periodType: KpiPeriodType, periodStart: string, periodEnd: string) =>
     [...kpiKeys.all, "project-performance", periodType, periodStart, periodEnd] as const,
-  simpleWorkspace: (kind: SimpleWorkspaceKind) => [...kpiKeys.all, "simple-workspace", kind] as const,
+  simpleWorkspace: (kind: SimpleWorkspaceKind, periodType?: KpiPeriodType, periodStart?: string, periodEnd?: string) =>
+    periodType && periodStart && periodEnd
+      ? ([...kpiKeys.all, "simple-workspace", kind, periodType, periodStart, periodEnd] as const)
+      : ([...kpiKeys.all, "simple-workspace", kind] as const),
 };
+
+export function mergeKpiValuesByKpiId(current: KpiValue[] | undefined, updates: KpiValue[]) {
+  const merged = new Map((current ?? []).map((value) => [value.kpi_id, value]));
+  updates.forEach((value) => merged.set(value.kpi_id, value));
+  return Array.from(merged.values());
+}
 
 export async function fetchKpiDefinitions(): Promise<KpiDefinition[]> {
   const supabase = createClient();
@@ -210,34 +219,48 @@ export async function deleteProjectPerformanceUpdate(id: string): Promise<void> 
   if (error) throw error;
 }
 
-export async function fetchSimpleWorkspaceRecords(kind: SimpleWorkspaceKind): Promise<SimpleWorkspaceRecord[]> {
+export async function fetchSimpleWorkspaceRecords(
+  kind: SimpleWorkspaceKind,
+  periodStart?: string,
+  periodEnd?: string
+): Promise<SimpleWorkspaceRecord[]> {
   const supabase = createClient();
 
   if (kind === "revenue") {
-    const { data, error } = await supabase.from("revenue_entries").select("*").order("entry_date", { ascending: false });
+    let query = supabase.from("revenue_entries").select("*");
+    if (periodStart && periodEnd) query = query.gte("entry_date", periodStart).lte("entry_date", periodEnd);
+    const { data, error } = await query.order("entry_date", { ascending: false });
     if (error) throw error;
     return data ?? [];
   }
 
   if (kind === "clients") {
-    const { data, error } = await supabase.from("client_opportunities").select("*").order("updated_at", { ascending: false });
+    let query = supabase.from("client_opportunities").select("*");
+    if (periodStart && periodEnd) query = query.gte("submitted_at", periodStart).lte("submitted_at", periodEnd);
+    const { data, error } = await query.order("updated_at", { ascending: false });
     if (error) throw error;
     return data ?? [];
   }
 
   if (kind === "audience") {
-    const { data, error } = await supabase.from("audience_metrics").select("*").order("metric_date", { ascending: false });
+    let query = supabase.from("audience_metrics").select("*");
+    if (periodStart && periodEnd) query = query.gte("metric_date", periodStart).lte("metric_date", periodEnd);
+    const { data, error } = await query.order("metric_date", { ascending: false });
     if (error) throw error;
     return data ?? [];
   }
 
   if (kind === "services") {
-    const { data, error } = await supabase.from("service_outputs").select("*").order("updated_at", { ascending: false });
+    let query = supabase.from("service_outputs").select("*");
+    if (periodStart && periodEnd) query = query.gte("delivery_date", periodStart).lte("delivery_date", periodEnd);
+    const { data, error } = await query.order("updated_at", { ascending: false });
     if (error) throw error;
     return data ?? [];
   }
 
-  const { data, error } = await supabase.from("partnership_activities").select("*").order("updated_at", { ascending: false });
+  let query = supabase.from("partnership_activities").select("*");
+  if (periodStart && periodEnd) query = query.gte("activity_date", periodStart).lte("activity_date", periodEnd);
+  const { data, error } = await query.order("updated_at", { ascending: false });
   if (error) throw error;
   return data ?? [];
 }

@@ -110,7 +110,7 @@ export function KpiCenterClient({
           section={section}
           currentUser={currentUser}
           definitions={definitions}
-          initialRecords={initialSimpleWorkspaces[simpleKind]}
+          initialRecords={isInitialPeriod ? initialSimpleWorkspaces[simpleKind] : []}
           periodType={periodType}
           periodStart={selectedPeriod.periodStart}
           periodEnd={selectedPeriod.periodEnd}

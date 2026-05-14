@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Edit, Plus, Save, Trash2 } from "lucide-react";
+import { Edit, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -10,19 +10,20 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { calculateKpiStatus, formatKpiValue } from "@/lib/kpis/status";
+import { buildSimpleWorkspaceKpiValues } from "@/lib/kpis/auto-calculations";
+import { formatKpiValue } from "@/lib/kpis/status";
 import {
   deleteSimpleWorkspaceRecord,
   fetchSimpleWorkspaceRecords,
   kpiKeys,
+  mergeKpiValuesByKpiId,
   saveSimpleWorkspaceRecord,
   upsertKpiValues,
-  type KpiValueUpsert,
   type SimpleWorkspaceKind,
   type SimpleWorkspacePayload,
   type SimpleWorkspaceRecord,
 } from "@/lib/queries/kpis";
-import type { KpiDefinition, KpiPeriodType, Profile } from "@/lib/supabase/types";
+import type { KpiDefinition, KpiPeriodType, KpiValue, Profile } from "@/lib/supabase/types";
 
 interface Props {
   kind: SimpleWorkspaceKind;
@@ -175,10 +176,12 @@ export function SimpleSectionWorkspace({
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Record<string, string>>(defaults[kind]);
   const canManage = kind === "revenue" ? currentUser.role === "admin" : currentUser.role === "admin" || currentUser.role === "project_manager";
+  const recordsQueryKey = kpiKeys.simpleWorkspace(kind, periodType, periodStart, periodEnd);
+  const valuesQueryKey = kpiKeys.values(periodType, periodStart, periodEnd);
 
-  const { data: records = initialRecords } = useQuery({
-    queryKey: kpiKeys.simpleWorkspace(kind),
-    queryFn: () => fetchSimpleWorkspaceRecords(kind),
+  const { data: records = [], isFetching } = useQuery({
+    queryKey: recordsQueryKey,
+    queryFn: () => fetchSimpleWorkspaceRecords(kind, periodStart, periodEnd),
     initialData: initialRecords,
   });
 
@@ -187,25 +190,28 @@ export function SimpleSectionWorkspace({
   const totalValue = chartData.reduce((sum, item) => sum + item.value, 0);
 
   const syncKpis = async (nextRecords: SimpleWorkspaceRecord[]) => {
-    const values = buildKpiValues(kind, nextRecords, definitions, periodType, periodStart, periodEnd, currentUser.id);
-    if (values.length > 0) await upsertKpiValues(values);
+    const values = buildSimpleWorkspaceKpiValues(kind, nextRecords, definitions, {
+      periodType,
+      periodStart,
+      periodEnd,
+      userId: currentUser.id,
+    });
+    return values.length > 0 ? upsertKpiValues(values) : [];
   };
 
   const saveMutation = useMutation({
     mutationFn: async () => {
       const saved = await saveSimpleWorkspaceRecord(kind, toPayload(kind, draft, currentUser.id));
-      const nextRecords = draft.id ? records.map((item) => (item.id === saved.id ? saved : item)) : [saved, ...records];
-      await syncKpis(nextRecords);
-      return saved;
+      const nextRecords = mergeSimpleRecord(records, saved, kind, periodStart, periodEnd);
+      const kpiValues = await syncKpis(nextRecords);
+      return { kpiValues, nextRecords };
     },
-    onSuccess: (saved) => {
+    onSuccess: ({ kpiValues, nextRecords }) => {
       toast.success("تم حفظ السجل");
-      queryClient.setQueryData(kpiKeys.simpleWorkspace(kind), (current: SimpleWorkspaceRecord[] | undefined) => {
-        const next = current ?? records;
-        return draft.id ? next.map((item) => (item.id === saved.id ? saved : item)) : [saved, ...next];
-      });
+      queryClient.setQueryData(recordsQueryKey, nextRecords);
+      queryClient.setQueryData(valuesQueryKey, (current: KpiValue[] | undefined) => mergeKpiValuesByKpiId(current, kpiValues));
       queryClient.invalidateQueries({ queryKey: kpiKeys.simpleWorkspace(kind) });
-      queryClient.invalidateQueries({ queryKey: kpiKeys.values(periodType, periodStart, periodEnd) });
+      queryClient.invalidateQueries({ queryKey: valuesQueryKey });
       setOpen(false);
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "تعذر حفظ السجل"),
@@ -214,16 +220,16 @@ export function SimpleSectionWorkspace({
   const deleteMutation = useMutation({
     mutationFn: async (record: SimpleWorkspaceRecord) => {
       await deleteSimpleWorkspaceRecord(kind, record.id);
-      await syncKpis(records.filter((item) => item.id !== record.id));
+      const nextRecords = records.filter((item) => item.id !== record.id);
+      const kpiValues = await syncKpis(nextRecords);
+      return { kpiValues, nextRecords };
     },
-    onSuccess: (_data, deletedRecord) => {
+    onSuccess: ({ kpiValues, nextRecords }) => {
       toast.success("تم حذف السجل");
-      queryClient.setQueryData(kpiKeys.simpleWorkspace(kind), (current: SimpleWorkspaceRecord[] | undefined) => {
-        const next = current ?? records;
-        return next.filter((item) => item.id !== deletedRecord.id);
-      });
+      queryClient.setQueryData(recordsQueryKey, nextRecords);
+      queryClient.setQueryData(valuesQueryKey, (current: KpiValue[] | undefined) => mergeKpiValuesByKpiId(current, kpiValues));
       queryClient.invalidateQueries({ queryKey: kpiKeys.simpleWorkspace(kind) });
-      queryClient.invalidateQueries({ queryKey: kpiKeys.values(periodType, periodStart, periodEnd) });
+      queryClient.invalidateQueries({ queryKey: valuesQueryKey });
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "تعذر حذف السجل"),
   });
@@ -240,6 +246,13 @@ export function SimpleSectionWorkspace({
         <Stat label="إجمالي القيمة" value={formatKpiValue(totalValue)} />
         <Stat label="مؤشرات هذا القسم" value={sectionDefinitions.length} />
       </div>
+
+      {isFetching && (
+        <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+          <RefreshCw size={14} className="animate-spin" />
+          يتم تحديث سجلات الفترة...
+        </div>
+      )}
 
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-4 flex items-center justify-between gap-3">
@@ -293,8 +306,8 @@ export function SimpleSectionWorkspace({
                   {canManage && (
                     <td className="px-4 py-3">
                       <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={() => editRecord(record)}><Edit size={14} /></Button>
-                        <Button variant="outline" size="sm" onClick={() => deleteMutation.mutate(record)}><Trash2 size={14} /></Button>
+                        <Button variant="outline" size="sm" onClick={() => editRecord(record)} disabled={deleteMutation.isPending}><Edit size={14} /></Button>
+                        <Button variant="outline" size="sm" onClick={() => deleteMutation.mutate(record)} disabled={deleteMutation.isPending}><Trash2 size={14} /></Button>
                       </div>
                     </td>
                   )}
@@ -319,7 +332,7 @@ export function SimpleSectionWorkspace({
             <Button variant="outline" onClick={() => setOpen(false)}>إلغاء</Button>
             <Button disabled={!isValid(config.fields, draft) || saveMutation.isPending} onClick={() => saveMutation.mutate()}>
               <Save size={16} />
-              حفظ
+              {saveMutation.isPending ? "جاري الحفظ..." : "حفظ"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -356,75 +369,30 @@ function Stat({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-function buildKpiValues(kind: SimpleWorkspaceKind, records: SimpleWorkspaceRecord[], definitions: KpiDefinition[], periodType: KpiPeriodType, periodStart: string, periodEnd: string, userId: string) {
-  const values = calculateActuals(kind, records);
-  return Object.entries(values).reduce<KpiValueUpsert[]>((acc, [code, actual]) => {
-    const definition = definitions.find((item) => item.code === code);
-    if (!definition || actual === null) return acc;
-    acc.push({
-      kpi_id: definition.id,
-      period_type: periodType,
-      period_start: periodStart,
-      period_end: periodEnd,
-      actual_value: actual,
-      target_value: definition.target_value,
-      status: calculateKpiStatus(definition, actual),
-      trend: "unknown",
-      source: "semi_auto",
-      notes: `تحديث تلقائي من ${configs[kind].title}`,
-      updated_by: userId,
-    });
-    return acc;
-  }, []);
+function mergeSimpleRecord(
+  records: SimpleWorkspaceRecord[],
+  record: SimpleWorkspaceRecord,
+  kind: SimpleWorkspaceKind,
+  periodStart: string,
+  periodEnd: string
+) {
+  const withoutRecord = records.filter((item) => item.id !== record.id);
+  if (!isRecordInPeriod(kind, record, periodStart, periodEnd)) return withoutRecord;
+  return [record, ...withoutRecord];
 }
 
-function calculateActuals(kind: SimpleWorkspaceKind, records: SimpleWorkspaceRecord[]) {
-  if (kind === "revenue") {
-    const rows = records.filter(isRevenue).filter((row) => row.status !== "expected");
-    return {
-      REV_GOV_ANNUAL: sum(rows.filter((row) => row.revenue_type === "government"), "amount"),
-      REV_NON_GOV: sum(rows.filter((row) => row.revenue_type === "non_government"), "amount"),
-      REV_PRODUCTS: sum(rows.filter((row) => row.revenue_type === "product"), "amount"),
-    };
-  }
-  if (kind === "clients") {
-    const rows = records.filter(isClient);
-    return {
-      CLIENT_STRATEGIC: rows.filter((row) => row.record_type === "strategic_client" && row.status !== "lost").length,
-      CLIENT_NEW: rows.filter((row) => row.record_type === "new_client" && row.status === "won").length,
-      CLIENT_PROPOSALS: rows.filter((row) => row.record_type === "proposal").length,
-      CLIENT_SATISFACTION: average(rows.map((row) => row.satisfaction_score)),
-      CLIENT_REPEAT: rows.filter((row) => row.record_type === "repeat_client" || row.status === "repeat").length,
-    };
-  }
-  if (kind === "audience") {
-    const rows = records.filter(isAudience);
-    return {
-      AUD_YOUTUBE_SUBS: sum(rows.filter((row) => row.platform.includes("يوتيوب") || row.platform.toLowerCase().includes("youtube")), "subscribers"),
-      AUD_OTHER_PLATFORM_SUBS: sum(rows.filter((row) => !(row.platform.includes("يوتيوب") || row.platform.toLowerCase().includes("youtube"))), "subscribers"),
-      AUD_PAID_VIEWS: average(rows.map((row) => row.paid_views_avg)),
-      AUD_ORGANIC_VIEWS: average(rows.map((row) => row.organic_views_avg)),
-      AUD_INFLUENCER_REACH: sum(rows, "influencer_reach"),
-      AUD_TOP_EPISODE: Math.max(0, ...rows.map((row) => row.top_episode_views)),
-    };
-  }
-  if (kind === "services") {
-    const rows = records.filter(isService).filter((row) => row.status === "completed");
-    return {
-      SERV_PODCAST: sum(rows.filter((row) => row.output_type === "podcast"), "quantity"),
-      SERV_YOUTUBE_PROGRAMS: sum(rows.filter((row) => row.output_type === "youtube_program"), "quantity"),
-      SERV_MEDIA_REPORTS: sum(rows.filter((row) => row.output_type === "media_report"), "quantity"),
-    };
-  }
-  const rows = records.filter(isPartnership).filter((row) => row.status === "confirmed" || row.status === "completed");
-  return {
-    PART_AWARDS: rows.filter((row) => row.activity_type === "award").length,
-    PART_SPONSORSHIPS: rows.filter((row) => row.activity_type === "sponsorship").length,
-    PART_EVENTS: rows.filter((row) => row.activity_type === "event").length,
-    PART_PRODUCT_SPONSORS: rows.filter((row) => row.activity_type === "product_sponsor").length,
-    PART_INTEGRATIONS: rows.filter((row) => row.activity_type === "partnership").length,
-    PART_SPEAKING: rows.filter((row) => row.activity_type === "speaker").length,
-  };
+function isRecordInPeriod(kind: SimpleWorkspaceKind, record: SimpleWorkspaceRecord, periodStart: string, periodEnd: string) {
+  const recordDate = getRecordDate(kind, record);
+  return Boolean(recordDate && recordDate >= periodStart && recordDate <= periodEnd);
+}
+
+function getRecordDate(kind: SimpleWorkspaceKind, record: SimpleWorkspaceRecord) {
+  if (kind === "revenue" && isRevenue(record)) return record.entry_date;
+  if (kind === "clients" && isClient(record)) return record.submitted_at;
+  if (kind === "audience" && isAudience(record)) return record.metric_date;
+  if (kind === "services" && isService(record)) return record.delivery_date;
+  if (kind === "partnerships" && isPartnership(record)) return record.activity_date;
+  return null;
 }
 
 function summarizeRecords(kind: SimpleWorkspaceKind, records: SimpleWorkspaceRecord[]) {
