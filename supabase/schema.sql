@@ -389,16 +389,46 @@ CREATE TABLE IF NOT EXISTS comments (
 CREATE TABLE IF NOT EXISTS notifications (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id    UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  actor_id   UUID REFERENCES profiles(id) ON DELETE SET NULL,
   project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
   task_id    UUID REFERENCES tasks(id) ON DELETE CASCADE,
+  challenge_id UUID REFERENCES challenges(id) ON DELETE CASCADE,
+  form_instance_id UUID REFERENCES project_form_instances(id) ON DELETE CASCADE,
+  kpi_id     UUID REFERENCES kpi_definitions(id) ON DELETE SET NULL,
+  category   TEXT,
+  priority   TEXT NOT NULL DEFAULT 'medium',
   type       TEXT,
   title      TEXT,
   body       TEXT,
-  sent_via   TEXT,
+  action_url TEXT,
+  metadata   JSONB NOT NULL DEFAULT '{}'::jsonb,
+  dedupe_key TEXT,
+  status     TEXT NOT NULL DEFAULT 'active',
+  sent_via   TEXT DEFAULT 'in_app',
   sent_at    TIMESTAMPTZ,
   read_at    TIMESTAMPTZ,
+  dismissed_at TIMESTAMPTZ,
+  snoozed_until TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ,
+  archived_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS actor_id UUID REFERENCES profiles(id) ON DELETE SET NULL;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS challenge_id UUID REFERENCES challenges(id) ON DELETE CASCADE;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS form_instance_id UUID REFERENCES project_form_instances(id) ON DELETE CASCADE;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS kpi_id UUID REFERENCES kpi_definitions(id) ON DELETE SET NULL;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS category TEXT;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAULT 'medium';
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS action_url TEXT;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS dedupe_key TEXT;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS dismissed_at TIMESTAMPTZ;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS snoozed_until TIMESTAMPTZ;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
+ALTER TABLE notifications ALTER COLUMN sent_via SET DEFAULT 'in_app';
 
 -- ============================================================
 -- 9. جدول سجلات الأتمتة (automation_logs)
@@ -638,6 +668,13 @@ CREATE INDEX IF NOT EXISTS idx_audience_metrics_platform_date ON audience_metric
 CREATE INDEX IF NOT EXISTS idx_service_outputs_type_status ON service_outputs(output_type, status);
 CREATE INDEX IF NOT EXISTS idx_partnership_activities_type_status ON partnership_activities(activity_type, status);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_status ON notifications(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_notifications_category ON notifications(category);
+CREATE INDEX IF NOT EXISTS idx_notifications_priority ON notifications(priority);
+CREATE INDEX IF NOT EXISTS idx_notifications_project ON notifications(project_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_dedupe
+  ON notifications(user_id, dedupe_key)
+  WHERE dedupe_key IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_challenges_project ON challenges(project_id);
 CREATE INDEX IF NOT EXISTS idx_documents_project ON documents(project_id);
 CREATE INDEX IF NOT EXISTS idx_comments_task ON comments(task_id);
@@ -658,3 +695,4 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON client_opportunities TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON audience_metrics TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON service_outputs TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON partnership_activities TO authenticated;
+GRANT SELECT, UPDATE ON notifications TO authenticated;

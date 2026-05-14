@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import type {
+  NotificationCategory,
+  NotificationPriority,
+  NotificationStatus,
+} from "@/lib/notifications/types";
 
-// GET /api/notifications?limit=20&offset=0
+const notificationStatuses: NotificationStatus[] = ["active", "done", "dismissed", "snoozed", "archived"];
+const notificationPriorities: NotificationPriority[] = ["low", "medium", "high", "critical"];
+const notificationCategories: NotificationCategory[] = ["task", "project", "challenge", "form", "kpi", "digest", "comment", "system"];
+
+// GET /api/notifications?limit=20&offset=0&status=active&category=task&priority=high
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -11,11 +20,38 @@ export async function GET(request: NextRequest) {
 
   const limit = parseInt(request.nextUrl.searchParams.get("limit") ?? "20");
   const offset = parseInt(request.nextUrl.searchParams.get("offset") ?? "0");
+  const status = request.nextUrl.searchParams.get("status");
+  const category = request.nextUrl.searchParams.get("category");
+  const priority = request.nextUrl.searchParams.get("priority");
+  const importantOnly = request.nextUrl.searchParams.get("important") === "true";
 
-  const { data: notifications, error, count } = await supabase
+  let query = supabase
     .from("notifications")
     .select("*", { count: "exact" })
-    .eq("user_id", user.id)
+    .eq("user_id", user.id);
+
+  const parsedStatus = status as NotificationStatus;
+  if (status && notificationStatuses.includes(parsedStatus)) {
+    query = query.eq("status", parsedStatus);
+  } else {
+    query = query.neq("status", "archived");
+  }
+
+  const parsedCategory = category as NotificationCategory;
+  if (category && notificationCategories.includes(parsedCategory)) {
+    query = query.eq("category", parsedCategory);
+  }
+
+  const parsedPriority = priority as NotificationPriority;
+  if (priority && notificationPriorities.includes(parsedPriority)) {
+    query = query.eq("priority", parsedPriority);
+  }
+
+  if (importantOnly) {
+    query = query.in("priority", ["high", "critical"]).in("status", ["active", "snoozed"]);
+  }
+
+  const { data: notifications, error, count } = await query
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
 

@@ -529,7 +529,8 @@ CREATE POLICY "notifications_select" ON notifications
 
 DROP POLICY IF EXISTS "notifications_update" ON notifications;
 CREATE POLICY "notifications_update" ON notifications
-  FOR UPDATE USING (user_id = auth.uid());
+  FOR UPDATE USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
 
 -- ============================================================
 -- Automation Logs - Admin فقط
