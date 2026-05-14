@@ -72,3 +72,38 @@ export function findPeriodOption(
   return getPeriodOptions(periodType, year).find((period) => period.periodStart === periodStart)
     ?? getCurrentKpiPeriod(periodType, year);
 }
+
+export function getMonthPeriodForDate(date: string): KpiPeriodOption {
+  const year = Number(date.slice(0, 4));
+  return getMonthlyPeriods(year).find((period) => date >= period.periodStart && date <= period.periodEnd)
+    ?? getCurrentKpiPeriod("monthly", year);
+}
+
+export function getQuarterPeriodForDate(date: string): KpiPeriodOption {
+  const year = Number(date.slice(0, 4));
+  return getQuarterlyPeriods(year).find((period) => date >= period.periodStart && date <= period.periodEnd)
+    ?? getCurrentKpiPeriod("quarterly", year);
+}
+
+export function getRelatedKpiPeriods(
+  periodType: KpiPeriodType,
+  periodStart: string,
+  periodEnd: string
+): KpiPeriodOption[] {
+  const currentPeriod = { label: "", periodType, periodStart, periodEnd };
+  if (periodType === "quarterly") return [currentPeriod];
+  return uniqueKpiPeriods([currentPeriod, getQuarterPeriodForDate(periodStart)]);
+}
+
+export function getDateRollupPeriods(date: string | null | undefined): KpiPeriodOption[] {
+  if (!date) return [];
+  return uniqueKpiPeriods([getMonthPeriodForDate(date), getQuarterPeriodForDate(date)]);
+}
+
+export function uniqueKpiPeriods(periods: KpiPeriodOption[]) {
+  const unique = new Map<string, KpiPeriodOption>();
+  periods.forEach((period) => {
+    unique.set(`${period.periodType}:${period.periodStart}:${period.periodEnd}`, period);
+  });
+  return Array.from(unique.values());
+}

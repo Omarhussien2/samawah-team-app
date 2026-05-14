@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { buildProductKpiValues } from "@/lib/kpis/auto-calculations";
+import { getRelatedKpiPeriods, type KpiPeriodOption } from "@/lib/kpis/periods";
 import { formatKpiValue } from "@/lib/kpis/status";
 import {
   deleteIndicatorProduct,
@@ -45,6 +46,10 @@ const blankDraft = {
 };
 
 type Draft = typeof blankDraft;
+type KpiSyncResult = {
+  period: KpiPeriodOption;
+  values: KpiValue[];
+};
 
 export function ProductsWorkspace({
   currentUser,
@@ -59,7 +64,6 @@ export function ProductsWorkspace({
   const [draft, setDraft] = useState<Draft>(blankDraft);
   const productDefinitions = definitions.filter((definition) => definition.auto_source === "indicator_products");
   const canManage = currentUser.role === "admin" || currentUser.role === "project_manager";
-  const valuesQueryKey = kpiKeys.values(periodType, periodStart, periodEnd);
 
   const { data: products = initialProducts, isFetching } = useQuery({
     queryKey: kpiKeys.products(),
@@ -67,14 +71,19 @@ export function ProductsWorkspace({
     initialData: initialProducts,
   });
 
-  const syncLinkedKpi = async (nextProducts: IndicatorProduct[]) => {
-    const values = buildProductKpiValues(nextProducts, definitions, {
-      periodType,
-      periodStart,
-      periodEnd,
-      userId: currentUser.id,
-    });
-    return values.length > 0 ? upsertKpiValues(values) : [];
+  const syncLinkedKpi = async (nextProducts: IndicatorProduct[]): Promise<KpiSyncResult[]> => {
+    return Promise.all(getRelatedKpiPeriods(periodType, periodStart, periodEnd).map(async (period) => {
+      const values = buildProductKpiValues(nextProducts, definitions, {
+        periodType: period.periodType,
+        periodStart: period.periodStart,
+        periodEnd: period.periodEnd,
+        userId: currentUser.id,
+      });
+      return {
+        period,
+        values: values.length > 0 ? await upsertKpiValues(values) : [],
+      };
+    }));
   };
 
   const saveMutation = useMutation({
@@ -94,15 +103,22 @@ export function ProductsWorkspace({
       };
       const saved = await saveIndicatorProduct(payload);
       const nextProducts = draft.id ? products.map((item) => (item.id === saved.id ? saved : item)) : [saved, ...products];
-      const kpiValues = await syncLinkedKpi(nextProducts);
-      return { kpiValues, nextProducts };
+      const syncResults = await syncLinkedKpi(nextProducts);
+      return { nextProducts, syncResults };
     },
-    onSuccess: ({ kpiValues, nextProducts }) => {
-      toast.success("تم حفظ المنتج");
+    onSuccess: ({ nextProducts, syncResults }) => {
+      toast.success("تم حفظ المنتج وتحديث مؤشرات الفترة");
       queryClient.setQueryData(kpiKeys.products(), nextProducts);
-      queryClient.setQueryData(valuesQueryKey, (current: KpiValue[] | undefined) => mergeKpiValuesByKpiId(current, kpiValues));
+      syncResults.forEach(({ period, values }) => {
+        queryClient.setQueryData(
+          kpiKeys.values(period.periodType, period.periodStart, period.periodEnd),
+          (current: KpiValue[] | undefined) => mergeKpiValuesByKpiId(current, values)
+        );
+      });
       queryClient.invalidateQueries({ queryKey: kpiKeys.products() });
-      queryClient.invalidateQueries({ queryKey: valuesQueryKey });
+      syncResults.forEach(({ period }) => {
+        queryClient.invalidateQueries({ queryKey: kpiKeys.values(period.periodType, period.periodStart, period.periodEnd) });
+      });
       setOpen(false);
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "تعذر حفظ المنتج"),
@@ -112,15 +128,22 @@ export function ProductsWorkspace({
     mutationFn: async (product: IndicatorProduct) => {
       await deleteIndicatorProduct(product.id);
       const nextProducts = products.filter((item) => item.id !== product.id);
-      const kpiValues = await syncLinkedKpi(nextProducts);
-      return { kpiValues, nextProducts };
+      const syncResults = await syncLinkedKpi(nextProducts);
+      return { nextProducts, syncResults };
     },
-    onSuccess: ({ kpiValues, nextProducts }) => {
-      toast.success("تم حذف المنتج");
+    onSuccess: ({ nextProducts, syncResults }) => {
+      toast.success("تم حذف المنتج وتحديث مؤشرات الفترة");
       queryClient.setQueryData(kpiKeys.products(), nextProducts);
-      queryClient.setQueryData(valuesQueryKey, (current: KpiValue[] | undefined) => mergeKpiValuesByKpiId(current, kpiValues));
+      syncResults.forEach(({ period, values }) => {
+        queryClient.setQueryData(
+          kpiKeys.values(period.periodType, period.periodStart, period.periodEnd),
+          (current: KpiValue[] | undefined) => mergeKpiValuesByKpiId(current, values)
+        );
+      });
       queryClient.invalidateQueries({ queryKey: kpiKeys.products() });
-      queryClient.invalidateQueries({ queryKey: valuesQueryKey });
+      syncResults.forEach(({ period }) => {
+        queryClient.invalidateQueries({ queryKey: kpiKeys.values(period.periodType, period.periodStart, period.periodEnd) });
+      });
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "تعذر حذف المنتج"),
   });

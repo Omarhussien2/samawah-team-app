@@ -1,4 +1,4 @@
-import { averageMetric } from "@/lib/kpis/operations";
+import { averageMetric, selectLatestProjectPerformanceByProject } from "@/lib/kpis/operations";
 import { calculateKpiStatus } from "@/lib/kpis/status";
 import type { KpiValueUpsert, ProjectPerformanceRecord, SimpleWorkspaceKind, SimpleWorkspaceRecord } from "@/lib/queries/kpis";
 import type { IndicatorProduct, KpiDefinition, KpiPeriodType } from "@/lib/supabase/types";
@@ -58,10 +58,11 @@ export function buildOperationsKpiValues(
   projectCount: number,
   context: Omit<KpiValueContext, "notes">
 ) {
+  const latestUpdates = selectLatestProjectPerformanceByProject(updates);
   const actuals = {
-    OPS_CPI: averageMetric(updates, "cpi"),
-    OPS_SPI: averageMetric(updates, "spi"),
-    OPS_UPDATED_REPORTS: projectCount ? Math.round((updates.length / projectCount) * 100) : null,
+    OPS_CPI: averageMetric(latestUpdates, "cpi"),
+    OPS_SPI: averageMetric(latestUpdates, "spi"),
+    OPS_UPDATED_REPORTS: projectCount ? Math.min(100, Math.round((latestUpdates.length / projectCount) * 100)) : null,
   };
 
   return buildKpiValuesFromCodes(actuals, definitions, {
