@@ -443,6 +443,23 @@ CREATE TABLE IF NOT EXISTS automation_logs (
 );
 
 -- ============================================================
+-- 9.1. جدول تفضيلات الإشعارات (notification_preferences)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS notification_preferences (
+  user_id               UUID PRIMARY KEY REFERENCES profiles(id) ON DELETE CASCADE,
+  in_app_enabled        BOOLEAN NOT NULL DEFAULT TRUE,
+  email_enabled         BOOLEAN NOT NULL DEFAULT TRUE,
+  important_email_only  BOOLEAN NOT NULL DEFAULT TRUE,
+  daily_digest_enabled  BOOLEAN NOT NULL DEFAULT TRUE,
+  weekly_digest_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  quiet_hours_start     TEXT,
+  quiet_hours_end       TEXT,
+  timezone              TEXT NOT NULL DEFAULT 'Asia/Riyadh',
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ============================================================
 -- 10. جدول قوالب المشاريع (project_templates)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS project_templates (
@@ -675,6 +692,7 @@ CREATE INDEX IF NOT EXISTS idx_notifications_project ON notifications(project_id
 CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_dedupe
   ON notifications(user_id, dedupe_key)
   WHERE dedupe_key IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_notification_preferences_user ON notification_preferences(user_id);
 CREATE INDEX IF NOT EXISTS idx_challenges_project ON challenges(project_id);
 CREATE INDEX IF NOT EXISTS idx_documents_project ON documents(project_id);
 CREATE INDEX IF NOT EXISTS idx_comments_task ON comments(task_id);
@@ -696,3 +714,4 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON audience_metrics TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON service_outputs TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON partnership_activities TO authenticated;
 GRANT SELECT, UPDATE ON notifications TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON notification_preferences TO authenticated;

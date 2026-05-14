@@ -4,6 +4,10 @@ import { sendEmail } from "@/lib/notifications/send-email";
 import { dailyDigestTemplate } from "@/lib/notifications/templates";
 import { createNotification } from "@/lib/notifications/create-notification";
 import { runManagerFollowups } from "@/lib/notifications/manager-followups";
+import {
+  getOrCreateNotificationPreferences,
+  shouldSendImportantEmail,
+} from "@/lib/notifications/preferences";
 import type { Json } from "@/lib/supabase/types";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
@@ -77,18 +81,26 @@ export async function GET(request: NextRequest) {
 
       const overdueCount = overdueTasks?.length ?? 0;
       const todayCount = todayTasks?.length ?? 0;
+      const openChallengeCount = challenges?.length ?? 0;
+      const preferences = await getOrCreateNotificationPreferences(supabase, manager.id);
+      const hasImportantItems = overdueCount > 0 || openChallengeCount > 0;
 
       // --- In-App Notification ---
-      await createNotification({
-        user_id: manager.id,
-        type: "daily_digest",
-        title: "ملخصك اليومي",
-        body: `لديك ${overdueCount} مهمة متأخرة و ${todayCount} مهمة مستحقة اليوم`,
-        sent_via: "in_app",
-      });
+      if (preferences.in_app_enabled && preferences.daily_digest_enabled) {
+        await createNotification({
+          user_id: manager.id,
+          type: "daily_digest",
+          category: "digest",
+          priority: hasImportantItems ? "high" : "medium",
+          title: "ملخصك اليومي",
+          body: `لديك ${overdueCount} مهمة متأخرة و ${todayCount} مهمة مستحقة اليوم`,
+          action_url: "/notifications?tab=summaries",
+          sent_via: "in_app",
+        });
+      }
 
-      // --- Email (if configured) ---
-      if (manager.email) {
+      // --- Email (important only by default) ---
+      if (manager.email && preferences.daily_digest_enabled && shouldSendImportantEmail(preferences, hasImportantItems)) {
         const html = dailyDigestTemplate({
           managerName: manager.full_name ?? manager.email,
           overdueTasks: (overdueTasks ?? []).map((t) => ({
@@ -108,7 +120,7 @@ export async function GET(request: NextRequest) {
 
         const { success } = await sendEmail({
           to: manager.email,
-          subject: `📋 ملخص يومي - سماوة | ${format(new Date(), "d MMMM yyyy", { locale: ar })}`,
+          subject: `ملخص مهم - سماوة | ${format(new Date(), "d MMMM yyyy", { locale: ar })}`,
           html,
         });
 

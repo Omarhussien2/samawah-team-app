@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json, NotificationPriority } from "@/lib/supabase/types";
+import { defaultNotificationPreferences } from "@/lib/notifications/preferences";
 import { upsertNotification } from "@/lib/notifications/upsert-notification";
 import { buildNotificationDedupeKey } from "@/lib/notifications/rule-utils";
 
@@ -309,12 +310,13 @@ export async function runManagerFollowups(
   supabase: SupabaseClient<Database>,
   today = new Date()
 ): Promise<ManagerFollowupResult> {
-  const [{ data: projects }, { data: tasks }, { data: challenges }, { data: forms }, { data: performanceUpdates }] = await Promise.all([
+  const [{ data: projects }, { data: tasks }, { data: challenges }, { data: forms }, { data: performanceUpdates }, { data: preferences }] = await Promise.all([
     supabase.from("projects").select("id, name, manager_id, path, current_stage, status, end_date, total_budget, progress, updated_at").eq("status", "active"),
     supabase.from("tasks").select("id, project_id, title, owner_id, status, priority, due_date, updated_at").not("status", "in", '("Done","Cancelled")'),
     supabase.from("challenges").select("id, project_id, title, status, owner_id, risk_impact, updated_at").in("status", ["open", "in_progress"]),
     supabase.from("project_form_instances").select("id, project_id, assigned_owner_id, status, completion_percentage, updated_at").neq("status", "completed"),
     supabase.from("project_performance_updates").select("id, project_id, period_start, planned_progress, actual_progress, actual_cost").gte("period_start", monthStart(today)),
+    supabase.from("notification_preferences").select("user_id, in_app_enabled"),
   ]);
 
   const followups = buildManagerFollowups({
@@ -327,8 +329,15 @@ export async function runManagerFollowups(
   });
 
   const todayKey = toDateOnly(today);
+  const preferenceMap = new Map((preferences ?? []).map((preference) => [preference.user_id, preference]));
+  let notificationsCreated = 0;
 
   for (const followup of followups) {
+    const managerPreferences = preferenceMap.get(followup.managerId);
+    if ((managerPreferences?.in_app_enabled ?? defaultNotificationPreferences.in_app_enabled) === false) {
+      continue;
+    }
+
     const priority = maxPriority(followup.findings);
     await upsertNotification({
       user_id: followup.managerId,
@@ -342,11 +351,12 @@ export async function runManagerFollowups(
       dedupe_key: buildNotificationDedupeKey("manager-followups", followup.managerId, todayKey),
       sent_via: "in_app",
     });
+    notificationsCreated++;
   }
 
   return {
     managersChecked: followups.length,
-    notificationsCreated: followups.length,
+    notificationsCreated,
     findingsCreated: followups.reduce((sum, followup) => sum + followup.findings.length, 0),
   };
 }

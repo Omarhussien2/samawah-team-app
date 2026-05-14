@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Bell } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { useNotificationSubscription } from "@/lib/supabase/realtime";
 import { NotificationList } from "./notification-list";
 import { toast } from "sonner";

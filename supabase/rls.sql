@@ -25,6 +25,7 @@ ALTER TABLE service_outputs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE partnership_activities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE comments         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notification_preferences ENABLE ROW LEVEL SECURITY;
 ALTER TABLE automation_logs  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE project_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE task_templates   ENABLE ROW LEVEL SECURITY;
@@ -529,6 +530,22 @@ CREATE POLICY "notifications_select" ON notifications
 
 DROP POLICY IF EXISTS "notifications_update" ON notifications;
 CREATE POLICY "notifications_update" ON notifications
+  FOR UPDATE USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
+-- ============================================================
+-- Notification Preferences Policies
+-- ============================================================
+DROP POLICY IF EXISTS "notification_preferences_select" ON notification_preferences;
+CREATE POLICY "notification_preferences_select" ON notification_preferences
+  FOR SELECT USING (user_id = auth.uid() OR get_my_role() = 'admin');
+
+DROP POLICY IF EXISTS "notification_preferences_insert" ON notification_preferences;
+CREATE POLICY "notification_preferences_insert" ON notification_preferences
+  FOR INSERT WITH CHECK (user_id = auth.uid());
+
+DROP POLICY IF EXISTS "notification_preferences_update" ON notification_preferences;
+CREATE POLICY "notification_preferences_update" ON notification_preferences
   FOR UPDATE USING (user_id = auth.uid())
   WITH CHECK (user_id = auth.uid());
 

@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/notifications/send-email";
 import { weeklySummaryTemplate } from "@/lib/notifications/templates";
-import { createNotificationForMany } from "@/lib/notifications/create-notification";
+import { createNotification } from "@/lib/notifications/create-notification";
+import {
+  getOrCreateNotificationPreferences,
+  shouldSendImportantEmail,
+} from "@/lib/notifications/preferences";
 
 export async function GET(request: NextRequest) {
   const secret = request.headers.get("authorization")?.replace("Bearer ", "");
@@ -23,7 +27,6 @@ export async function GET(request: NextRequest) {
       .select()
       .single();
 
-    // Get stats
     const [{ count: completedCount }, { count: overdueCount }, { data: projects }, { data: adminUsers }] = await Promise.all([
       supabase.from("tasks").select("*", { count: "exact", head: true }).eq("status", "Done").gte("updated_at", weekAgoStr),
       supabase.from("tasks").select("*", { count: "exact", head: true }).lt("due_date", today).not("status", "in", '("Done","Cancelled")'),
@@ -33,19 +36,6 @@ export async function GET(request: NextRequest) {
 
     const completed = completedCount ?? 0;
     const overdue = overdueCount ?? 0;
-
-    // --- In-App Notification for all admins ---
-    const adminIds = (adminUsers ?? []).map((a) => a.id);
-    if (adminIds.length > 0) {
-      await createNotificationForMany(adminIds, {
-        type: "daily_digest",
-        title: "الملخص الأسبوعي",
-        body: `${completed} مهمة مكتملة هذا الأسبوع • ${overdue} مهمة متأخرة حالياً`,
-        sent_via: "in_app",
-      });
-    }
-
-    // --- Email ---
     const html = weeklySummaryTemplate({
       totalCompleted: completed,
       totalOverdue: overdue,
@@ -56,19 +46,42 @@ export async function GET(request: NextRequest) {
     });
 
     let sentCount = 0;
+    let notifiedCount = 0;
+
     for (const admin of adminUsers ?? []) {
-      if (!admin.email) continue;
-      const { success } = await sendEmail({
-        to: admin.email,
-        subject: "📊 الملخص الأسبوعي - سماوة",
-        html,
-      });
-      if (success) sentCount++;
+      const preferences = await getOrCreateNotificationPreferences(supabase, admin.id);
+      if (!preferences.weekly_digest_enabled) continue;
+
+      if (preferences.in_app_enabled) {
+        await createNotification({
+          user_id: admin.id,
+          type: "weekly_summary",
+          category: "digest",
+          priority: overdue > 0 ? "high" : "medium",
+          title: "الملخص الأسبوعي",
+          body: `${completed} مهمة مكتملة هذا الأسبوع • ${overdue} مهمة متأخرة حاليًا`,
+          action_url: "/notifications?tab=summaries",
+          sent_via: "in_app",
+        });
+        notifiedCount++;
+      }
+
+      if (admin.email && shouldSendImportantEmail(preferences, overdue > 0)) {
+        const { success } = await sendEmail({
+          to: admin.email,
+          subject: "ملخص أسبوعي مهم - سماوة",
+          html,
+        });
+        if (success) sentCount++;
+      }
     }
 
-    await supabase.from("automation_logs").update({ status: "success", payload: { sent: sentCount } }).eq("id", log?.id ?? "");
-    return NextResponse.json({ success: true, sent: sentCount });
+    await supabase
+      .from("automation_logs")
+      .update({ status: "success", payload: { sent: sentCount, notified: notifiedCount } })
+      .eq("id", log?.id ?? "");
 
+    return NextResponse.json({ success: true, sent: sentCount, notified: notifiedCount });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     await supabase.from("automation_logs").insert({ type: "weekly-summary", status: "error", error: errorMessage });
