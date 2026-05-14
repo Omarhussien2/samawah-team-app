@@ -55,6 +55,26 @@ describe("KPI radar model", () => {
     });
   });
 
+  it("keeps section dashboards scoped to their own indicators", () => {
+    const revenue = { ...kpiDefinition("REV_GOV_ANNUAL", "revenue", 1200, "ريال"), perspective: "الإيرادات" };
+    const audience = { ...kpiDefinition("AUD_SUBSCRIBERS_TOTAL", "audience", 400, "مشترك"), perspective: "الجمهور والمشتركين" };
+
+    const model = buildKpiRadarModel([audience], [], [
+      kpiValue(revenue.id, "quarterly", "2026-01-01", "2026-03-31", 1200),
+      kpiValue(audience.id, "quarterly", "2026-01-01", "2026-03-31", 100),
+    ], "quarterly", 2026);
+
+    expect(model.indicators).toHaveLength(1);
+    expect(model.indicators[0].definition.perspective).toBe("الجمهور والمشتركين");
+    expect(model.indicators[0].quarters[0]).toMatchObject({
+      key: "Q1",
+      value: 100,
+      target: 100,
+      achievement: 100,
+    });
+    expect(model.summary.perspectives.map((item) => item.name)).toEqual(["الجمهور والمشتركين"]);
+  });
+
   it("merges annual cache values by KPI and period", () => {
     const merged = mergeKpiValuesByPeriod([
       kpiValue("audience", "quarterly", "2026-01-01", "2026-03-31", 10),

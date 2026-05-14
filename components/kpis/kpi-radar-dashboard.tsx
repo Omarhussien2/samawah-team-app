@@ -1,14 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Activity,
-  AlertTriangle,
   ArrowUpRight,
   BarChart3,
-  CheckCircle2,
-  CircleDashed,
+  Edit3,
   LayoutDashboard,
   List,
   Package,
@@ -36,9 +34,10 @@ interface Props {
   year: number;
   isFetching?: boolean;
   isAdmin: boolean;
+  scopePerspective?: string;
   onOpenBulkUpdate: () => void;
   onOpenTargets: () => void;
-  onOpenWorkspace: (perspective: string) => void;
+  onEditIndicator: (definitionId: string) => void;
 }
 
 const ALL_PERSPECTIVES = "all";
@@ -64,23 +63,32 @@ export function KpiRadarDashboard({
   year,
   isFetching,
   isAdmin,
+  scopePerspective,
   onOpenBulkUpdate,
   onOpenTargets,
-  onOpenWorkspace,
+  onEditIndicator,
 }: Props) {
-  const [perspective, setPerspective] = useState(ALL_PERSPECTIVES);
+  const [perspective, setPerspective] = useState(scopePerspective ?? ALL_PERSPECTIVES);
   const [query, setQuery] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
+
+  useEffect(() => {
+    if (scopePerspective) setPerspective(scopePerspective);
+  }, [scopePerspective]);
 
   const model = useMemo(
     () => buildKpiRadarModel(definitions, values, yearValues, periodType, year),
     [definitions, periodType, values, year, yearValues]
   );
+
+  const isScoped = Boolean(scopePerspective);
+  const activePerspective = scopePerspective ?? perspective;
   const perspectives = model.summary.perspectives.map((item) => item.name);
-  const activePerspectiveName = perspective === ALL_PERSPECTIVES ? "كل المؤشرات" : perspective;
+  const activePerspectiveName = activePerspective === ALL_PERSPECTIVES ? "كل المؤشرات" : activePerspective;
   const normalizedQuery = query.trim().toLowerCase();
+
   const filteredIndicators = model.indicators.filter((indicator) => {
-    const matchesPerspective = perspective === ALL_PERSPECTIVES || indicator.definition.perspective === perspective;
+    const matchesPerspective = activePerspective === ALL_PERSPECTIVES || indicator.definition.perspective === activePerspective;
     const matchesQuery = !normalizedQuery
       || indicator.definition.name.toLowerCase().includes(normalizedQuery)
       || indicator.definition.code.toLowerCase().includes(normalizedQuery)
@@ -93,62 +101,69 @@ export function KpiRadarDashboard({
     value: item.averageAchievement,
   }));
 
+  const indicatorChartData = filteredIndicators
+    .map((indicator) => ({
+      id: indicator.definition.id,
+      name: shortLabel(indicator.definition.name),
+      fullName: indicator.definition.name,
+      achievement: indicator.annualAchievement ?? 0,
+    }))
+    .sort((a, b) => b.achievement - a.achievement)
+    .slice(0, 10);
+
   return (
-    <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
-      <aside className="space-y-5 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="flex size-11 items-center justify-center rounded-lg bg-slate-950 text-white">
-            <LayoutDashboard size={22} />
+    <div className={cn("grid gap-6", !isScoped && "xl:grid-cols-[280px_minmax(0,1fr)]")}>
+      {!isScoped && (
+        <aside className="space-y-5 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="flex size-11 items-center justify-center rounded-lg bg-slate-950 text-white">
+              <LayoutDashboard size={22} />
+            </div>
+            <div>
+              <h2 className="text-base font-extrabold text-slate-950">رادار الأداء</h2>
+              <p className="text-xs font-semibold text-slate-500">سماوة {year}</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-base font-extrabold text-slate-950">رادار الأداء</h2>
-            <p className="text-xs font-semibold text-slate-500">سماوة {year}</p>
-          </div>
-        </div>
 
-        <nav className="space-y-2">
-          <PerspectiveButton active={perspective === ALL_PERSPECTIVES} onClick={() => setPerspective(ALL_PERSPECTIVES)}>
-            <BarChart3 size={16} />
-            عرض الكل
-          </PerspectiveButton>
-          {perspectives.map((item) => {
-            const Icon = PERSPECTIVE_ICONS[item] ?? BarChart3;
-            return (
-              <PerspectiveButton key={item} active={perspective === item} onClick={() => setPerspective(item)}>
-                <Icon size={16} />
-                {item}
-              </PerspectiveButton>
-            );
-          })}
-        </nav>
+          <nav className="space-y-2">
+            <PerspectiveButton active={perspective === ALL_PERSPECTIVES} onClick={() => setPerspective(ALL_PERSPECTIVES)}>
+              <BarChart3 size={16} />
+              عرض الكل
+            </PerspectiveButton>
+            {perspectives.map((item) => {
+              const Icon = PERSPECTIVE_ICONS[item] ?? BarChart3;
+              return (
+                <PerspectiveButton key={item} active={perspective === item} onClick={() => setPerspective(item)}>
+                  <Icon size={16} />
+                  {item}
+                </PerspectiveButton>
+              );
+            })}
+          </nav>
 
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <p className="text-xs font-bold text-slate-500">إجمالي الإنجاز السنوي</p>
-          <div className="mt-2 flex items-end gap-2">
-            <span className="text-4xl font-black text-slate-950">{model.summary.averageAchievement}%</span>
-            <span className="mb-1 text-xs font-bold text-slate-500">متوسط</span>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <p className="text-xs font-bold text-slate-500">متوسط الإنجاز السنوي</p>
+            <div className="mt-2 flex items-end gap-2">
+              <span className="text-4xl font-black text-slate-950">{model.summary.averageAchievement}%</span>
+              <span className="mb-1 text-xs font-bold text-slate-500">للسنة</span>
+            </div>
+            <ProgressBar value={model.summary.averageAchievement} status={model.summary.averageAchievement >= 100 ? "green" : "yellow"} />
           </div>
-          <div className="mt-4 h-2 overflow-hidden rounded-full bg-white">
-            <div
-              className="h-full rounded-full bg-emerald-600 transition-all"
-              style={{ width: `${Math.min(model.summary.averageAchievement, 100)}%` }}
-            />
-          </div>
-        </div>
 
-        {isAdmin && (
-          <div className="grid gap-2">
-            <Button variant="outline" onClick={onOpenTargets}>
-              <Settings2 size={16} />
-              المستهدفات
-            </Button>
-            <Button onClick={onOpenBulkUpdate}>
-              <Target size={16} />
-              تحديث سريع
-            </Button>
-          </div>
-        )}
-      </aside>
+          {isAdmin && (
+            <div className="grid gap-2">
+              <Button variant="outline" onClick={onOpenTargets}>
+                <Settings2 size={16} />
+                المستهدفات
+              </Button>
+              <Button onClick={onOpenBulkUpdate}>
+                <Target size={16} />
+                تحديث سريع
+              </Button>
+            </div>
+          )}
+        </aside>
+      )}
 
       <div className="min-w-0 space-y-6">
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
@@ -159,47 +174,49 @@ export function KpiRadarDashboard({
                 <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">{periodLabel}</span>
                 {isFetching && <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">تحديث البيانات</span>}
               </div>
-              <div className="mt-3 flex flex-wrap items-center gap-3">
-                <h2 className="text-2xl font-black text-slate-950">{activePerspectiveName}</h2>
-                <span className="rounded-full border border-slate-200 px-3 py-1 text-xs font-bold text-slate-500">
-                  {filteredIndicators.length} مؤشر
-                </span>
-              </div>
+              <h2 className="mt-3 text-2xl font-black text-slate-950">{activePerspectiveName}</h2>
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                عرض ربعي واضح لكل مؤشر: المستهدف، الفعلي، نسبة الإنجاز، والحالة السنوية من بيانات {year}.
+                عرض ربع سنوي واضح لكل مؤشر: المستهدف، الفعلي، نسبة الإنجاز، والحالة السنوية من بيانات {year}.
               </p>
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-1">
-                <Button size="sm" variant={viewMode === "grid" ? "default" : "ghost"} onClick={() => setViewMode("grid")}>
-                  <LayoutDashboard size={15} />
-                  المربعات
-                </Button>
-                <Button size="sm" variant={viewMode === "table" ? "default" : "ghost"} onClick={() => setViewMode("table")}>
-                  <List size={15} />
-                  الجدول
-                </Button>
-              </div>
+              {!isScoped && (
+                <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+                  <Button size="sm" variant={viewMode === "grid" ? "default" : "ghost"} onClick={() => setViewMode("grid")}>
+                    <LayoutDashboard size={15} />
+                    المربعات
+                  </Button>
+                  <Button size="sm" variant={viewMode === "table" ? "default" : "ghost"} onClick={() => setViewMode("table")}>
+                    <List size={15} />
+                    الجدول
+                  </Button>
+                </div>
+              )}
               <div className="relative min-w-64">
                 <Search className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
                 <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحث عن مؤشر" className="pr-9" />
               </div>
+              {isScoped && isAdmin && (
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={onOpenTargets}>
+                    <Settings2 size={16} />
+                    المستهدفات
+                  </Button>
+                  <Button onClick={onOpenBulkUpdate}>
+                    <Target size={16} />
+                    تحديث القسم
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
-        </section>
-
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatusCard label="إجمالي المؤشرات" value={model.summary.total} icon={Target} />
-          <StatusCard label="مكتمل" value={model.summary.achieved} icon={CheckCircle2} tone="green" />
-          <StatusCard label="بحاجة متابعة" value={model.summary.attention} icon={AlertTriangle} tone="amber" />
-          <StatusCard label="بلا بيانات" value={model.summary.noData} icon={CircleDashed} tone="slate" />
         </section>
 
         <section className="grid gap-6 xl:grid-cols-5">
           <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm xl:col-span-3">
             <div className="mb-4 flex items-center justify-between gap-3">
-              <h3 className="text-base font-extrabold text-slate-900">التوجه الربعي للأداء المختزل</h3>
+              <h3 className="text-base font-extrabold text-slate-900">التوجه الربع سنوي للأداء</h3>
               <span className="text-xs font-bold text-slate-500">Q1 - Q4</span>
             </div>
             <div className="h-72" dir="ltr">
@@ -219,39 +236,61 @@ export function KpiRadarDashboard({
             </div>
           </div>
 
-          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm xl:col-span-2">
-            <h3 className="mb-4 text-base font-extrabold text-slate-900">توزيع الإنجاز حسب المنظور</h3>
-            <div className="relative h-56" dir="ltr">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={perspectiveChartData} dataKey="value" nameKey="name" innerRadius={62} outerRadius={86} paddingAngle={5}>
-                    {perspectiveChartData.map((entry, index) => (
-                      <Cell key={entry.name} fill={PERSPECTIVE_COLORS[index % PERSPECTIVE_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value, name) => [`${value}%`, name]} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-3xl font-black text-slate-950">{model.summary.averageAchievement}%</span>
-                <span className="text-xs font-bold text-slate-500">المتوسط</span>
+          {isScoped ? (
+            <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm xl:col-span-2">
+              <h3 className="mb-4 text-base font-extrabold text-slate-900">إنجاز مؤشرات القسم</h3>
+              <div className="h-72" dir="ltr">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={indicatorChartData} layout="vertical" margin={{ right: 12, left: 12 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" domain={[0, 120]} tickFormatter={(value) => `${value}%`} />
+                    <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11 }} />
+                    <Tooltip formatter={(value) => [`${value}%`, "الإنجاز"]} labelFormatter={(_, items) => items?.[0]?.payload?.fullName ?? ""} />
+                    <Bar dataKey="achievement" radius={[6, 6, 6, 6]} barSize={18} fill="#0f766e" />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              <MiniMetric label="المكتملة" value={model.summary.achieved} tone="green" />
-              <MiniMetric label="قيد المتابعة" value={model.summary.total - model.summary.achieved} tone="rose" />
+          ) : (
+            <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm xl:col-span-2">
+              <h3 className="mb-4 text-base font-extrabold text-slate-900">توزيع الإنجاز حسب المنظور</h3>
+              <div className="relative h-56" dir="ltr">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={perspectiveChartData} dataKey="value" nameKey="name" innerRadius={62} outerRadius={86} paddingAngle={5}>
+                      {perspectiveChartData.map((entry, index) => (
+                        <Cell key={entry.name} fill={PERSPECTIVE_COLORS[index % PERSPECTIVE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value, name) => [`${value}%`, name]} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-3xl font-black text-slate-950">{model.summary.averageAchievement}%</span>
+                  <span className="text-xs font-bold text-slate-500">المتوسط</span>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
         </section>
 
-        {viewMode === "grid" ? (
+        {filteredIndicators.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-slate-200 bg-white p-10 text-center text-sm font-semibold text-slate-500">
+            لا توجد مؤشرات مطابقة للفترة أو البحث الحالي.
+          </div>
+        ) : isScoped || viewMode === "grid" ? (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
             {filteredIndicators.map((indicator) => (
-              <RadarCard key={indicator.definition.id} indicator={indicator} onOpenWorkspace={onOpenWorkspace} />
+              <RadarCard
+                key={indicator.definition.id}
+                indicator={indicator}
+                canEdit={isAdmin}
+                onEditIndicator={onEditIndicator}
+              />
             ))}
           </div>
         ) : (
-          <RadarTable indicators={filteredIndicators} onOpenWorkspace={onOpenWorkspace} />
+          <RadarTable indicators={filteredIndicators} canEdit={isAdmin} onEditIndicator={onEditIndicator} />
         )}
       </div>
     </div>
@@ -260,10 +299,12 @@ export function KpiRadarDashboard({
 
 function RadarCard({
   indicator,
-  onOpenWorkspace,
+  canEdit,
+  onEditIndicator,
 }: {
   indicator: KpiRadarIndicator;
-  onOpenWorkspace: (perspective: string) => void;
+  canEdit: boolean;
+  onEditIndicator: (definitionId: string) => void;
 }) {
   return (
     <article className="group flex min-h-[430px] flex-col rounded-lg border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-md">
@@ -309,10 +350,12 @@ function RadarCard({
         <p className="text-xs font-semibold text-slate-500">
           آخر تحديث: {indicator.lastUpdatedAt ? new Date(indicator.lastUpdatedAt).toLocaleDateString("ar-SA") : "لم يحدث بعد"}
         </p>
-        <Button variant="outline" size="sm" onClick={() => onOpenWorkspace(indicator.definition.perspective)}>
-          <ArrowUpRight size={15} />
-          فتح المساحة
-        </Button>
+        {canEdit && (
+          <Button variant="outline" size="sm" onClick={() => onEditIndicator(indicator.definition.id)}>
+            <Edit3 size={15} />
+            تعديل المؤشر
+          </Button>
+        )}
       </div>
     </article>
   );
@@ -320,10 +363,12 @@ function RadarCard({
 
 function RadarTable({
   indicators,
-  onOpenWorkspace,
+  canEdit,
+  onEditIndicator,
 }: {
   indicators: KpiRadarIndicator[];
-  onOpenWorkspace: (perspective: string) => void;
+  canEdit: boolean;
+  onEditIndicator: (definitionId: string) => void;
 }) {
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -340,7 +385,7 @@ function RadarTable({
               <th className="px-4 py-3">المتحقق السنوي</th>
               <th className="px-4 py-3">الإنجاز والحالة</th>
               <th className="px-4 py-3">آخر تحديث</th>
-              <th className="px-4 py-3">إجراء</th>
+              {canEdit && <th className="px-4 py-3">إجراء</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -370,11 +415,14 @@ function RadarTable({
                 <td className="px-4 py-3 text-xs font-semibold text-slate-500">
                   {indicator.lastUpdatedAt ? new Date(indicator.lastUpdatedAt).toLocaleDateString("ar-SA") : "لم يحدث بعد"}
                 </td>
-                <td className="px-4 py-3">
-                  <Button variant="outline" size="sm" onClick={() => onOpenWorkspace(indicator.definition.perspective)}>
-                    <ArrowUpRight size={15} />
-                  </Button>
-                </td>
+                {canEdit && (
+                  <td className="px-4 py-3">
+                    <Button variant="outline" size="sm" onClick={() => onEditIndicator(indicator.definition.id)}>
+                      <ArrowUpRight size={15} />
+                      تعديل
+                    </Button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -421,7 +469,7 @@ function QuarterCell({ quarter, unit }: { quarter: KpiRadarQuarter; unit: string
 
 function ProgressBar({ value, status, compact }: { value: number | null; status: string; compact?: boolean }) {
   return (
-    <div className={cn("overflow-hidden rounded-full bg-slate-100", compact ? "h-1.5" : "h-2")}>
+    <div className={cn("mt-3 overflow-hidden rounded-full bg-slate-100", compact ? "h-1.5" : "h-2")}>
       <div
         className={cn(
           "h-full rounded-full transition-all",
@@ -432,48 +480,6 @@ function ProgressBar({ value, status, compact }: { value: number | null; status:
         )}
         style={{ width: `${Math.min(value ?? 0, 100)}%` }}
       />
-    </div>
-  );
-}
-
-function StatusCard({
-  label,
-  value,
-  icon: Icon,
-  tone = "blue",
-}: {
-  label: string;
-  value: number;
-  icon: typeof Target;
-  tone?: "blue" | "green" | "amber" | "slate";
-}) {
-  const toneClass = {
-    blue: "bg-blue-50 text-blue-700",
-    green: "bg-emerald-50 text-emerald-700",
-    amber: "bg-amber-50 text-amber-700",
-    slate: "bg-slate-100 text-slate-700",
-  }[tone];
-
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-slate-500">{label}</p>
-          <p className="mt-2 text-3xl font-black text-slate-950">{value}</p>
-        </div>
-        <div className={cn("flex size-11 items-center justify-center rounded-lg", toneClass)}>
-          <Icon size={22} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MiniMetric({ label, value, tone }: { label: string; value: number; tone: "green" | "rose" }) {
-  return (
-    <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
-      <p className="text-xs font-bold text-slate-500">{label}</p>
-      <p className={cn("mt-1 text-2xl font-black", tone === "green" ? "text-emerald-700" : "text-rose-700")}>{value}</p>
     </div>
   );
 }
@@ -534,4 +540,8 @@ function getAnnualActualLabel(indicator: KpiRadarIndicator) {
   if (indicator.aggregation === "average") return "متوسط سنوي";
   if (indicator.aggregation === "max") return "أعلى قيمة سنوية";
   return "إجمالي سنوي";
+}
+
+function shortLabel(value: string) {
+  return value.length > 22 ? `${value.slice(0, 22)}...` : value;
 }
