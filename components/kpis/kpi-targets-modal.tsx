@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { getKpiPeriodTarget } from "@/lib/kpis/aggregation";
 import { calculateKpiStatus } from "@/lib/kpis/status";
 import { kpiKeys, updateKpiDefinitionTarget } from "@/lib/queries/kpis";
 import type { KpiDefinition, KpiValue } from "@/lib/supabase/types";
@@ -82,15 +83,17 @@ export function KpiTargetsModal({ open, onOpenChange, definitions }: Props) {
         return current.map((value) => {
           const definition = updatedDefinitions.find((item) => item.id === value.kpi_id);
           if (!definition) return value;
+          const periodTarget = getKpiPeriodTarget(definition, value.period_type);
           return {
             ...value,
-            target_value: definition.target_value,
-            status: calculateKpiStatus(definition, value.actual_value),
+            target_value: periodTarget,
+            status: calculateKpiStatus({ ...definition, target_value: periodTarget }, value.actual_value),
           };
         });
       });
       queryClient.invalidateQueries({ queryKey: kpiKeys.definitions() });
       queryClient.invalidateQueries({ queryKey: [...kpiKeys.all, "values"] });
+      queryClient.invalidateQueries({ queryKey: [...kpiKeys.all, "year-values"] });
       onOpenChange(false);
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "تعذر تحديث المستهدفات"),

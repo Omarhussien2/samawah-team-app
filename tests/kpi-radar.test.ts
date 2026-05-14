@@ -39,6 +39,22 @@ describe("KPI radar model", () => {
     expect(byId["top-episode"].annualAchievement).toBe(100);
   });
 
+  it("keeps the annual dashboard scoped to the selected year", () => {
+    const [definition] = [kpiDefinition("REV_GOV_ANNUAL", "revenue", 1200, "ريال")];
+    const model = buildKpiRadarModel(definition ? [definition] : [], [], [
+      kpiValue("revenue", "quarterly", "2025-01-01", "2025-03-31", 900),
+      kpiValue("revenue", "quarterly", "2026-01-01", "2026-03-31", 100),
+    ], "quarterly", 2026);
+
+    expect(model.indicators[0].annualActual).toBe(100);
+    expect(model.indicators[0].quarters[0]).toMatchObject({
+      key: "Q1",
+      value: 100,
+      target: 300,
+      achievement: 33,
+    });
+  });
+
   it("merges annual cache values by KPI and period", () => {
     const merged = mergeKpiValuesByPeriod([
       kpiValue("audience", "quarterly", "2026-01-01", "2026-03-31", 10),

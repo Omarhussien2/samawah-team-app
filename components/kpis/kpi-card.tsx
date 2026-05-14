@@ -2,6 +2,7 @@
 
 import { ArrowDown, ArrowUp, Minus } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getKpiAggregation, getKpiPeriodTarget } from "@/lib/kpis/aggregation";
 import {
   calculateKpiAchievement,
   calculateKpiStatus,
@@ -9,17 +10,20 @@ import {
   getKpiStatusLabel,
   getKpiStatusStyle,
 } from "@/lib/kpis/status";
-import type { KpiDefinition, KpiValue } from "@/lib/supabase/types";
+import type { KpiDefinition, KpiPeriodType, KpiValue } from "@/lib/supabase/types";
 
 interface KpiCardProps {
   definition: KpiDefinition;
   value?: KpiValue | null;
+  periodType?: KpiPeriodType;
 }
 
-export function KpiCard({ definition, value }: KpiCardProps) {
+export function KpiCard({ definition, value, periodType = "monthly" }: KpiCardProps) {
   const actualValue = value?.actual_value ?? null;
-  const status = calculateKpiStatus(definition, actualValue);
-  const achievement = calculateKpiAchievement(actualValue, definition.target_value, definition.direction);
+  const aggregation = getKpiAggregation(definition);
+  const targetValue = getKpiPeriodTarget(definition, periodType);
+  const status = calculateKpiStatus({ ...definition, target_value: targetValue }, actualValue);
+  const achievement = calculateKpiAchievement(actualValue, targetValue, definition.direction);
   const progress = achievement === null ? 0 : Math.round(achievement);
 
   const TrendIcon = value?.trend === "up" ? ArrowUp : value?.trend === "down" ? ArrowDown : Minus;
@@ -43,7 +47,7 @@ export function KpiCard({ definition, value }: KpiCardProps) {
         </div>
         <div>
           <p className="text-xs text-slate-500">المستهدف</p>
-          <p className="mt-1 text-sm font-bold text-slate-700">{definition.target_text ?? formatKpiValue(definition.target_value, definition.target_unit)}</p>
+          <p className="mt-1 text-sm font-bold text-slate-700">{formatKpiValue(targetValue, definition.target_unit)}</p>
         </div>
       </div>
 
@@ -67,7 +71,11 @@ export function KpiCard({ definition, value }: KpiCardProps) {
       </div>
 
       <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-500">
-        <span>{definition.calculation_method === "manual" ? "يدوي" : definition.calculation_method === "semi_auto" ? "شبه تلقائي" : "تلقائي"}</span>
+        <span>
+          {definition.calculation_method === "manual" ? "يدوي" : definition.calculation_method === "semi_auto" ? "شبه تلقائي" : "تلقائي"}
+          {" · "}
+          {aggregation === "sum" ? "تجميعي" : aggregation === "average" ? "متوسط" : "أعلى قيمة"}
+        </span>
         <span className="flex items-center gap-1">
           <TrendIcon size={13} />
           {value?.updated_at ? new Date(value.updated_at).toLocaleDateString("ar-SA") : "لم يحدث بعد"}

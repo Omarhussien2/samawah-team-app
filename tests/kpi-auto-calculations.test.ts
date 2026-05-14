@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   buildOperationsKpiValues,
   buildProductKpiValues,
+  buildQuarterlyKpiValueRollups,
   calculateSimpleWorkspaceActuals,
 } from "../lib/kpis/auto-calculations";
 import type { ProjectPerformanceRecord, SimpleWorkspaceRecord } from "../lib/queries/kpis";
-import type { KpiDefinition } from "../lib/supabase/types";
+import type { KpiDefinition, KpiValue } from "../lib/supabase/types";
 
 const periodContext = {
   periodType: "monthly" as const,
@@ -39,8 +40,8 @@ describe("KPI auto calculations", () => {
     expect(values[0]).toMatchObject({
       kpi_id: "product-kpi",
       actual_value: 0,
-      target_value: 5000,
     });
+    expect(values[0].target_value).toBeCloseTo(5000 / 12);
   });
 
   it("emits neutral CPI/SPI values when the last project update is removed", () => {
@@ -78,6 +79,35 @@ describe("KPI auto calculations", () => {
 
     expect(byKpi.cpi.actual_value).toBe(1);
     expect(byKpi.coverage.actual_value).toBe(50);
+  });
+
+  it("rolls monthly KPI values into quarterly values without dropping existing Q1 cache entries", () => {
+    const definitions = [
+      kpiDefinition("REV_GOV_ANNUAL", "revenue", 1200, "revenue_entries"),
+      kpiDefinition("CLIENT_SATISFACTION", "satisfaction", 80, "client_opportunities"),
+      kpiDefinition("AUD_TOP_EPISODE", "top-episode", 1000, "audience_metrics"),
+    ];
+
+    const values = buildQuarterlyKpiValueRollups([
+      kpiValue("revenue", "2026-04-01", "2026-04-30", 100),
+      kpiValue("revenue", "2026-05-01", "2026-05-31", 200),
+      kpiValue("satisfaction", "2026-04-01", "2026-04-30", 90),
+      kpiValue("satisfaction", "2026-05-01", "2026-05-31", 70),
+      kpiValue("top-episode", "2026-04-01", "2026-04-30", 500),
+      kpiValue("top-episode", "2026-05-01", "2026-05-31", 1200),
+    ], definitions, {
+      periodStart: "2026-04-01",
+      periodEnd: "2026-06-30",
+      userId: "user-1",
+    });
+    const byKpi = Object.fromEntries(values.map((value) => [value.kpi_id, value]));
+
+    expect(byKpi.revenue.actual_value).toBe(300);
+    expect(byKpi.revenue.target_value).toBe(300);
+    expect(byKpi.satisfaction.actual_value).toBe(80);
+    expect(byKpi.satisfaction.target_value).toBe(80);
+    expect(byKpi["top-episode"].actual_value).toBe(1200);
+    expect(byKpi["top-episode"].target_value).toBe(1000);
   });
 });
 
@@ -144,5 +174,25 @@ function performanceUpdate(patch: Partial<ProjectPerformanceRecord>): ProjectPer
       total_budget: patch.project?.total_budget ?? 1000,
       progress: patch.project?.progress ?? 0,
     },
+  };
+}
+
+function kpiValue(kpiId: string, periodStart: string, periodEnd: string, actualValue: number): KpiValue {
+  return {
+    id: `${kpiId}-${periodStart}`,
+    kpi_id: kpiId,
+    period_type: "monthly",
+    period_start: periodStart,
+    period_end: periodEnd,
+    actual_value: actualValue,
+    actual_text: null,
+    target_value: null,
+    status: "neutral",
+    trend: "unknown",
+    source: "manual",
+    notes: null,
+    updated_by: null,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
   };
 }

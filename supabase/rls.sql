@@ -385,12 +385,51 @@ CREATE POLICY "kpi_values_select" ON kpi_values
   );
 
 DROP POLICY IF EXISTS "kpi_values_admin_insert" ON kpi_values;
-CREATE POLICY "kpi_values_admin_insert" ON kpi_values
-  FOR INSERT WITH CHECK (get_my_role() = 'admin');
+DROP POLICY IF EXISTS "kpi_values_manage_insert" ON kpi_values;
+CREATE POLICY "kpi_values_manage_insert" ON kpi_values
+  FOR INSERT WITH CHECK (
+    get_my_role() = 'admin'
+    OR (
+      get_my_role() = 'project_manager'
+      AND EXISTS (
+        SELECT 1
+        FROM kpi_definitions kd
+        WHERE kd.id = kpi_values.kpi_id
+          AND kd.active = TRUE
+          AND kd.visibility IN ('project_managers', 'team')
+      )
+    )
+  );
 
 DROP POLICY IF EXISTS "kpi_values_admin_update" ON kpi_values;
-CREATE POLICY "kpi_values_admin_update" ON kpi_values
-  FOR UPDATE USING (get_my_role() = 'admin');
+DROP POLICY IF EXISTS "kpi_values_manage_update" ON kpi_values;
+CREATE POLICY "kpi_values_manage_update" ON kpi_values
+  FOR UPDATE USING (
+    get_my_role() = 'admin'
+    OR (
+      get_my_role() = 'project_manager'
+      AND EXISTS (
+        SELECT 1
+        FROM kpi_definitions kd
+        WHERE kd.id = kpi_values.kpi_id
+          AND kd.active = TRUE
+          AND kd.visibility IN ('project_managers', 'team')
+      )
+    )
+  )
+  WITH CHECK (
+    get_my_role() = 'admin'
+    OR (
+      get_my_role() = 'project_manager'
+      AND EXISTS (
+        SELECT 1
+        FROM kpi_definitions kd
+        WHERE kd.id = kpi_values.kpi_id
+          AND kd.active = TRUE
+          AND kd.visibility IN ('project_managers', 'team')
+      )
+    )
+  );
 
 DROP POLICY IF EXISTS "kpi_values_admin_delete" ON kpi_values;
 CREATE POLICY "kpi_values_admin_delete" ON kpi_values

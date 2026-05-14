@@ -15,8 +15,18 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { buildQuarterlyKpiValueRollups } from "@/lib/kpis/auto-calculations";
+import { getKpiPeriodTarget } from "@/lib/kpis/aggregation";
+import { getQuarterPeriodForDate } from "@/lib/kpis/periods";
 import { calculateKpiStatus, formatKpiValue, getValueForKpi } from "@/lib/kpis/status";
-import { kpiKeys, mergeKpiValuesByKpiId, mergeKpiValuesByPeriod, upsertKpiValues, type KpiValueUpsert } from "@/lib/queries/kpis";
+import {
+  fetchKpiValuesInRange,
+  kpiKeys,
+  mergeKpiValuesByKpiId,
+  mergeKpiValuesByPeriod,
+  upsertKpiValues,
+  type KpiValueUpsert,
+} from "@/lib/queries/kpis";
 import type { KpiDefinition, KpiPeriodType, KpiValue } from "@/lib/supabase/types";
 
 interface Props {
@@ -65,8 +75,23 @@ export function KpiBulkUpdateModal({
   }, [definitions, open, values]);
 
   const mutation = useMutation({
-    mutationFn: upsertKpiValues,
-    onSuccess: (updatedValues) => {
+    mutationFn: async () => {
+      const updatedValues = await upsertKpiValues(payload);
+      if (periodType === "quarterly") return { updatedValues, rollupValues: [], rollupPeriod: null };
+
+      const rollupPeriod = getQuarterPeriodForDate(periodStart);
+      const changedDefinitionIds = new Set(payload.map((value) => value.kpi_id));
+      const changedDefinitions = definitions.filter((definition) => changedDefinitionIds.has(definition.id));
+      const monthlyValues = await fetchKpiValuesInRange("monthly", rollupPeriod.periodStart, rollupPeriod.periodEnd);
+      const rollupPayload = buildQuarterlyKpiValueRollups(monthlyValues, changedDefinitions, {
+        periodStart: rollupPeriod.periodStart,
+        periodEnd: rollupPeriod.periodEnd,
+        userId: currentUserId,
+      });
+      const rollupValues = rollupPayload.length > 0 ? await upsertKpiValues(rollupPayload) : [];
+      return { updatedValues, rollupValues, rollupPeriod };
+    },
+    onSuccess: ({ updatedValues, rollupValues, rollupPeriod }) => {
       toast.success("تم تحديث المؤشرات");
       queryClient.setQueryData(valuesQueryKey, (current: KpiValue[] | undefined) => mergeKpiValuesByKpiId(current, updatedValues));
       if (periodType === "quarterly") {
@@ -75,7 +100,20 @@ export function KpiBulkUpdateModal({
           (current: KpiValue[] | undefined) => mergeKpiValuesByPeriod(current, updatedValues)
         );
       }
+      if (rollupPeriod && rollupValues.length > 0) {
+        queryClient.setQueryData(
+          kpiKeys.values("quarterly", rollupPeriod.periodStart, rollupPeriod.periodEnd),
+          (current: KpiValue[] | undefined) => mergeKpiValuesByKpiId(current, rollupValues)
+        );
+        queryClient.setQueryData(
+          kpiKeys.yearValues(Number(rollupPeriod.periodStart.slice(0, 4))),
+          (current: KpiValue[] | undefined) => mergeKpiValuesByPeriod(current, rollupValues)
+        );
+      }
       queryClient.invalidateQueries({ queryKey: valuesQueryKey });
+      if (rollupPeriod) {
+        queryClient.invalidateQueries({ queryKey: kpiKeys.values("quarterly", rollupPeriod.periodStart, rollupPeriod.periodEnd) });
+      }
       queryClient.invalidateQueries({ queryKey: kpiKeys.yearValues(Number(periodStart.slice(0, 4))) });
       onOpenChange(false);
     },
@@ -91,14 +129,15 @@ export function KpiBulkUpdateModal({
         if (!draft || draft.actualValue.trim() === "") return null;
         const numericValue = Number(draft.actualValue);
         if (Number.isNaN(numericValue)) return null;
+        const periodTarget = getKpiPeriodTarget(definition, periodType);
         return {
           kpi_id: definition.id,
           period_type: periodType,
           period_start: periodStart,
           period_end: periodEnd,
           actual_value: numericValue,
-          target_value: definition.target_value,
-          status: calculateKpiStatus(definition, numericValue),
+          target_value: periodTarget,
+          status: calculateKpiStatus({ ...definition, target_value: periodTarget }, numericValue),
           trend: "unknown",
           source: "manual",
           notes: draft.notes.trim() || null,
@@ -170,7 +209,7 @@ export function KpiBulkUpdateModal({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             إلغاء
           </Button>
-          <Button onClick={() => mutation.mutate(payload)} disabled={mutation.isPending || payload.length === 0}>
+          <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || payload.length === 0}>
             <Save size={16} />
             {mutation.isPending ? "جاري الحفظ..." : `حفظ ${payload.length > 0 ? `${payload.length} مؤشر` : ""}`}
           </Button>
