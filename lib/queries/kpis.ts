@@ -61,6 +61,7 @@ export const kpiKeys = {
   definitions: () => [...kpiKeys.all, "definitions"] as const,
   values: (periodType: KpiPeriodType, periodStart: string, periodEnd: string) =>
     [...kpiKeys.all, "values", periodType, periodStart, periodEnd] as const,
+  yearValues: (year: number) => [...kpiKeys.all, "year-values", year] as const,
   shareLinks: () => [...kpiKeys.all, "share-links"] as const,
   products: () => [...kpiKeys.all, "products"] as const,
   projectPerformance: (periodType: KpiPeriodType, periodStart: string, periodEnd: string) =>
@@ -75,6 +76,16 @@ export function mergeKpiValuesByKpiId(current: KpiValue[] | undefined, updates: 
   const merged = new Map((current ?? []).map((value) => [value.kpi_id, value]));
   updates.forEach((value) => merged.set(value.kpi_id, value));
   return Array.from(merged.values());
+}
+
+export function mergeKpiValuesByPeriod(current: KpiValue[] | undefined, updates: KpiValue[]) {
+  const merged = new Map((current ?? []).map((value) => [getKpiValuePeriodKey(value), value]));
+  updates.forEach((value) => merged.set(getKpiValuePeriodKey(value), value));
+  return Array.from(merged.values());
+}
+
+function getKpiValuePeriodKey(value: Pick<KpiValue, "kpi_id" | "period_type" | "period_start" | "period_end">) {
+  return `${value.kpi_id}:${value.period_type}:${value.period_start}:${value.period_end}`;
 }
 
 export async function fetchKpiDefinitions(): Promise<KpiDefinition[]> {
@@ -115,6 +126,19 @@ export async function fetchKpiValues(
     .eq("period_type", periodType)
     .eq("period_start", periodStart)
     .eq("period_end", periodEnd);
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function fetchKpiYearValues(year: number): Promise<KpiValue[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("kpi_values")
+    .select("*")
+    .eq("period_type", "quarterly")
+    .gte("period_start", `${year}-01-01`)
+    .lte("period_end", `${year}-12-31`);
 
   if (error) throw error;
   return data ?? [];

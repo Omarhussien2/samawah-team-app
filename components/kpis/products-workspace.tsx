@@ -18,6 +18,7 @@ import {
   fetchIndicatorProducts,
   kpiKeys,
   mergeKpiValuesByKpiId,
+  mergeKpiValuesByPeriod,
   saveIndicatorProduct,
   upsertKpiValues,
 } from "@/lib/queries/kpis";
@@ -114,10 +115,19 @@ export function ProductsWorkspace({
           kpiKeys.values(period.periodType, period.periodStart, period.periodEnd),
           (current: KpiValue[] | undefined) => mergeKpiValuesByKpiId(current, values)
         );
+        if (period.periodType === "quarterly") {
+          queryClient.setQueryData(
+            kpiKeys.yearValues(Number(period.periodStart.slice(0, 4))),
+            (current: KpiValue[] | undefined) => mergeKpiValuesByPeriod(current, values)
+          );
+        }
       });
       queryClient.invalidateQueries({ queryKey: kpiKeys.products() });
       syncResults.forEach(({ period }) => {
         queryClient.invalidateQueries({ queryKey: kpiKeys.values(period.periodType, period.periodStart, period.periodEnd) });
+        if (period.periodType === "quarterly") {
+          queryClient.invalidateQueries({ queryKey: kpiKeys.yearValues(Number(period.periodStart.slice(0, 4))) });
+        }
       });
       setOpen(false);
     },
@@ -139,10 +149,19 @@ export function ProductsWorkspace({
           kpiKeys.values(period.periodType, period.periodStart, period.periodEnd),
           (current: KpiValue[] | undefined) => mergeKpiValuesByKpiId(current, values)
         );
+        if (period.periodType === "quarterly") {
+          queryClient.setQueryData(
+            kpiKeys.yearValues(Number(period.periodStart.slice(0, 4))),
+            (current: KpiValue[] | undefined) => mergeKpiValuesByPeriod(current, values)
+          );
+        }
       });
       queryClient.invalidateQueries({ queryKey: kpiKeys.products() });
       syncResults.forEach(({ period }) => {
         queryClient.invalidateQueries({ queryKey: kpiKeys.values(period.periodType, period.periodStart, period.periodEnd) });
+        if (period.periodType === "quarterly") {
+          queryClient.invalidateQueries({ queryKey: kpiKeys.yearValues(Number(period.periodStart.slice(0, 4))) });
+        }
       });
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "تعذر حذف المنتج"),

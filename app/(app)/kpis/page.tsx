@@ -9,10 +9,12 @@ export default async function KpisPage() {
   const { user } = await getUser();
   const supabase = await createClient();
   const initialPeriod = getCurrentKpiPeriod("monthly");
+  const initialYear = Number(initialPeriod.periodStart.slice(0, 4));
 
   const [
     { data: definitions },
     { data: values },
+    { data: yearValues },
     { data: shareLinks },
     { data: products },
     { data: projects },
@@ -34,6 +36,12 @@ export default async function KpisPage() {
       .eq("period_type", initialPeriod.periodType)
       .eq("period_start", initialPeriod.periodStart)
       .eq("period_end", initialPeriod.periodEnd),
+    supabase
+      .from("kpi_values")
+      .select("*")
+      .eq("period_type", "quarterly")
+      .gte("period_start", `${initialYear}-01-01`)
+      .lte("period_end", `${initialYear}-12-31`),
     user.role === "admin"
       ? supabase
           .from("kpi_share_links")
@@ -96,6 +104,7 @@ export default async function KpisPage() {
         currentUser={user}
         initialDefinitions={definitions ?? []}
         initialValues={values ?? []}
+        initialYearValues={yearValues ?? []}
         initialShareLinks={shareLinks ?? []}
         initialProducts={products ?? []}
         initialProjects={projects ?? []}

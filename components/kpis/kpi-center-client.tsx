@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KpiBulkUpdateModal } from "@/components/kpis/kpi-bulk-update-modal";
 import { KpiCard } from "@/components/kpis/kpi-card";
-import { KpiExecutiveOverview } from "@/components/kpis/kpi-executive-overview";
+import { KpiRadarDashboard } from "@/components/kpis/kpi-radar-dashboard";
 import { KpiTargetsModal } from "@/components/kpis/kpi-targets-modal";
 import { OperationsWorkspace } from "@/components/kpis/operations-workspace";
 import { ProductsWorkspace } from "@/components/kpis/products-workspace";
@@ -16,13 +16,14 @@ import { ShareLinkPanel } from "@/components/kpis/share-link-panel";
 import { SimpleSectionWorkspace } from "@/components/kpis/simple-section-workspace";
 import { findPeriodOption, getCurrentKpiPeriod, getPeriodOptions, type KpiPeriodOption } from "@/lib/kpis/periods";
 import { getValueForKpi } from "@/lib/kpis/status";
-import { fetchKpiDefinitions, fetchKpiValues, kpiKeys, type KpiShareLinkSafe, type ProjectPerformanceRecord, type SimpleWorkspaceKind, type SimpleWorkspaceRecord } from "@/lib/queries/kpis";
+import { fetchKpiDefinitions, fetchKpiValues, fetchKpiYearValues, kpiKeys, type KpiShareLinkSafe, type ProjectPerformanceRecord, type SimpleWorkspaceKind, type SimpleWorkspaceRecord } from "@/lib/queries/kpis";
 import type { IndicatorProduct, KpiDefinition, KpiPeriodType, KpiValue, Profile, Project } from "@/lib/supabase/types";
 
 interface Props {
   currentUser: Profile;
   initialDefinitions: KpiDefinition[];
   initialValues: KpiValue[];
+  initialYearValues: KpiValue[];
   initialShareLinks: KpiShareLinkSafe[];
   initialProducts: IndicatorProduct[];
   initialProjects: Pick<Project, "id" | "name" | "manager_id" | "total_budget" | "progress">[];
@@ -55,6 +56,7 @@ export function KpiCenterClient({
   currentUser,
   initialDefinitions,
   initialValues,
+  initialYearValues,
   initialShareLinks,
   initialProducts,
   initialProjects,
@@ -78,6 +80,9 @@ export function KpiCenterClient({
   });
 
   const isInitialPeriod = selectedPeriod.periodStart === initialPeriod.periodStart && selectedPeriod.periodType === initialPeriod.periodType;
+  const selectedYear = Number(selectedPeriod.periodStart.slice(0, 4));
+  const isInitialYear = selectedYear === Number(initialPeriod.periodStart.slice(0, 4));
+
   const { data: values = [], isFetching } = useQuery({
     queryKey: kpiKeys.values(periodType, selectedPeriod.periodStart, selectedPeriod.periodEnd),
     queryFn: () => fetchKpiValues(periodType, selectedPeriod.periodStart, selectedPeriod.periodEnd),
@@ -85,7 +90,18 @@ export function KpiCenterClient({
     placeholderData: [],
   });
 
+  const { data: yearValues = [], isFetching: isFetchingYearValues } = useQuery({
+    queryKey: kpiKeys.yearValues(selectedYear),
+    queryFn: () => fetchKpiYearValues(selectedYear),
+    initialData: isInitialYear ? initialYearValues : undefined,
+    placeholderData: [],
+  });
+
   const isAdmin = currentUser.role === "admin";
+  const radarDefinitions = useMemo(
+    () => isAdmin ? definitions : definitions.filter((definition) => definition.perspective !== REVENUE_TAB),
+    [definitions, isAdmin]
+  );
   const visibleSections = useMemo(
     () => TABS.filter((tab) => {
       if (tab === REVENUE_TAB) return isAdmin;
@@ -216,7 +232,7 @@ export function KpiCenterClient({
                   </SelectContent>
                 </Select>
               </div>
-              {isAdmin && (
+              {isAdmin && activeTab !== EXECUTIVE_TAB && (
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Button variant="outline" onClick={() => setTargetsOpen(true)}>
                     <Target size={16} />
@@ -251,7 +267,19 @@ export function KpiCenterClient({
           </TabsList>
 
           <TabsContent value={EXECUTIVE_TAB} className="mt-6">
-            <KpiExecutiveOverview definitions={definitions} values={values} />
+            <KpiRadarDashboard
+              definitions={radarDefinitions}
+              values={values}
+              yearValues={yearValues}
+              periodType={periodType}
+              periodLabel={selectedPeriod.label}
+              year={selectedYear}
+              isFetching={isFetching || isFetchingYearValues}
+              isAdmin={isAdmin}
+              onOpenBulkUpdate={() => setBulkOpen(true)}
+              onOpenTargets={() => setTargetsOpen(true)}
+              onOpenWorkspace={setActiveTab}
+            />
           </TabsContent>
 
           {TABS.filter((tab) => tab !== EXECUTIVE_TAB).map((tab) => (
