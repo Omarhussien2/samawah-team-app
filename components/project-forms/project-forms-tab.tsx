@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Download, FileText, Filter, Loader2, Plus, Search, Eye, Pencil } from "lucide-react";
+import { Check, ChevronDown, Download, FileText, Loader2, Plus, Search, Eye, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { cn, formatRelativeAr } from "@/lib/utils";
@@ -36,10 +36,12 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
   const [stageFilter, setStageFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [search, setSearch] = useState("");
-  const [manualTemplateId, setManualTemplateId] = useState("");
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [editorForm, setEditorForm] = useState<ProjectFormTemplateWithInstance | null>(null);
   const [previewForm, setPreviewForm] = useState<ProjectFormTemplateWithInstance | null>(null);
   const [exporting, setExporting] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const isManager = project.manager_id === currentUser.id;
   const canEdit = isManager;
@@ -73,6 +75,17 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
       .filter((instance) => instance.template && !isTrainingTemplate(instance.template as ProjectFormTemplate))
       .map((instance) => mapInstanceToCard(instance.template as ProjectFormTemplate, instance));
   }, [instances]);
+
+  const existingTemplateIds = useMemo(() => new Set(forms.map((form) => form.template.id)), [forms]);
+  const selectableTemplates = useMemo(
+    () => templates.filter((template) => !existingTemplateIds.has(template.id)),
+    [templates, existingTemplateIds]
+  );
+
+  const selectedTemplates = useMemo(
+    () => selectableTemplates.filter((template) => selectedTemplateIds.includes(template.id)),
+    [selectableTemplates, selectedTemplateIds]
+  );
 
   const filteredForms = useMemo(() => {
     return forms.filter((form) => {
@@ -123,14 +136,50 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
     setSaving(false);
   };
 
-  const createManualInstance = async () => {
-    const template = templates.find((item) => item.id === manualTemplateId);
-    if (!template) {
-      toast.error("اختر نموذجًا أولًا");
+  const toggleTemplateSelection = (templateId: string) => {
+    setSelectedTemplateIds((current) =>
+      current.includes(templateId) ? current.filter((id) => id !== templateId) : [...current, templateId]
+    );
+  };
+
+  const createSelectedInstances = async () => {
+    if (selectedTemplates.length === 0) {
+      toast.error("اختر نموذجًا واحدًا على الأقل");
       return;
     }
-    await createInstances([template.name]);
-    setManualTemplateId("");
+    await createInstances(selectedTemplates.map((template) => template.name));
+    setSelectedTemplateIds([]);
+    setTemplatePickerOpen(false);
+  };
+
+  const deleteForm = async (form: ProjectFormTemplateWithInstance) => {
+    if (!canEdit) {
+      toast.error("حذف نماذج المشروع متاح لمدير المشروع فقط");
+      return;
+    }
+
+    if (!form.instance?.id) {
+      toast.error("لا يمكن حذف نموذج غير محفوظ");
+      return;
+    }
+
+    const confirmed = window.confirm(`هل تريد حذف نموذج "${form.template.name}" من هذا المشروع؟ سيتم حذف بياناته المحفوظة.`);
+    if (!confirmed) return;
+
+    setDeletingId(form.id);
+    const supabase = createClient();
+    const { error } = await supabase.from("project_form_instances").delete().eq("id", form.instance.id);
+
+    if (error) {
+      toast.error(`ما نجح حذف النموذج: ${error.message}`);
+    } else {
+      toast.success("تم حذف النموذج");
+      setInstances((current) => current.filter((instance) => instance.id !== form.instance?.id));
+      setSelectedTemplateIds((current) => current.filter((id) => id !== form.template.id));
+      if (editorForm?.instance?.id === form.instance.id) setEditorForm(null);
+      if (previewForm?.instance?.id === form.instance.id) setPreviewForm(null);
+    }
+    setDeletingId(null);
   };
 
   const handleExport = async (form: ProjectFormTemplateWithInstance, format: "pdf" | "docx") => {
@@ -191,7 +240,7 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="grid gap-3 lg:grid-cols-[1fr_160px_160px_160px_240px]">
+        <div className="grid gap-3 lg:grid-cols-[1fr_160px_160px_160px_300px]">
           <div className="relative">
             <Search size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث باسم النموذج" className="w-full rounded-lg border border-slate-200 py-2 pl-3 pr-9 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" />
@@ -205,14 +254,48 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
           <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
             {CATEGORIES.map((category) => <option key={category} value={category}>{category === "all" ? "كل الأنواع" : category}</option>)}
           </select>
-          <div className="flex gap-2">
-            <select value={manualTemplateId} onChange={(e) => setManualTemplateId(e.target.value)} className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
-              <option value="">إضافة نموذج</option>
-              {templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
-            </select>
-            <button onClick={createManualInstance} disabled={!manualTemplateId || !canEdit} className="rounded-lg bg-slate-900 px-3 py-2 text-white disabled:opacity-50" title="إضافة">
-              <Filter size={15} />
+          <div className="relative flex gap-2">
+            <button
+              type="button"
+              onClick={() => setTemplatePickerOpen((open) => !open)}
+              disabled={!canEdit}
+              className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-right text-sm disabled:opacity-50"
+            >
+              <span className="truncate">
+                {selectedTemplates.length > 0 ? `${selectedTemplates.length} نموذج محدد` : "اختر النماذج المطلوبة"}
+              </span>
+              <ChevronDown size={15} className="shrink-0 text-slate-400" />
             </button>
+            <button onClick={createSelectedInstances} disabled={selectedTemplates.length === 0 || !canEdit || saving} className="rounded-lg bg-slate-900 px-3 py-2 text-white disabled:opacity-50" title="إضافة المحدد">
+              {saving ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+            </button>
+            {templatePickerOpen && (
+              <div className="absolute left-0 right-0 top-11 z-20 max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+                {selectableTemplates.length === 0 ? (
+                  <div className="px-3 py-6 text-center text-xs font-bold text-slate-400">كل النماذج المتاحة مضافة بالفعل</div>
+                ) : (
+                  selectableTemplates.map((template) => {
+                    const checked = selectedTemplateIds.includes(template.id);
+                    return (
+                      <button
+                        key={template.id}
+                        type="button"
+                        onClick={() => toggleTemplateSelection(template.id)}
+                        className="flex w-full items-start gap-2 rounded-lg px-3 py-2 text-right hover:bg-slate-50"
+                      >
+                        <span className={cn("mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border", checked ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300")}>
+                          {checked && <Check size={12} />}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-bold text-slate-700">{template.name}</span>
+                          <span className="block truncate text-xs text-slate-400">{template.category} - {template.stage}</span>
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -273,6 +356,12 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
                   {exporting === `${form.id}-docx` ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
                   Word
                 </button>
+                {canEdit && (
+                  <button onClick={() => deleteForm(form)} disabled={deletingId === form.id} className="flex items-center gap-1.5 rounded-lg border border-red-100 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 disabled:opacity-60">
+                    {deletingId === form.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                    حذف
+                  </button>
+                )}
               </div>
             </div>
           ))}

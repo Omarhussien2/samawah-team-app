@@ -21,12 +21,14 @@ Project forms live in the project detail page under the `نماذج المشرو
 - `components/project-forms/dynamic-form-renderer.tsx` renders fields from template JSON.
 - `components/project-forms/project-form-preview.tsx` previews and prints the form.
 
+Project managers add forms through a multi-select dropdown that only shows templates not already added to the project. Removing a form deletes its `project_form_instances` row for that project/template pair, including the saved JSON data for that instance.
+
 ## Permissions
 
 RLS allows:
 
 - admins to manage templates.
-- project managers to create and update project form instances.
+- project managers to create, update, and delete project form instances.
 - project members to view forms for their projects.
 - sharing is reserved for a future flow. It should not affect form access until it sends an in-app notification or email.
 
