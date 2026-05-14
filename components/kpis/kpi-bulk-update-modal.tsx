@@ -39,6 +39,7 @@ interface Props {
   periodStart: string;
   periodEnd: string;
   periodLabel: string;
+  scopeLabel?: string;
 }
 
 type DraftValue = {
@@ -56,6 +57,7 @@ export function KpiBulkUpdateModal({
   periodStart,
   periodEnd,
   periodLabel,
+  scopeLabel,
 }: Props) {
   const queryClient = useQueryClient();
   const [drafts, setDrafts] = useState<Record<string, DraftValue>>({});
@@ -166,9 +168,10 @@ export function KpiBulkUpdateModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-5xl overflow-hidden p-0">
         <DialogHeader className="border-b border-slate-100 px-6 py-5">
-          <DialogTitle>تحديث المؤشرات اليدوية</DialogTitle>
+          <DialogTitle>{definitions.length === 1 ? "تحديث مؤشر" : "تحديث المؤشرات اليدوية"}</DialogTitle>
           <DialogDescription>
-            الفترة الحالية: {periodLabel}. اترك الحقل فارغًا إذا لم يكن المؤشر جاهزًا للتحديث.
+            الفترة الحالية: {periodLabel}
+            {scopeLabel ? ` · النطاق: ${scopeLabel}` : ""}. اترك الحقل فارغًا إذا لم يكن المؤشر جاهزًا للتحديث.
           </DialogDescription>
         </DialogHeader>
 
@@ -182,7 +185,9 @@ export function KpiBulkUpdateModal({
                     <div key={definition.id} className="grid gap-3 rounded-lg border border-slate-100 bg-white p-3 md:grid-cols-[1.3fr_0.7fr_1fr]">
                       <div>
                         <p className="text-sm font-bold text-slate-900">{definition.name}</p>
-                        <p className="mt-1 text-xs text-slate-500">المستهدف: {definition.target_text ?? formatKpiValue(definition.target_value, definition.target_unit)}</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          المستهدف للفترة: {definition.target_text ?? formatKpiValue(getKpiPeriodTarget(definition, periodType), definition.target_unit)}
+                        </p>
                       </div>
                       <Input
                         type="number"
