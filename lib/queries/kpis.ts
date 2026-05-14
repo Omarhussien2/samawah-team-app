@@ -16,6 +16,10 @@ import type {
 } from "@/lib/supabase/types";
 
 export type KpiValueUpsert = Database["public"]["Tables"]["kpi_values"]["Insert"];
+export type KpiDefinitionTargetUpdate = Pick<
+  Database["public"]["Tables"]["kpi_definitions"]["Update"],
+  "id" | "target_value" | "target_text" | "target_unit"
+> & { id: string };
 export type IndicatorProductInsert = Database["public"]["Tables"]["indicator_products"]["Insert"];
 export type IndicatorProductUpdate = Database["public"]["Tables"]["indicator_products"]["Update"];
 export type ProjectPerformanceUpdateInsert = Database["public"]["Tables"]["project_performance_updates"]["Insert"];
@@ -74,6 +78,20 @@ export async function fetchKpiDefinitions(): Promise<KpiDefinition[]> {
 
   if (error) throw error;
   return data ?? [];
+}
+
+export async function updateKpiDefinitionTarget(payload: KpiDefinitionTargetUpdate): Promise<KpiDefinition> {
+  const supabase = createClient();
+  const { id, ...patch } = payload;
+  const { data, error } = await supabase
+    .from("kpi_definitions")
+    .update(patch)
+    .eq("id", id)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data;
 }
 
 export async function fetchKpiValues(

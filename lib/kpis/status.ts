@@ -85,7 +85,7 @@ export function summarizeKpiStatuses(definitions: KpiDefinition[], values: KpiVa
   return definitions.reduce<Record<KpiStatus, number>>(
     (summary, definition) => {
       const value = getValueForKpi(values, definition.id);
-      const status = value?.status ?? calculateKpiStatus(definition, value?.actual_value);
+      const status = calculateKpiStatus(definition, value?.actual_value);
       summary[status] += 1;
       return summary;
     },
