@@ -16,7 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { calculateKpiStatus, formatKpiValue, getValueForKpi } from "@/lib/kpis/status";
-import { kpiKeys, mergeKpiValuesByKpiId, upsertKpiValues, type KpiValueUpsert } from "@/lib/queries/kpis";
+import { kpiKeys, mergeKpiValuesByKpiId, mergeKpiValuesByPeriod, upsertKpiValues, type KpiValueUpsert } from "@/lib/queries/kpis";
 import type { KpiDefinition, KpiPeriodType, KpiValue } from "@/lib/supabase/types";
 
 interface Props {
@@ -69,7 +69,14 @@ export function KpiBulkUpdateModal({
     onSuccess: (updatedValues) => {
       toast.success("تم تحديث المؤشرات");
       queryClient.setQueryData(valuesQueryKey, (current: KpiValue[] | undefined) => mergeKpiValuesByKpiId(current, updatedValues));
+      if (periodType === "quarterly") {
+        queryClient.setQueryData(
+          kpiKeys.yearValues(Number(periodStart.slice(0, 4))),
+          (current: KpiValue[] | undefined) => mergeKpiValuesByPeriod(current, updatedValues)
+        );
+      }
       queryClient.invalidateQueries({ queryKey: valuesQueryKey });
+      queryClient.invalidateQueries({ queryKey: kpiKeys.yearValues(Number(periodStart.slice(0, 4))) });
       onOpenChange(false);
     },
     onError: (error) => {
