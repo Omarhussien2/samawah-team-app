@@ -16,6 +16,8 @@ ALTER TABLE project_form_shares ENABLE ROW LEVEL SECURITY;
 ALTER TABLE kpi_definitions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE kpi_values      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE kpi_share_links ENABLE ROW LEVEL SECURITY;
+ALTER TABLE indicator_products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE project_performance_updates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE comments         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE automation_logs  ENABLE ROW LEVEL SECURITY;
@@ -403,6 +405,56 @@ CREATE POLICY "kpi_share_links_admin_update" ON kpi_share_links
 DROP POLICY IF EXISTS "kpi_share_links_admin_delete" ON kpi_share_links;
 CREATE POLICY "kpi_share_links_admin_delete" ON kpi_share_links
   FOR DELETE USING (get_my_role() = 'admin');
+
+DROP POLICY IF EXISTS "indicator_products_select" ON indicator_products;
+CREATE POLICY "indicator_products_select" ON indicator_products
+  FOR SELECT USING (
+    get_my_role() IN ('admin', 'project_manager')
+    OR EXISTS (
+      SELECT 1
+      FROM kpi_definitions kd
+      WHERE kd.id = indicator_products.kpi_id
+        AND kd.visibility = 'team'
+    )
+  );
+
+DROP POLICY IF EXISTS "indicator_products_manage" ON indicator_products;
+CREATE POLICY "indicator_products_manage" ON indicator_products
+  FOR ALL USING (get_my_role() IN ('admin', 'project_manager'))
+  WITH CHECK (get_my_role() IN ('admin', 'project_manager'));
+
+DROP POLICY IF EXISTS "project_performance_updates_select" ON project_performance_updates;
+CREATE POLICY "project_performance_updates_select" ON project_performance_updates
+  FOR SELECT USING (
+    get_my_role() = 'admin'
+    OR is_project_manager(project_id)
+    OR is_project_member(project_id)
+  );
+
+DROP POLICY IF EXISTS "project_performance_updates_insert" ON project_performance_updates;
+CREATE POLICY "project_performance_updates_insert" ON project_performance_updates
+  FOR INSERT WITH CHECK (
+    get_my_role() = 'admin'
+    OR is_project_manager(project_id)
+  );
+
+DROP POLICY IF EXISTS "project_performance_updates_update" ON project_performance_updates;
+CREATE POLICY "project_performance_updates_update" ON project_performance_updates
+  FOR UPDATE USING (
+    get_my_role() = 'admin'
+    OR is_project_manager(project_id)
+  )
+  WITH CHECK (
+    get_my_role() = 'admin'
+    OR is_project_manager(project_id)
+  );
+
+DROP POLICY IF EXISTS "project_performance_updates_delete" ON project_performance_updates;
+CREATE POLICY "project_performance_updates_delete" ON project_performance_updates
+  FOR DELETE USING (
+    get_my_role() = 'admin'
+    OR is_project_manager(project_id)
+  );
 
 -- ============================================================
 -- Comments Policies

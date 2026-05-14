@@ -9,28 +9,37 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KpiBulkUpdateModal } from "@/components/kpis/kpi-bulk-update-modal";
 import { KpiCard } from "@/components/kpis/kpi-card";
 import { KpiExecutiveOverview } from "@/components/kpis/kpi-executive-overview";
+import { OperationsWorkspace } from "@/components/kpis/operations-workspace";
+import { ProductsWorkspace } from "@/components/kpis/products-workspace";
 import { ShareLinkPanel } from "@/components/kpis/share-link-panel";
 import { findPeriodOption, getCurrentKpiPeriod, getPeriodOptions, type KpiPeriodOption } from "@/lib/kpis/periods";
 import { getValueForKpi } from "@/lib/kpis/status";
-import { fetchKpiDefinitions, fetchKpiValues, kpiKeys, type KpiShareLinkSafe } from "@/lib/queries/kpis";
-import type { KpiDefinition, KpiPeriodType, KpiValue, Profile } from "@/lib/supabase/types";
+import { fetchKpiDefinitions, fetchKpiValues, kpiKeys, type KpiShareLinkSafe, type ProjectPerformanceRecord } from "@/lib/queries/kpis";
+import type { IndicatorProduct, KpiDefinition, KpiPeriodType, KpiValue, Profile, Project } from "@/lib/supabase/types";
 
 interface Props {
   currentUser: Profile;
   initialDefinitions: KpiDefinition[];
   initialValues: KpiValue[];
   initialShareLinks: KpiShareLinkSafe[];
+  initialProducts: IndicatorProduct[];
+  initialProjects: Pick<Project, "id" | "name" | "manager_id" | "total_budget" | "progress">[];
+  initialProjectUpdates: ProjectPerformanceRecord[];
   initialPeriod: KpiPeriodOption;
 }
 
+const EXECUTIVE_TAB = "النظرة التنفيذية";
+const OPERATIONS_TAB = "العمليات والمشاريع";
+const PRODUCTS_TAB = "المنتجات";
+
 const TABS = [
-  "النظرة التنفيذية",
+  EXECUTIVE_TAB,
   "الإيرادات",
   "العقود والعملاء",
   "الجمهور والمشتركين",
-  "العمليات والمشاريع",
+  OPERATIONS_TAB,
   "البرامج والخدمات",
-  "المنتجات",
+  PRODUCTS_TAB,
   "الشراكات والتموضع",
 ];
 
@@ -39,6 +48,9 @@ export function KpiCenterClient({
   initialDefinitions,
   initialValues,
   initialShareLinks,
+  initialProducts,
+  initialProjects,
+  initialProjectUpdates,
   initialPeriod,
 }: Props) {
   const [activeTab, setActiveTab] = useState(TABS[0]);
@@ -64,7 +76,10 @@ export function KpiCenterClient({
   });
 
   const isAdmin = currentUser.role === "admin";
-  const visibleSections = useMemo(() => TABS.filter((tab) => tab === "النظرة التنفيذية" || definitions.some((item) => item.perspective === tab)), [definitions]);
+  const visibleSections = useMemo(
+    () => TABS.filter((tab) => tab === EXECUTIVE_TAB || tab === PRODUCTS_TAB || tab === OPERATIONS_TAB || definitions.some((item) => item.perspective === tab)),
+    [definitions]
+  );
 
   const changePeriodType = (nextType: KpiPeriodType) => {
     const nextPeriod = getCurrentKpiPeriod(nextType);
@@ -73,6 +88,33 @@ export function KpiCenterClient({
   };
 
   const renderSection = (section: string) => {
+    if (section === PRODUCTS_TAB) {
+      return (
+        <ProductsWorkspace
+          currentUser={currentUser}
+          definitions={definitions}
+          initialProducts={initialProducts}
+          periodType={periodType}
+          periodStart={selectedPeriod.periodStart}
+          periodEnd={selectedPeriod.periodEnd}
+        />
+      );
+    }
+
+    if (section === OPERATIONS_TAB) {
+      return (
+        <OperationsWorkspace
+          currentUser={currentUser}
+          definitions={definitions}
+          initialProjects={initialProjects}
+          initialUpdates={isInitialPeriod ? initialProjectUpdates : []}
+          periodType={periodType}
+          periodStart={selectedPeriod.periodStart}
+          periodEnd={selectedPeriod.periodEnd}
+        />
+      );
+    }
+
     const sectionDefinitions = definitions.filter((definition) => definition.perspective === section);
     if (sectionDefinitions.length === 0) {
       return (
@@ -116,7 +158,7 @@ export function KpiCenterClient({
               </div>
               <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-slate-950">مركز مؤشرات سماوة 2026</h1>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-                مساحة تنفيذية لمتابعة مؤشرات الشركة حسب المنظورات، مع قيم شهرية وربع سنوية ورابط قراءة فقط لمجلس الإدارة.
+                مساحة تنفيذية لمتابعة مؤشرات الشركة حسب المنظورات، مع مساحات عمل عميقة للمنتجات والعمليات والمشاريع.
               </p>
             </div>
 
@@ -172,11 +214,11 @@ export function KpiCenterClient({
             ))}
           </TabsList>
 
-          <TabsContent value="النظرة التنفيذية" className="mt-6">
+          <TabsContent value={EXECUTIVE_TAB} className="mt-6">
             <KpiExecutiveOverview definitions={definitions} values={values} />
           </TabsContent>
 
-          {TABS.filter((tab) => tab !== "النظرة التنفيذية").map((tab) => (
+          {TABS.filter((tab) => tab !== EXECUTIVE_TAB).map((tab) => (
             <TabsContent key={tab} value={tab} className="mt-6">
               {renderSection(tab)}
             </TabsContent>

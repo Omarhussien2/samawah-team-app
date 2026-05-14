@@ -579,6 +579,102 @@ export interface Database {
         };
         Relationships: [];
       };
+      indicator_products: {
+        Row: {
+          id: string;
+          kpi_id: string | null;
+          name: string;
+          category: string | null;
+          description: string | null;
+          current_value: number;
+          target_value: number | null;
+          unit: string | null;
+          status: "active" | "paused" | "archived";
+          owner_id: string | null;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          kpi_id?: string | null;
+          name: string;
+          category?: string | null;
+          description?: string | null;
+          current_value?: number;
+          target_value?: number | null;
+          unit?: string | null;
+          status?: "active" | "paused" | "archived";
+          owner_id?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          kpi_id?: string | null;
+          name?: string;
+          category?: string | null;
+          description?: string | null;
+          current_value?: number;
+          target_value?: number | null;
+          unit?: string | null;
+          status?: "active" | "paused" | "archived";
+          owner_id?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      project_performance_updates: {
+        Row: {
+          id: string;
+          project_id: string;
+          period_type: KpiPeriodType;
+          period_start: string;
+          period_end: string;
+          planned_progress: number;
+          actual_progress: number;
+          actual_cost: number;
+          notes: string | null;
+          updated_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          period_type?: KpiPeriodType;
+          period_start: string;
+          period_end: string;
+          planned_progress?: number;
+          actual_progress?: number;
+          actual_cost?: number;
+          notes?: string | null;
+          updated_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          project_id?: string;
+          period_type?: KpiPeriodType;
+          period_start?: string;
+          period_end?: string;
+          planned_progress?: number;
+          actual_progress?: number;
+          actual_cost?: number;
+          notes?: string | null;
+          updated_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       comments: {
         Row: {
           id: string;
@@ -748,6 +844,8 @@ export type ProjectFormShare = Database["public"]["Tables"]["project_form_shares
 export type KpiDefinition = Database["public"]["Tables"]["kpi_definitions"]["Row"];
 export type KpiValue = Database["public"]["Tables"]["kpi_values"]["Row"];
 export type KpiShareLink = Database["public"]["Tables"]["kpi_share_links"]["Row"];
+export type IndicatorProduct = Database["public"]["Tables"]["indicator_products"]["Row"];
+export type ProjectPerformanceUpdate = Database["public"]["Tables"]["project_performance_updates"]["Row"];
 export type Comment = Database["public"]["Tables"]["comments"]["Row"];
 export type Notification = Database["public"]["Tables"]["notifications"]["Row"];
 export type AutomationLog = Database["public"]["Tables"]["automation_logs"]["Row"];

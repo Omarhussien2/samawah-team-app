@@ -10,7 +10,7 @@ export default async function KpisPage() {
   const supabase = await createClient();
   const initialPeriod = getCurrentKpiPeriod("monthly");
 
-  const [{ data: definitions }, { data: values }, { data: shareLinks }] = await Promise.all([
+  const [{ data: definitions }, { data: values }, { data: shareLinks }, { data: products }, { data: projects }, { data: projectUpdates }] = await Promise.all([
     supabase
       .from("kpi_definitions")
       .select("*")
@@ -28,6 +28,22 @@ export default async function KpisPage() {
           .select(SAFE_SHARE_LINK_SELECT)
           .order("created_at", { ascending: false })
       : Promise.resolve({ data: [] }),
+    supabase
+      .from("indicator_products")
+      .select("*")
+      .order("updated_at", { ascending: false }),
+    supabase
+      .from("projects")
+      .select("id,name,manager_id,total_budget,progress")
+      .neq("status", "cancelled")
+      .order("name", { ascending: true }),
+    supabase
+      .from("project_performance_updates")
+      .select("*, project:projects(id,name,manager_id,total_budget,progress)")
+      .eq("period_type", initialPeriod.periodType)
+      .eq("period_start", initialPeriod.periodStart)
+      .eq("period_end", initialPeriod.periodEnd)
+      .order("updated_at", { ascending: false }),
   ]);
 
   return (
@@ -37,6 +53,9 @@ export default async function KpisPage() {
         initialDefinitions={definitions ?? []}
         initialValues={values ?? []}
         initialShareLinks={shareLinks ?? []}
+        initialProducts={products ?? []}
+        initialProjects={projects ?? []}
+        initialProjectUpdates={projectUpdates ?? []}
         initialPeriod={initialPeriod}
       />
     </div>
