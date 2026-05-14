@@ -35,6 +35,10 @@ export async function updateSession(request: NextRequest) {
     return supabaseResponse;
   }
 
+  if (pathname.startsWith("/api/cron/")) {
+    return supabaseResponse;
+  }
+
   if (!user && pathname !== "/login") {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
