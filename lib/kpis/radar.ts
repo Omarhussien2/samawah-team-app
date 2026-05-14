@@ -1,7 +1,15 @@
 import { calculateKpiAchievement, calculateKpiStatus } from "@/lib/kpis/status";
+import {
+  aggregateKpiActuals,
+  getKpiAggregation,
+  getPeriodTarget,
+  type KpiAggregation,
+} from "@/lib/kpis/aggregation";
 import type { KpiDefinition, KpiPeriodType, KpiStatus, KpiValue } from "@/lib/supabase/types";
 
-export type KpiRadarAggregation = "sum" | "average" | "max";
+export { getPeriodTarget };
+
+export type KpiRadarAggregation = KpiAggregation;
 export type KpiRadarQuarterKey = "Q1" | "Q2" | "Q3" | "Q4";
 
 export type KpiRadarQuarter = {
@@ -67,30 +75,15 @@ const QUARTERS: { key: KpiRadarQuarterKey; label: string; startMonth: number }[]
   { key: "Q4", label: "الربع 4", startMonth: 10 },
 ];
 
-const AVERAGE_CODES = new Set([
-  "CLIENT_SATISFACTION",
-  "AUD_PAID_VIEWS",
-  "AUD_ORGANIC_VIEWS",
-  "OPS_CPI",
-  "OPS_SPI",
-  "OPS_UPDATED_REPORTS",
-  "OPS_ISO_21500",
-  "OPS_PM_COMPLIANCE",
-  "OPS_PROGRAM_INTEGRATION",
-  "OPS_REVISION_ROUNDS",
-  "OPS_RISK_COVERAGE",
-]);
-
-const MAX_CODES = new Set(["AUD_TOP_EPISODE"]);
-
 export function buildKpiRadarModel(
   definitions: KpiDefinition[],
   currentValues: KpiValue[],
   yearValues: KpiValue[],
-  selectedPeriodType: KpiPeriodType
+  selectedPeriodType: KpiPeriodType,
+  year?: number
 ): KpiRadarModel {
   const currentByKpi = new Map(currentValues.map((value) => [value.kpi_id, value]));
-  const quarterlyByKpi = groupQuarterValuesByKpi(yearValues);
+  const quarterlyByKpi = groupQuarterValuesByKpi(filterQuarterlyValuesForYear(yearValues, year));
 
   const indicators = definitions.map((definition) => {
     const aggregation = getKpiRadarAggregation(definition);
@@ -112,7 +105,7 @@ export function buildKpiRadarModel(
         status: calculateKpiStatus({ ...definition, target_value: quarterTarget }, quarterValue?.actual_value),
       };
     });
-    const annualActual = aggregateQuarterValues(quarters.map((quarter) => quarter.value), aggregation);
+    const annualActual = aggregateKpiActuals(quarters.map((quarter) => quarter.value), aggregation);
     const annualAchievement = calculateAchievement(definition, annualActual, definition.target_value);
 
     return {
@@ -139,22 +132,16 @@ export function buildKpiRadarModel(
   };
 }
 
-export function getKpiRadarAggregation(definition: Pick<KpiDefinition, "code" | "name" | "target_unit">): KpiRadarAggregation {
-  if (MAX_CODES.has(definition.code)) return "max";
-  if (AVERAGE_CODES.has(definition.code)) return "average";
-  if (definition.name.includes("متوسط")) return "average";
-  if (definition.target_unit === "%" && !definition.code.includes("COVERAGE")) return "average";
-  return "sum";
+export function getKpiRadarAggregation(
+  definition: Pick<KpiDefinition, "code" | "target_unit" | "calculation_method" | "auto_source">
+): KpiRadarAggregation {
+  return getKpiAggregation(definition);
 }
 
-export function getPeriodTarget(
-  annualTarget: number | null | undefined,
-  aggregation: KpiRadarAggregation,
-  periodType: KpiPeriodType
-) {
-  if (annualTarget === null || annualTarget === undefined) return null;
-  if (aggregation !== "sum") return annualTarget;
-  return periodType === "monthly" ? annualTarget / 12 : annualTarget / 4;
+function filterQuarterlyValuesForYear(values: KpiValue[], year?: number) {
+  if (!year) return values;
+  const yearPrefix = `${year}-`;
+  return values.filter((value) => value.period_start.startsWith(yearPrefix) && value.period_end.startsWith(yearPrefix));
 }
 
 function buildRadarSummary(indicators: KpiRadarIndicator[]): KpiRadarSummary {
@@ -217,14 +204,6 @@ function getQuarterKey(periodStart: string): KpiRadarQuarterKey | null {
   if (month >= 7 && month <= 9) return "Q3";
   if (month >= 10 && month <= 12) return "Q4";
   return null;
-}
-
-function aggregateQuarterValues(values: (number | null)[], aggregation: KpiRadarAggregation) {
-  const usable = values.filter((value): value is number => value !== null && Number.isFinite(value));
-  if (usable.length === 0) return null;
-  if (aggregation === "average") return average(usable);
-  if (aggregation === "max") return Math.max(...usable);
-  return usable.reduce((sum, value) => sum + value, 0);
 }
 
 function calculateAchievement(

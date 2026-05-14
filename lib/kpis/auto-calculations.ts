@@ -1,7 +1,8 @@
 import { averageMetric, selectLatestProjectPerformanceByProject } from "@/lib/kpis/operations";
+import { aggregateKpiActuals, getKpiAggregation, getKpiPeriodTarget } from "@/lib/kpis/aggregation";
 import { calculateKpiStatus } from "@/lib/kpis/status";
 import type { KpiValueUpsert, ProjectPerformanceRecord, SimpleWorkspaceKind, SimpleWorkspaceRecord } from "@/lib/queries/kpis";
-import type { IndicatorProduct, KpiDefinition, KpiPeriodType } from "@/lib/supabase/types";
+import type { IndicatorProduct, KpiDefinition, KpiPeriodType, KpiValue } from "@/lib/supabase/types";
 
 type KpiValueContext = {
   periodType: KpiPeriodType;
@@ -127,6 +128,28 @@ export function calculateSimpleWorkspaceActuals(
   };
 }
 
+export function buildQuarterlyKpiValueRollups(
+  monthlyValues: KpiValue[],
+  definitions: KpiDefinition[],
+  context: Omit<KpiValueContext, "periodType" | "notes">
+) {
+  return definitions.map((definition) => {
+    const aggregation = getKpiAggregation(definition);
+    const actual = aggregateKpiActuals(
+      monthlyValues
+        .filter((value) => value.kpi_id === definition.id)
+        .map((value) => value.actual_value),
+      aggregation
+    );
+
+    return toKpiValueUpsert(definition, actual, {
+      ...context,
+      periodType: "quarterly",
+      notes: "تجميع تلقائي من القيم الشهرية",
+    });
+  });
+}
+
 function buildKpiValuesFromCodes(
   actuals: Record<string, number | null>,
   definitions: KpiDefinition[],
@@ -145,14 +168,15 @@ function toKpiValueUpsert(
   actual: number | null,
   context: KpiValueContext
 ): KpiValueUpsert {
+  const periodTarget = getKpiPeriodTarget(definition, context.periodType);
   return {
     kpi_id: definition.id,
     period_type: context.periodType,
     period_start: context.periodStart,
     period_end: context.periodEnd,
     actual_value: actual,
-    target_value: definition.target_value,
-    status: calculateKpiStatus(definition, actual),
+    target_value: periodTarget,
+    status: calculateKpiStatus({ ...definition, target_value: periodTarget }, actual),
     trend: "unknown",
     source: "semi_auto",
     notes: context.notes,

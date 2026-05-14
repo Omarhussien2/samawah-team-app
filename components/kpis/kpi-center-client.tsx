@@ -185,7 +185,7 @@ export function KpiCenterClient({
         </div>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {sectionDefinitions.map((definition) => (
-            <KpiCard key={definition.id} definition={definition} value={getValueForKpi(values, definition.id)} />
+            <KpiCard key={definition.id} definition={definition} value={getValueForKpi(values, definition.id)} periodType={periodType} />
           ))}
         </div>
       </div>

@@ -144,6 +144,23 @@ export async function fetchKpiYearValues(year: number): Promise<KpiValue[]> {
   return data ?? [];
 }
 
+export async function fetchKpiValuesInRange(
+  periodType: KpiPeriodType,
+  periodStart: string,
+  periodEnd: string
+): Promise<KpiValue[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("kpi_values")
+    .select("*")
+    .eq("period_type", periodType)
+    .gte("period_start", periodStart)
+    .lte("period_end", periodEnd);
+
+  if (error) throw error;
+  return data ?? [];
+}
+
 export async function upsertKpiValues(values: KpiValueUpsert[]): Promise<KpiValue[]> {
   if (values.length === 0) return [];
   const supabase = createClient();
