@@ -11,7 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { buildOperationsKpiValues } from "@/lib/kpis/auto-calculations";
-import { averageMetric, calculateProjectPerformance } from "@/lib/kpis/operations";
+import { getRelatedKpiPeriods, type KpiPeriodOption, uniqueKpiPeriods } from "@/lib/kpis/periods";
+import { averageMetric, calculateProjectPerformance, selectLatestProjectPerformanceByProject } from "@/lib/kpis/operations";
 import { formatKpiValue, getKpiStatusStyle } from "@/lib/kpis/status";
 import {
   deleteProjectPerformanceUpdate,
@@ -45,6 +46,10 @@ const blankDraft = {
 };
 
 type Draft = typeof blankDraft;
+type KpiSyncResult = {
+  period: KpiPeriodOption;
+  values: KpiValue[];
+};
 
 export function OperationsWorkspace({
   currentUser,
@@ -60,7 +65,6 @@ export function OperationsWorkspace({
   const [draft, setDraft] = useState<Draft>(blankDraft);
   const canManage = currentUser.role === "admin" || currentUser.role === "project_manager";
   const updatesQueryKey = kpiKeys.projectPerformance(periodType, periodStart, periodEnd);
-  const valuesQueryKey = kpiKeys.values(periodType, periodStart, periodEnd);
 
   const { data: projects = initialProjects } = useQuery({
     queryKey: [...kpiKeys.all, "performance-projects"],
@@ -74,25 +78,37 @@ export function OperationsWorkspace({
     initialData: initialUpdates,
   });
 
-  const syncOperationalKpis = async (nextUpdates: ProjectPerformanceRecord[]) => {
-    const values = buildOperationsKpiValues(nextUpdates, definitions, projects.length, {
-      periodType,
-      periodStart,
-      periodEnd,
-      userId: currentUser.id,
-    });
-    return values.length > 0 ? upsertKpiValues(values) : [];
+  const syncOperationalKpis = async (
+    nextUpdates: ProjectPerformanceRecord[],
+    affectedPeriods: KpiPeriodOption[]
+  ): Promise<KpiSyncResult[]> => {
+    return Promise.all(affectedPeriods.map(async (period) => {
+      const periodUpdates = isSameKpiPeriod(period, periodType, periodStart, periodEnd)
+        ? nextUpdates
+        : await fetchProjectPerformanceUpdates(period.periodType, period.periodStart, period.periodEnd);
+      const values = buildOperationsKpiValues(periodUpdates, definitions, projects.length, {
+        periodType: period.periodType,
+        periodStart: period.periodStart,
+        periodEnd: period.periodEnd,
+        userId: currentUser.id,
+      });
+      return {
+        period,
+        values: values.length > 0 ? await upsertKpiValues(values) : [],
+      };
+    }));
   };
 
   const saveMutation = useMutation({
     mutationFn: async () => {
       const project = projects.find((item) => item.id === draft.projectId);
+      const existingUpdate = draft.id ? updates.find((item) => item.id === draft.id) : null;
       const saved = await saveProjectPerformanceUpdate({
         ...(draft.id ? { id: draft.id } : {}),
         project_id: draft.projectId,
-        period_type: periodType,
-        period_start: periodStart,
-        period_end: periodEnd,
+        period_type: existingUpdate?.period_type ?? periodType,
+        period_start: existingUpdate?.period_start ?? periodStart,
+        period_end: existingUpdate?.period_end ?? periodEnd,
         planned_progress: Number(draft.plannedProgress || 0),
         actual_progress: Number(draft.actualProgress || 0),
         actual_cost: Number(draft.actualCost || 0),
@@ -101,15 +117,26 @@ export function OperationsWorkspace({
       });
       const record: ProjectPerformanceRecord = { ...saved, project: project ?? null };
       const nextUpdates = mergePerformanceUpdate(updates, record);
-      const kpiValues = await syncOperationalKpis(nextUpdates);
-      return { kpiValues, nextUpdates };
+      const syncResults = await syncOperationalKpis(
+        nextUpdates,
+        getOperationAffectedPeriods(record, periodType, periodStart, periodEnd)
+      );
+      return { nextUpdates, syncResults };
     },
-    onSuccess: ({ kpiValues, nextUpdates }) => {
-      toast.success("تم حفظ أداء المشروع");
+    onSuccess: ({ nextUpdates, syncResults }) => {
+      toast.success("تم حفظ أداء المشروع وتحديث مؤشرات الفترة");
       queryClient.setQueryData(updatesQueryKey, nextUpdates);
-      queryClient.setQueryData(valuesQueryKey, (current: KpiValue[] | undefined) => mergeKpiValuesByKpiId(current, kpiValues));
+      syncResults.forEach(({ period, values }) => {
+        queryClient.setQueryData(
+          kpiKeys.values(period.periodType, period.periodStart, period.periodEnd),
+          (current: KpiValue[] | undefined) => mergeKpiValuesByKpiId(current, values)
+        );
+      });
       queryClient.invalidateQueries({ queryKey: updatesQueryKey });
-      queryClient.invalidateQueries({ queryKey: valuesQueryKey });
+      syncResults.forEach(({ period }) => {
+        queryClient.invalidateQueries({ queryKey: kpiKeys.values(period.periodType, period.periodStart, period.periodEnd) });
+        queryClient.invalidateQueries({ queryKey: kpiKeys.projectPerformance(period.periodType, period.periodStart, period.periodEnd) });
+      });
       setOpen(false);
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "تعذر حفظ أداء المشروع"),
@@ -119,22 +146,34 @@ export function OperationsWorkspace({
     mutationFn: async (record: ProjectPerformanceRecord) => {
       await deleteProjectPerformanceUpdate(record.id);
       const nextUpdates = updates.filter((item) => item.id !== record.id);
-      const kpiValues = await syncOperationalKpis(nextUpdates);
-      return { kpiValues, nextUpdates };
+      const syncResults = await syncOperationalKpis(
+        nextUpdates,
+        getOperationAffectedPeriods(record, periodType, periodStart, periodEnd)
+      );
+      return { nextUpdates, syncResults };
     },
-    onSuccess: ({ kpiValues, nextUpdates }) => {
-      toast.success("تم حذف تحديث الأداء");
+    onSuccess: ({ nextUpdates, syncResults }) => {
+      toast.success("تم حذف تحديث الأداء وتحديث مؤشرات الفترة");
       queryClient.setQueryData(updatesQueryKey, nextUpdates);
-      queryClient.setQueryData(valuesQueryKey, (current: KpiValue[] | undefined) => mergeKpiValuesByKpiId(current, kpiValues));
+      syncResults.forEach(({ period, values }) => {
+        queryClient.setQueryData(
+          kpiKeys.values(period.periodType, period.periodStart, period.periodEnd),
+          (current: KpiValue[] | undefined) => mergeKpiValuesByKpiId(current, values)
+        );
+      });
       queryClient.invalidateQueries({ queryKey: updatesQueryKey });
-      queryClient.invalidateQueries({ queryKey: valuesQueryKey });
+      syncResults.forEach(({ period }) => {
+        queryClient.invalidateQueries({ queryKey: kpiKeys.values(period.periodType, period.periodStart, period.periodEnd) });
+        queryClient.invalidateQueries({ queryKey: kpiKeys.projectPerformance(period.periodType, period.periodStart, period.periodEnd) });
+      });
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "تعذر حذف تحديث الأداء"),
   });
 
-  const metrics = updates.map((update) => ({ update, metrics: calculateProjectPerformance(update) }));
-  const averageCpi = averageMetric(updates, "cpi");
-  const averageSpi = averageMetric(updates, "spi");
+  const latestUpdates = selectLatestProjectPerformanceByProject(updates);
+  const metrics = latestUpdates.map((update) => ({ update, metrics: calculateProjectPerformance(update) }));
+  const averageCpi = averageMetric(latestUpdates, "cpi");
+  const averageSpi = averageMetric(latestUpdates, "spi");
   const warningCount = metrics.filter((item) => item.metrics.warnings.length > 0).length;
   const chartData = metrics.map(({ update, metrics }) => ({
     project: update.project?.name ?? "مشروع",
@@ -161,7 +200,7 @@ export function OperationsWorkspace({
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <Stat label="متوسط CPI" value={averageCpi === null ? "محايد" : averageCpi.toFixed(2)} />
         <Stat label="متوسط SPI" value={averageSpi === null ? "محايد" : averageSpi.toFixed(2)} />
-        <Stat label="تقارير الأداء" value={`${updates.length}/${projects.length}`} />
+        <Stat label="تقارير الأداء" value={`${latestUpdates.length}/${projects.length}`} />
         <Stat label="تحذيرات" value={warningCount} />
       </div>
 
@@ -294,10 +333,40 @@ function Stat({ label, value }: { label: string; value: string | number }) {
   );
 }
 
+function getOperationAffectedPeriods(
+  record: ProjectPerformanceRecord,
+  periodType: KpiPeriodType,
+  periodStart: string,
+  periodEnd: string
+) {
+  return uniqueKpiPeriods([
+    ...getRelatedKpiPeriods(periodType, periodStart, periodEnd),
+    ...getRelatedKpiPeriods(record.period_type, record.period_start, record.period_end),
+  ]);
+}
+
 function mergePerformanceUpdate(records: ProjectPerformanceRecord[], record: ProjectPerformanceRecord) {
-  const exists = records.some((item) => item.id === record.id || item.project_id === record.project_id);
+  const exists = records.some((item) => item.id === record.id || isSamePerformancePeriod(item, record));
   if (exists) {
-    return records.map((item) => (item.id === record.id || item.project_id === record.project_id ? record : item));
+    return records.map((item) => (item.id === record.id || isSamePerformancePeriod(item, record) ? record : item));
   }
   return [record, ...records];
+}
+
+function isSamePerformancePeriod(left: ProjectPerformanceRecord, right: ProjectPerformanceRecord) {
+  return left.project_id === right.project_id
+    && left.period_type === right.period_type
+    && left.period_start === right.period_start
+    && left.period_end === right.period_end;
+}
+
+function isSameKpiPeriod(
+  period: KpiPeriodOption,
+  periodType: KpiPeriodType,
+  periodStart: string,
+  periodEnd: string
+) {
+  return period.periodType === periodType
+    && period.periodStart === periodStart
+    && period.periodEnd === periodEnd;
 }

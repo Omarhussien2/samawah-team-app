@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { buildSimpleWorkspaceKpiValues } from "@/lib/kpis/auto-calculations";
+import { getDateRollupPeriods, getRelatedKpiPeriods, type KpiPeriodOption, uniqueKpiPeriods } from "@/lib/kpis/periods";
 import { formatKpiValue } from "@/lib/kpis/status";
 import {
   deleteSimpleWorkspaceRecord,
@@ -42,6 +43,11 @@ type Field = {
   type: "text" | "number" | "date" | "textarea" | "select";
   required?: boolean;
   options?: { value: string; label: string }[];
+};
+
+type KpiSyncResult = {
+  period: KpiPeriodOption;
+  values: KpiValue[];
 };
 
 const configs: Record<SimpleWorkspaceKind, { title: string; action: string; fields: Field[] }> = {
@@ -177,7 +183,6 @@ export function SimpleSectionWorkspace({
   const [draft, setDraft] = useState<Record<string, string>>(defaults[kind]);
   const canManage = kind === "revenue" ? currentUser.role === "admin" : currentUser.role === "admin" || currentUser.role === "project_manager";
   const recordsQueryKey = kpiKeys.simpleWorkspace(kind, periodType, periodStart, periodEnd);
-  const valuesQueryKey = kpiKeys.values(periodType, periodStart, periodEnd);
 
   const { data: records = [], isFetching } = useQuery({
     queryKey: recordsQueryKey,
@@ -189,29 +194,51 @@ export function SimpleSectionWorkspace({
   const chartData = useMemo(() => summarizeRecords(kind, records), [kind, records]);
   const totalValue = chartData.reduce((sum, item) => sum + item.value, 0);
 
-  const syncKpis = async (nextRecords: SimpleWorkspaceRecord[]) => {
-    const values = buildSimpleWorkspaceKpiValues(kind, nextRecords, definitions, {
-      periodType,
-      periodStart,
-      periodEnd,
-      userId: currentUser.id,
-    });
-    return values.length > 0 ? upsertKpiValues(values) : [];
+  const syncKpis = async (
+    nextRecords: SimpleWorkspaceRecord[],
+    affectedPeriods: KpiPeriodOption[]
+  ): Promise<KpiSyncResult[]> => {
+    return Promise.all(affectedPeriods.map(async (period) => {
+      const periodRecords = isSameKpiPeriod(period, periodType, periodStart, periodEnd)
+        ? nextRecords
+        : await fetchSimpleWorkspaceRecords(kind, period.periodStart, period.periodEnd);
+      const values = buildSimpleWorkspaceKpiValues(kind, periodRecords, definitions, {
+        periodType: period.periodType,
+        periodStart: period.periodStart,
+        periodEnd: period.periodEnd,
+        userId: currentUser.id,
+      });
+      return {
+        period,
+        values: values.length > 0 ? await upsertKpiValues(values) : [],
+      };
+    }));
   };
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      const previousRecord = draft.id ? records.find((item) => item.id === draft.id) ?? null : null;
       const saved = await saveSimpleWorkspaceRecord(kind, toPayload(kind, draft, currentUser.id));
       const nextRecords = mergeSimpleRecord(records, saved, kind, periodStart, periodEnd);
-      const kpiValues = await syncKpis(nextRecords);
-      return { kpiValues, nextRecords };
+      const syncResults = await syncKpis(
+        nextRecords,
+        getAffectedPeriods(kind, saved, previousRecord, periodType, periodStart, periodEnd)
+      );
+      return { nextRecords, syncResults };
     },
-    onSuccess: ({ kpiValues, nextRecords }) => {
-      toast.success("تم حفظ السجل");
+    onSuccess: ({ nextRecords, syncResults }) => {
+      toast.success("تم حفظ السجل وتحديث مؤشرات الفترة");
       queryClient.setQueryData(recordsQueryKey, nextRecords);
-      queryClient.setQueryData(valuesQueryKey, (current: KpiValue[] | undefined) => mergeKpiValuesByKpiId(current, kpiValues));
+      syncResults.forEach(({ period, values }) => {
+        queryClient.setQueryData(
+          kpiKeys.values(period.periodType, period.periodStart, period.periodEnd),
+          (current: KpiValue[] | undefined) => mergeKpiValuesByKpiId(current, values)
+        );
+      });
       queryClient.invalidateQueries({ queryKey: kpiKeys.simpleWorkspace(kind) });
-      queryClient.invalidateQueries({ queryKey: valuesQueryKey });
+      syncResults.forEach(({ period }) => {
+        queryClient.invalidateQueries({ queryKey: kpiKeys.values(period.periodType, period.periodStart, period.periodEnd) });
+      });
       setOpen(false);
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "تعذر حفظ السجل"),
@@ -221,15 +248,25 @@ export function SimpleSectionWorkspace({
     mutationFn: async (record: SimpleWorkspaceRecord) => {
       await deleteSimpleWorkspaceRecord(kind, record.id);
       const nextRecords = records.filter((item) => item.id !== record.id);
-      const kpiValues = await syncKpis(nextRecords);
-      return { kpiValues, nextRecords };
+      const syncResults = await syncKpis(
+        nextRecords,
+        getAffectedPeriods(kind, record, null, periodType, periodStart, periodEnd)
+      );
+      return { nextRecords, syncResults };
     },
-    onSuccess: ({ kpiValues, nextRecords }) => {
-      toast.success("تم حذف السجل");
+    onSuccess: ({ nextRecords, syncResults }) => {
+      toast.success("تم حذف السجل وتحديث مؤشرات الفترة");
       queryClient.setQueryData(recordsQueryKey, nextRecords);
-      queryClient.setQueryData(valuesQueryKey, (current: KpiValue[] | undefined) => mergeKpiValuesByKpiId(current, kpiValues));
+      syncResults.forEach(({ period, values }) => {
+        queryClient.setQueryData(
+          kpiKeys.values(period.periodType, period.periodStart, period.periodEnd),
+          (current: KpiValue[] | undefined) => mergeKpiValuesByKpiId(current, values)
+        );
+      });
       queryClient.invalidateQueries({ queryKey: kpiKeys.simpleWorkspace(kind) });
-      queryClient.invalidateQueries({ queryKey: valuesQueryKey });
+      syncResults.forEach(({ period }) => {
+        queryClient.invalidateQueries({ queryKey: kpiKeys.values(period.periodType, period.periodStart, period.periodEnd) });
+      });
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "تعذر حذف السجل"),
   });
@@ -367,6 +404,32 @@ function Stat({ label, value }: { label: string; value: string | number }) {
       <p className="mt-2 text-3xl font-extrabold text-slate-900">{value}</p>
     </div>
   );
+}
+
+function getAffectedPeriods(
+  kind: SimpleWorkspaceKind,
+  record: SimpleWorkspaceRecord,
+  previousRecord: SimpleWorkspaceRecord | null,
+  periodType: KpiPeriodType,
+  periodStart: string,
+  periodEnd: string
+) {
+  return uniqueKpiPeriods([
+    ...getRelatedKpiPeriods(periodType, periodStart, periodEnd),
+    ...getDateRollupPeriods(getRecordDate(kind, record)),
+    ...getDateRollupPeriods(previousRecord ? getRecordDate(kind, previousRecord) : null),
+  ]);
+}
+
+function isSameKpiPeriod(
+  period: KpiPeriodOption,
+  periodType: KpiPeriodType,
+  periodStart: string,
+  periodEnd: string
+) {
+  return period.periodType === periodType
+    && period.periodStart === periodStart
+    && period.periodEnd === periodEnd;
 }
 
 function mergeSimpleRecord(

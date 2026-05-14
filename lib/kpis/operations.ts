@@ -40,3 +40,19 @@ export function averageMetric(records: ProjectPerformanceRecord[], key: "cpi" | 
   if (values.length === 0) return null;
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
+
+export function selectLatestProjectPerformanceByProject(records: ProjectPerformanceRecord[]) {
+  const sorted = [...records].sort((a, b) => {
+    if (a.period_type !== b.period_type) return a.period_type === "quarterly" ? -1 : 1;
+    const periodOrder = b.period_end.localeCompare(a.period_end);
+    if (periodOrder !== 0) return periodOrder;
+    return b.updated_at.localeCompare(a.updated_at);
+  });
+
+  const latestByProject = new Map<string, ProjectPerformanceRecord>();
+  sorted.forEach((record) => {
+    if (!latestByProject.has(record.project_id)) latestByProject.set(record.project_id, record);
+  });
+
+  return Array.from(latestByProject.values());
+}

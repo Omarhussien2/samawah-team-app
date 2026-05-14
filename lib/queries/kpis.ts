@@ -170,6 +170,31 @@ export async function fetchProjectPerformanceUpdates(
   periodEnd: string
 ): Promise<ProjectPerformanceRecord[]> {
   const supabase = createClient();
+
+  if (periodType === "quarterly") {
+    const [quarterly, monthly] = await Promise.all([
+      supabase
+        .from("project_performance_updates")
+        .select("*, project:projects(id,name,manager_id,total_budget,progress)")
+        .eq("period_type", "quarterly")
+        .eq("period_start", periodStart)
+        .eq("period_end", periodEnd)
+        .order("updated_at", { ascending: false }),
+      supabase
+        .from("project_performance_updates")
+        .select("*, project:projects(id,name,manager_id,total_budget,progress)")
+        .eq("period_type", "monthly")
+        .gte("period_start", periodStart)
+        .lte("period_end", periodEnd)
+        .order("period_end", { ascending: false })
+        .order("updated_at", { ascending: false }),
+    ]);
+
+    if (quarterly.error) throw quarterly.error;
+    if (monthly.error) throw monthly.error;
+    return [...(quarterly.data ?? []), ...(monthly.data ?? [])];
+  }
+
   const { data, error } = await supabase
     .from("project_performance_updates")
     .select("*, project:projects(id,name,manager_id,total_budget,progress)")

@@ -4,7 +4,7 @@ import {
   buildProductKpiValues,
   calculateSimpleWorkspaceActuals,
 } from "../lib/kpis/auto-calculations";
-import type { SimpleWorkspaceRecord } from "../lib/queries/kpis";
+import type { ProjectPerformanceRecord, SimpleWorkspaceRecord } from "../lib/queries/kpis";
 import type { KpiDefinition } from "../lib/supabase/types";
 
 const periodContext = {
@@ -58,6 +58,27 @@ describe("KPI auto calculations", () => {
     expect(byKpi.spi.actual_value).toBeNull();
     expect(byKpi.coverage.actual_value).toBe(0);
   });
+
+  it("uses one latest operations update per project when rolling up a quarter", () => {
+    const definitions = [
+      kpiDefinition("OPS_CPI", "cpi", 1, "project_performance_updates"),
+      kpiDefinition("OPS_UPDATED_REPORTS", "coverage", 80, "project_performance_updates"),
+    ];
+
+    const values = buildOperationsKpiValues([
+      performanceUpdate({ id: "older", period_start: "2026-04-01", period_end: "2026-04-30", actual_progress: 10, actual_cost: 1000 }),
+      performanceUpdate({ id: "latest", period_start: "2026-05-01", period_end: "2026-05-31", actual_progress: 50, actual_cost: 500 }),
+    ], definitions, 2, {
+      ...periodContext,
+      periodType: "quarterly",
+      periodStart: "2026-04-01",
+      periodEnd: "2026-06-30",
+    });
+    const byKpi = Object.fromEntries(values.map((value) => [value.kpi_id, value]));
+
+    expect(byKpi.cpi.actual_value).toBe(1);
+    expect(byKpi.coverage.actual_value).toBe(50);
+  });
 });
 
 function kpiDefinition(code: string, id: string, targetValue: number, autoSource: string | null): KpiDefinition {
@@ -99,5 +120,29 @@ function audienceMetric(patch: Partial<Extract<SimpleWorkspaceRecord, { platform
     created_by: null,
     created_at: "2026-05-10T00:00:00Z",
     updated_at: "2026-05-10T00:00:00Z",
+  };
+}
+
+function performanceUpdate(patch: Partial<ProjectPerformanceRecord>): ProjectPerformanceRecord {
+  return {
+    id: patch.id ?? "performance-1",
+    project_id: patch.project_id ?? "project-1",
+    period_type: patch.period_type ?? "monthly",
+    period_start: patch.period_start ?? "2026-05-01",
+    period_end: patch.period_end ?? "2026-05-31",
+    planned_progress: patch.planned_progress ?? 50,
+    actual_progress: patch.actual_progress ?? 50,
+    actual_cost: patch.actual_cost ?? 500,
+    notes: null,
+    updated_by: null,
+    created_at: patch.created_at ?? "2026-05-01T00:00:00Z",
+    updated_at: patch.updated_at ?? "2026-05-01T00:00:00Z",
+    project: {
+      id: patch.project?.id ?? "project-1",
+      name: patch.project?.name ?? "Project",
+      manager_id: patch.project?.manager_id ?? null,
+      total_budget: patch.project?.total_budget ?? 1000,
+      progress: patch.project?.progress ?? 0,
+    },
   };
 }
