@@ -1,150 +1,436 @@
 "use client";
 
-import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Building2, Clock, Eye, ShieldCheck } from "lucide-react";
-import { KpiCard } from "@/components/kpis/kpi-card";
-import { calculateKpiAchievement, getValueForKpi, summarizeKpiStatuses } from "@/lib/kpis/status";
+import { useMemo, useState } from "react";
+import type { ReactNode } from "react";
+import {
+  Activity,
+  BarChart3,
+  Eye,
+  LayoutDashboard,
+  List,
+  Package,
+  Radio,
+  Search,
+  ShieldCheck,
+  Target,
+  TrendingUp,
+  Users,
+} from "lucide-react";
+import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import { buildKpiRadarModel, type KpiRadarIndicator, type KpiRadarQuarter } from "@/lib/kpis/radar";
+import { formatKpiValue, getKpiStatusLabel, getKpiStatusStyle } from "@/lib/kpis/status";
 import type { KpiBoardSnapshot } from "@/lib/kpis/share";
-import type { KpiValue } from "@/lib/supabase/types";
+import type { KpiStatus } from "@/lib/supabase/types";
 
-const STATUS_COLORS = {
-  green: "#10b981",
-  yellow: "#f59e0b",
-  red: "#f43f5e",
-  neutral: "#94a3b8",
+const ALL_PERSPECTIVES = "ALL";
+const QUARTER_COLORS = ["#10b981", "#f43f5e", "#eab308", "#6366f1"];
+const PERSPECTIVE_COLORS = ["#10b981", "#f43f5e", "#eab308", "#3b82f6", "#ec4899", "#8b5cf6", "#06b6d4"];
+
+const PERSPECTIVE_ICONS: Record<string, typeof Activity> = {
+  "الإيرادات": TrendingUp,
+  "العقود والعملاء": Users,
+  "الجمهور والمشتركين": Radio,
+  "العمليات والمشاريع": Activity,
+  "البرامج والخدمات": BarChart3,
+  "المنتجات": Package,
+  "الشراكات والتموضع": Target,
 };
-
-const STATUS_LABELS = {
-  green: "ممتاز",
-  yellow: "بحاجة متابعة",
-  red: "متعثر",
-  neutral: "بلا بيانات",
-};
-
-function latestValues(values: KpiValue[]) {
-  const map = new Map<string, KpiValue>();
-  values.forEach((value) => {
-    if (!map.has(value.kpi_id)) map.set(value.kpi_id, value);
-  });
-  return Array.from(map.values());
-}
 
 export function BoardShareView({ snapshot }: { snapshot: KpiBoardSnapshot }) {
-  const values = latestValues(snapshot.values);
-  const statusSummary = summarizeKpiStatuses(snapshot.definitions, values);
-  const statusData = Object.entries(statusSummary).map(([status, value]) => ({
-    status,
-    name: STATUS_LABELS[status as keyof typeof STATUS_LABELS],
-    value,
-  }));
+  const [activePerspective, setActivePerspective] = useState(ALL_PERSPECTIVES);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
 
-  const sectionData = Object.values(
-    snapshot.definitions.reduce<Record<string, { section: string; values: number[] }>>((acc, definition) => {
-      const value = getValueForKpi(values, definition.id);
-      const achievement = calculateKpiAchievement(value?.actual_value, definition.target_value, definition.direction);
-      acc[definition.perspective] ??= { section: definition.perspective, values: [] };
-      if (achievement !== null) acc[definition.perspective].values.push(Math.round(achievement));
-      return acc;
-    }, {})
-  ).map((section) => ({
-    section: section.section,
-    achievement: section.values.length ? Math.round(section.values.reduce((sum, item) => sum + item, 0) / section.values.length) : 0,
-  }));
+  const model = useMemo(
+    () => buildKpiRadarModel(snapshot.definitions, [], snapshot.values, "quarterly", snapshot.year),
+    [snapshot.definitions, snapshot.values, snapshot.year]
+  );
 
-  const critical = snapshot.definitions
-    .filter((definition) => {
-      const value = getValueForKpi(values, definition.id);
-      return value?.status === "red" || value?.status === "yellow";
-    })
-    .slice(0, 8);
+  const perspectives = model.summary.perspectives.map((item) => item.name);
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const filteredIndicators = model.indicators.filter((indicator) => {
+    const matchesPerspective = activePerspective === ALL_PERSPECTIVES || indicator.definition.perspective === activePerspective;
+    const matchesQuery = !normalizedQuery
+      || indicator.definition.name.toLowerCase().includes(normalizedQuery)
+      || indicator.definition.code.toLowerCase().includes(normalizedQuery)
+      || (indicator.definition.strategic_goal ?? "").toLowerCase().includes(normalizedQuery);
+    return matchesPerspective && matchesQuery;
+  });
+
+  const averageProgress = Math.round(average(filteredIndicators.map((indicator) => indicator.annualAchievement ?? 0)));
+  const achievedCount = filteredIndicators.filter((indicator) => (indicator.annualAchievement ?? 0) >= 100).length;
+  const quartersData = ["Q1", "Q2", "Q3", "Q4"].map((key) => ({
+    name: key,
+    value: Math.round(average(filteredIndicators.map((indicator) => indicator.quarters.find((quarter) => quarter.key === key)?.achievement ?? 0))),
+  }));
+  const perspectiveProgress = model.summary.perspectives.map((item) => ({
+    name: item.name,
+    value: item.averageAchievement,
+  }));
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white" dir="rtl">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <header className="rounded-2xl border border-white/10 bg-white/[0.06] p-6 shadow-2xl">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+    <main className="min-h-screen overflow-hidden bg-slate-950 text-white" dir="rtl">
+      <div className="flex min-h-screen flex-col lg:flex-row">
+        <aside className="relative z-10 flex w-full flex-col gap-8 border-b border-white/10 bg-white/[0.05] p-6 shadow-2xl backdrop-blur-2xl lg:w-80 lg:border-b-0 lg:border-l lg:p-8">
+          <div className="flex items-center gap-4">
+            <div className="flex size-12 rotate-3 items-center justify-center rounded-lg bg-teal-500 text-white shadow-lg shadow-teal-500/20">
+              <LayoutDashboard size={28} />
+            </div>
             <div>
-              <div className="flex items-center gap-2 text-sm font-bold text-emerald-300">
-                <ShieldCheck size={18} />
-                رابط قراءة فقط
+              <h1 className="text-xl font-black leading-tight text-white">سماوة {snapshot.year}</h1>
+              <p className="text-xs font-semibold text-white/40">رادار الأداء الاستراتيجي</p>
+            </div>
+          </div>
+
+          <nav className="flex gap-2 overflow-x-auto lg:flex-col lg:overflow-visible">
+            <PerspectiveButton active={activePerspective === ALL_PERSPECTIVES} onClick={() => setActivePerspective(ALL_PERSPECTIVES)}>
+              <BarChart3 size={18} />
+              عرض الكل
+            </PerspectiveButton>
+            <div className="hidden h-px bg-white/10 lg:block" />
+            {perspectives.map((perspective) => {
+              const Icon = PERSPECTIVE_ICONS[perspective] ?? BarChart3;
+              return (
+                <PerspectiveButton key={perspective} active={activePerspective === perspective} onClick={() => setActivePerspective(perspective)}>
+                  <Icon size={18} />
+                  {perspective}
+                </PerspectiveButton>
+              );
+            })}
+          </nav>
+
+          <div className="mt-auto grid gap-3">
+            <div className="rounded-lg border border-white/10 bg-white/[0.06] p-5 text-center">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/30">إجمالي الإنجاز</p>
+              <div className="mt-2 text-4xl font-black text-teal-300 drop-shadow-[0_0_12px_rgba(45,212,191,0.35)]">{averageProgress}%</div>
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10 p-0.5">
+                <div
+                  className="h-full rounded-full bg-teal-400 shadow-[0_0_12px_rgba(45,212,191,0.5)] transition-all"
+                  style={{ width: `${Math.min(averageProgress, 100)}%` }}
+                />
               </div>
-              <h1 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl">لوحة مؤشرات سماوة لمجلس الإدارة</h1>
-              <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
-                عرض تنفيذي محدث لأداء مؤشرات 2026 عبر المنظورات الاستراتيجية. لا توجد صلاحيات تعديل في هذا الرابط.
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <MiniStat label="المكتملة" value={achievedCount} tone="teal" />
+              <MiniStat label="قيد التنفيذ" value={Math.max(filteredIndicators.length - achievedCount, 0)} tone="rose" />
+            </div>
+          </div>
+        </aside>
+
+        <section className="relative z-10 min-w-0 flex-1 overflow-auto p-5 md:p-10">
+          <header className="mb-10 flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-2 rounded-full border border-teal-300/20 bg-teal-300/10 px-3 py-1 text-xs font-black text-teal-200">
+                  <ShieldCheck size={14} />
+                  رابط قراءة فقط
+                </span>
+                <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-bold text-white/50">
+                  <Eye size={14} />
+                  {snapshot.link.views_count} مشاهدة
+                </span>
+              </div>
+              <h2 className="flex flex-wrap items-center gap-3 text-3xl font-black text-white md:text-4xl">
+                {activePerspective === ALL_PERSPECTIVES ? "الكل" : activePerspective}
+                <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-black uppercase tracking-widest text-white/40">
+                  {filteredIndicators.length} مؤشر
+                </span>
+              </h2>
+              <p className="max-w-3xl text-sm font-medium leading-7 text-white/40">
+                تتبع أداء مؤشرات سماوة في الوقت الفعلي عبر الأرباع، المستهدف السنوي، المتحقق، ونسبة الإنجاز.
               </p>
             </div>
-            <div className="grid gap-3 text-sm text-slate-300 sm:grid-cols-3 lg:min-w-[520px]">
-              <div className="rounded-xl bg-white/10 p-4">
-                <Building2 size={18} className="mb-2 text-indigo-300" />
-                <p className="text-slate-400">المؤشرات</p>
-                <p className="mt-1 text-2xl font-extrabold text-white">{snapshot.definitions.length}</p>
+
+            <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-center">
+              <div className="flex rounded-lg border border-white/10 bg-white/[0.08] p-1.5 shadow-xl backdrop-blur-xl">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setViewMode("grid")}
+                  className={cn("text-white/40 hover:bg-white/10 hover:text-white", viewMode === "grid" && "bg-white/10 text-white")}
+                >
+                  <LayoutDashboard size={16} />
+                  المربعات
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setViewMode("table")}
+                  className={cn("text-white/40 hover:bg-white/10 hover:text-white", viewMode === "table" && "bg-white/10 text-white")}
+                >
+                  <List size={16} />
+                  الجدول
+                </Button>
               </div>
-              <div className="rounded-xl bg-white/10 p-4">
-                <Eye size={18} className="mb-2 text-emerald-300" />
-                <p className="text-slate-400">عدد المشاهدات</p>
-                <p className="mt-1 text-2xl font-extrabold text-white">{snapshot.link.views_count}</p>
-              </div>
-              <div className="rounded-xl bg-white/10 p-4">
-                <Clock size={18} className="mb-2 text-amber-300" />
-                <p className="text-slate-400">تاريخ العرض</p>
-                <p className="mt-1 text-base font-bold text-white">{new Date(snapshot.generatedAt).toLocaleString("ar-SA")}</p>
+              <div className="relative w-full md:w-80">
+                <Search className="absolute right-4 top-1/2 size-4 -translate-y-1/2 text-white/30" />
+                <Input
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="ابحث عن مؤشر..."
+                  className="rounded-lg border-white/10 bg-white/[0.06] py-6 pr-11 text-right text-white placeholder:text-white/25 focus-visible:ring-teal-400/40"
+                />
               </div>
             </div>
-          </div>
-        </header>
+          </header>
 
-        <section className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-5">
-          <div className="rounded-2xl border border-white/10 bg-white p-5 text-slate-900 shadow-xl xl:col-span-2">
-            <h2 className="mb-4 text-lg font-extrabold">توزيع حالة المؤشرات</h2>
-            <div className="h-72" dir="ltr">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={statusData} dataKey="value" nameKey="name" innerRadius={74} outerRadius={108} paddingAngle={3}>
-                    {statusData.map((entry) => (
-                      <Cell key={entry.status} fill={STATUS_COLORS[entry.status as keyof typeof STATUS_COLORS]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
+          <section className="mb-8 grid grid-cols-1 gap-6 xl:grid-cols-3">
+            <div className="rounded-lg border border-white/10 bg-white/[0.06] p-6 shadow-2xl backdrop-blur-2xl xl:col-span-2">
+              <h3 className="mb-6 flex items-center gap-2 text-sm font-black text-white/70">
+                <span className="h-6 w-1.5 rounded-full bg-teal-400" />
+                التوجه الربع سنوي للأداء المختزل (%)
+              </h3>
+              <div className="h-72" dir="ltr">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={quartersData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff14" vertical={false} />
+                    <XAxis dataKey="name" stroke="#ffffff45" fontSize={12} tickLine={false} axisLine={false} dy={10} />
+                    <YAxis stroke="#ffffff45" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}%`} />
+                    <Tooltip
+                      cursor={{ fill: "rgba(255,255,255,0.04)" }}
+                      contentStyle={{ backgroundColor: "#020617", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px" }}
+                      formatter={(value) => [`${value}%`, "الإنجاز"]}
+                    />
+                    <Bar dataKey="value" radius={[8, 8, 0, 0]} barSize={40}>
+                      {quartersData.map((entry, index) => (
+                        <Cell key={entry.name} fill={QUARTER_COLORS[index % QUARTER_COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
-          </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white p-5 text-slate-900 shadow-xl xl:col-span-3">
-            <h2 className="mb-4 text-lg font-extrabold">أداء المنظورات</h2>
-            <div className="h-80" dir="ltr">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={sectionData} layout="vertical" margin={{ right: 16, left: 12 }}>
-                  <XAxis type="number" domain={[0, 100]} hide />
-                  <YAxis type="category" dataKey="section" width={135} tick={{ fontSize: 12 }} />
-                  <Tooltip formatter={(value) => [`${value}%`, "الإنجاز"]} />
-                  <Bar dataKey="achievement" fill="#4f46e5" radius={[6, 6, 6, 6]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </section>
-
-        {critical.length > 0 && (
-          <section className="mt-6 rounded-2xl border border-amber-400/20 bg-amber-400/10 p-5">
-            <h2 className="text-lg font-extrabold text-amber-100">مؤشرات تحتاج متابعة</h2>
-            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-              {critical.map((definition) => (
-                <div key={definition.id} className="rounded-xl bg-white/10 p-4">
-                  <p className="text-xs font-bold text-amber-200">{definition.perspective}</p>
-                  <p className="mt-1 text-sm font-bold">{definition.name}</p>
+            <div className="rounded-lg border border-white/10 bg-white/[0.06] p-6 shadow-2xl backdrop-blur-2xl">
+              <h3 className="mb-6 flex items-center gap-2 text-sm font-black text-white/70">
+                <span className="h-6 w-1.5 rounded-full bg-blue-400" />
+                توزيع الإنجاز حسب المنظور
+              </h3>
+              <div className="relative h-56" dir="ltr">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={perspectiveProgress} dataKey="value" nameKey="name" innerRadius={65} outerRadius={86} paddingAngle={7} stroke="none">
+                      {perspectiveProgress.map((entry, index) => (
+                        <Cell key={entry.name} fill={PERSPECTIVE_COLORS[index % PERSPECTIVE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{ backgroundColor: "#020617", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px" }} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-3xl font-black text-white">{model.summary.averageAchievement}%</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-white/30">المتوسط</span>
                 </div>
-              ))}
+              </div>
             </div>
           </section>
-        )}
 
-        <section className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {snapshot.definitions.slice(0, 12).map((definition) => (
-            <KpiCard key={definition.id} definition={definition} value={getValueForKpi(values, definition.id)} />
-          ))}
+          {filteredIndicators.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-white/15 bg-white/[0.04] p-10 text-center text-sm font-semibold text-white/45">
+              لا توجد مؤشرات مطابقة للبحث الحالي.
+            </div>
+          ) : viewMode === "grid" ? (
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+              {filteredIndicators.map((indicator) => (
+                <IndicatorCard key={indicator.definition.id} indicator={indicator} />
+              ))}
+            </div>
+          ) : (
+            <IndicatorTable indicators={filteredIndicators} />
+          )}
         </section>
       </div>
     </main>
+  );
+}
+
+function IndicatorCard({ indicator }: { indicator: KpiRadarIndicator }) {
+  return (
+    <article className="group relative flex min-h-[430px] flex-col overflow-hidden rounded-lg border border-white/10 bg-white/[0.06] p-6 shadow-2xl backdrop-blur-2xl transition hover:-translate-y-1 hover:bg-white/[0.08] hover:shadow-teal-500/10">
+      <div className="relative z-10 flex items-start justify-between gap-4">
+        <div className="min-w-0 space-y-1">
+          <span className="text-[10px] font-black uppercase tracking-[0.18em] text-teal-300">{indicator.definition.perspective}</span>
+          <h3 className="line-clamp-2 text-xl font-black leading-tight text-white transition group-hover:text-teal-200">{indicator.definition.name}</h3>
+          <p className="line-clamp-1 text-[11px] font-semibold text-white/30">{indicator.definition.strategic_goal ?? indicator.sourceLabel}</p>
+        </div>
+        <span className={cn("shrink-0 rounded-lg border px-2.5 py-1 text-xs font-black", darkStatusStyle(indicator.annualStatus))}>
+          {getKpiStatusLabel(indicator.annualStatus)}
+        </span>
+      </div>
+
+      <div className="relative z-10 mt-10 flex flex-1 flex-col justify-end">
+        <div className="mb-4 flex items-baseline justify-between gap-3">
+          <span className="text-3xl font-black tracking-tight text-white">
+            {formatCompactValue(indicator.annualActual, indicator.definition.target_unit)}
+          </span>
+          <span className={cn("rounded-full border px-3 py-1 text-xs font-black", (indicator.annualAchievement ?? 0) >= 100 ? "border-teal-300/30 bg-teal-300/10 text-teal-200" : "border-rose-300/30 bg-rose-300/10 text-rose-200")}>
+            {formatAchievement(indicator.annualAchievement)}
+          </span>
+        </div>
+
+        <div className="mb-8 h-2 overflow-hidden rounded-full bg-white/10">
+          <div
+            className={cn("h-full rounded-full shadow-[0_0_12px_rgba(45,212,191,0.35)]", (indicator.annualAchievement ?? 0) >= 100 ? "bg-teal-400" : "bg-rose-400")}
+            style={{ width: `${Math.min(indicator.annualAchievement ?? 0, 100)}%` }}
+          />
+        </div>
+
+        <div className="grid grid-cols-4 gap-3">
+          {indicator.quarters.map((quarter) => (
+            <QuarterSpark key={quarter.key} quarter={quarter} unit={indicator.definition.target_unit} />
+          ))}
+        </div>
+      </div>
+
+      <div className="relative z-10 mt-8 flex items-center justify-between gap-3 border-t border-white/10 pt-5 text-xs font-bold text-white/35">
+        <span>المستهدف السنوي: {formatCompactValue(indicator.annualTarget, indicator.definition.target_unit)}</span>
+        <span>{indicator.lastUpdatedAt ? new Date(indicator.lastUpdatedAt).toLocaleDateString("ar-SA") : "لم يحدث بعد"}</span>
+      </div>
+    </article>
+  );
+}
+
+function IndicatorTable({ indicators }: { indicators: KpiRadarIndicator[] }) {
+  return (
+    <div className="overflow-hidden rounded-lg border border-white/10 bg-white/[0.06] shadow-2xl backdrop-blur-2xl">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[1500px] border-collapse text-right">
+          <thead>
+            <tr className="border-b border-white/10 bg-white/[0.08] text-[10px] font-black uppercase tracking-widest text-white/50">
+              <th className="p-5">المؤشر الاستراتيجي</th>
+              <th className="p-5">المستهدف السنوي</th>
+              <th className="p-5 text-center">Q1</th>
+              <th className="p-5 text-center">Q2</th>
+              <th className="p-5 text-center">Q3</th>
+              <th className="p-5 text-center">Q4</th>
+              <th className="p-5">المتحقق السنوي</th>
+              <th className="p-5">تقرير الأداء</th>
+              <th className="p-5">آخر تحديث</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/10">
+            {indicators.map((indicator) => (
+              <tr key={indicator.definition.id} className="transition hover:bg-white/[0.04]">
+                <td className="p-5">
+                  <p className="text-base font-black text-white">{indicator.definition.name}</p>
+                  <p className="mt-1 inline-block rounded bg-white/[0.06] px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-white/30">
+                    {indicator.definition.perspective}
+                  </p>
+                </td>
+                <td className="whitespace-nowrap p-5 font-bold text-white/50">{formatCompactValue(indicator.annualTarget, indicator.definition.target_unit)}</td>
+                {indicator.quarters.map((quarter) => (
+                  <td key={quarter.key} className="p-5 text-center font-bold text-white/60">
+                    <QuarterCell quarter={quarter} unit={indicator.definition.target_unit} />
+                  </td>
+                ))}
+                <td className="p-5 text-lg font-black text-teal-300">{formatCompactValue(indicator.annualActual, indicator.definition.target_unit)}</td>
+                <td className="p-5">
+                  <div className="flex items-center gap-4">
+                    <div className="h-2 w-28 overflow-hidden rounded-full bg-white/10">
+                      <div
+                        className={cn("h-full", (indicator.annualAchievement ?? 0) >= 100 ? "bg-teal-400" : "bg-rose-400")}
+                        style={{ width: `${Math.min(indicator.annualAchievement ?? 0, 100)}%` }}
+                      />
+                    </div>
+                    <span className="text-xs font-black text-white/70">{formatAchievement(indicator.annualAchievement)}</span>
+                  </div>
+                </td>
+                <td className="p-5 text-xs font-bold text-white/35">
+                  {indicator.lastUpdatedAt ? new Date(indicator.lastUpdatedAt).toLocaleDateString("ar-SA") : "لم يحدث بعد"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function QuarterSpark({ quarter, unit }: { quarter: KpiRadarQuarter; unit: string | null }) {
+  const progress = Math.min(quarter.achievement ?? 0, 100);
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <div className="text-[10px] font-black text-white/35">{quarter.key}</div>
+      <div className="h-1 w-full overflow-hidden rounded-full bg-white/10">
+        <div className={cn("h-full transition-all", progress >= 100 ? "bg-teal-300/60" : "bg-white/25")} style={{ width: `${progress}%` }} />
+      </div>
+      <div className="text-center text-[10px] font-bold text-white/35">{formatCompactValue(quarter.value, unit)}</div>
+    </div>
+  );
+}
+
+function QuarterCell({ quarter, unit }: { quarter: KpiRadarQuarter; unit: string | null }) {
+  return (
+    <div className="mx-auto grid max-w-[180px] grid-cols-3 gap-2 rounded-lg bg-white/[0.05] px-3 py-2 text-right text-[11px]">
+      <SmallValue label="مستهدف" value={formatCompactValue(quarter.target, unit)} />
+      <SmallValue label="فعلي" value={formatCompactValue(quarter.value, unit)} />
+      <SmallValue label="إنجاز" value={formatAchievement(quarter.achievement)} />
+    </div>
+  );
+}
+
+function PerspectiveButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex shrink-0 items-center gap-3 rounded-lg border px-4 py-3 text-sm font-bold transition lg:w-full",
+        active
+          ? "border-teal-300/30 bg-teal-500 text-white shadow-xl shadow-teal-500/20"
+          : "border-transparent text-white/50 hover:border-white/10 hover:bg-white/[0.06] hover:text-white"
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function MiniStat({ label, value, tone }: { label: string; value: number; tone: "teal" | "rose" }) {
+  return (
+    <div className="relative overflow-hidden rounded-lg border border-white/10 bg-white/[0.06] p-4">
+      <div className={cn("absolute right-0 top-0 h-full w-1", tone === "teal" ? "bg-teal-400" : "bg-rose-400")} />
+      <p className="text-[10px] font-black uppercase tracking-widest text-white/30">{label}</p>
+      <p className="mt-1 text-2xl font-black text-white">{value}</p>
+    </div>
+  );
+}
+
+function SmallValue({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="font-black text-white/25">{label}</p>
+      <p className="mt-0.5 truncate font-black text-white/70">{value}</p>
+    </div>
+  );
+}
+
+function formatCompactValue(value: number | null | undefined, unit?: string | null) {
+  if (value === null || value === undefined) return "لا يوجد";
+  return formatKpiValue(value, unit);
+}
+
+function formatAchievement(value: number | null | undefined) {
+  return value === null || value === undefined ? "غير متاح" : `${value}%`;
+}
+
+function average(values: number[]) {
+  const usable = values.filter((value) => Number.isFinite(value));
+  return usable.length ? usable.reduce((sum, value) => sum + value, 0) / usable.length : 0;
+}
+
+function darkStatusStyle(status: KpiStatus) {
+  return cn(
+    getKpiStatusStyle(status),
+    status === "green" && "border-teal-300/30 bg-teal-300/10 text-teal-100",
+    status === "yellow" && "border-amber-300/30 bg-amber-300/10 text-amber-100",
+    status === "red" && "border-rose-300/30 bg-rose-300/10 text-rose-100",
+    status === "neutral" && "border-white/10 bg-white/[0.06] text-white/45"
   );
 }
