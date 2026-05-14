@@ -3,6 +3,10 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/notifications/send-email";
 import { taskReminderTemplate } from "@/lib/notifications/templates";
 import { createNotification } from "@/lib/notifications/create-notification";
+import {
+  getOrCreateNotificationPreferences,
+  shouldSendImportantEmail,
+} from "@/lib/notifications/preferences";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 
@@ -76,12 +80,15 @@ export async function GET(request: NextRequest) {
       const userTasks = byOwner[profile.id] ?? [];
       const overdueForUser = userTasks.filter((t) => t.due_date && t.due_date < today);
       const dueSoon = userTasks.filter((t) => t.due_date && t.due_date >= today && t.due_date <= threeDaysLaterStr);
+      const preferences = await getOrCreateNotificationPreferences(supabase, profile.id);
 
       // --- In-App Notification: Overdue ---
-      if (overdueForUser.length > 0) {
+      if (preferences.in_app_enabled && overdueForUser.length > 0) {
         await createNotification({
           user_id: profile.id,
           type: "overdue",
+          category: "task",
+          priority: "high",
           title: `لديك ${overdueForUser.length} مهمة متأخرة`,
           body: overdueForUser.map((t) => `• ${t.title}`).join("\n").substring(0, 200),
           sent_via: "in_app",
@@ -89,18 +96,20 @@ export async function GET(request: NextRequest) {
       }
 
       // --- In-App Notification: Due Soon (within 3 days) ---
-      if (dueSoon.length > 0) {
+      if (preferences.in_app_enabled && dueSoon.length > 0) {
         await createNotification({
           user_id: profile.id,
           type: "reminder",
+          category: "task",
+          priority: "medium",
           title: `${dueSoon.length} مهمة تستحق خلال 3 أيام`,
           body: dueSoon.map((t) => `• ${t.title}`).join("\n").substring(0, 200),
           sent_via: "in_app",
         });
       }
 
-      // --- Email ---
-      if (profile.email) {
+      // --- Email: important only by default ---
+      if (profile.email && shouldSendImportantEmail(preferences, overdueForUser.length > 0)) {
         const html = taskReminderTemplate({
           userName: profile.full_name ?? profile.email,
           tasks: userTasks.map((t) => ({

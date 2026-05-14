@@ -1029,6 +1029,48 @@ export interface Database {
         };
         Relationships: [];
       };
+      notification_preferences: {
+        Row: {
+          user_id: string;
+          in_app_enabled: boolean;
+          email_enabled: boolean;
+          important_email_only: boolean;
+          daily_digest_enabled: boolean;
+          weekly_digest_enabled: boolean;
+          quiet_hours_start: string | null;
+          quiet_hours_end: string | null;
+          timezone: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          in_app_enabled?: boolean;
+          email_enabled?: boolean;
+          important_email_only?: boolean;
+          daily_digest_enabled?: boolean;
+          weekly_digest_enabled?: boolean;
+          quiet_hours_start?: string | null;
+          quiet_hours_end?: string | null;
+          timezone?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          in_app_enabled?: boolean;
+          email_enabled?: boolean;
+          important_email_only?: boolean;
+          daily_digest_enabled?: boolean;
+          weekly_digest_enabled?: boolean;
+          quiet_hours_start?: string | null;
+          quiet_hours_end?: string | null;
+          timezone?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       project_templates: {
         Row: {
           id: string;
@@ -1114,6 +1156,7 @@ export type ServiceOutput = Database["public"]["Tables"]["service_outputs"]["Row
 export type PartnershipActivity = Database["public"]["Tables"]["partnership_activities"]["Row"];
 export type Comment = Database["public"]["Tables"]["comments"]["Row"];
 export type Notification = Database["public"]["Tables"]["notifications"]["Row"];
+export type NotificationPreference = Database["public"]["Tables"]["notification_preferences"]["Row"];
 export type AutomationLog = Database["public"]["Tables"]["automation_logs"]["Row"];
 export type ProjectTemplate = Database["public"]["Tables"]["project_templates"]["Row"];
 export type TaskTemplate = Database["public"]["Tables"]["task_templates"]["Row"];

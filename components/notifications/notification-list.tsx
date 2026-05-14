@@ -91,10 +91,12 @@ export function NotificationList({
             const isUnread = !notification.read_at;
 
             return (
-              <button
+              <Link
                 key={notification.id}
+                href={notification.action_url ?? "/notifications"}
                 onClick={() => {
                   if (isUnread) onMarkAsRead(notification.id);
+                  onClose();
                 }}
                 className={cn(
                   "w-full flex items-start gap-3 px-4 py-3 text-right transition-colors border-b border-border/50 last:border-b-0",
@@ -130,7 +132,7 @@ export function NotificationList({
                 {isUnread && (
                   <div className="w-2.5 h-2.5 bg-primary rounded-full flex-shrink-0 mt-2 animate-pulse" />
                 )}
-              </button>
+              </Link>
             );
           })
         )}
