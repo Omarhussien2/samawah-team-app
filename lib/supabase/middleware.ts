@@ -31,6 +31,10 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
+  if (pathname.startsWith("/kpis/share/")) {
+    return supabaseResponse;
+  }
+
   if (!user && pathname !== "/login") {
     const url = request.nextUrl.clone();
     url.pathname = "/login";

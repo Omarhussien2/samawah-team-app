@@ -13,6 +13,9 @@ ALTER TABLE documents        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE project_form_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE project_form_instances ENABLE ROW LEVEL SECURITY;
 ALTER TABLE project_form_shares ENABLE ROW LEVEL SECURITY;
+ALTER TABLE kpi_definitions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE kpi_values      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE kpi_share_links ENABLE ROW LEVEL SECURITY;
 ALTER TABLE comments         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE automation_logs  ENABLE ROW LEVEL SECURITY;
@@ -323,6 +326,83 @@ CREATE POLICY "project_form_shares_delete" ON project_form_shares
         AND can_edit_project_forms(pfi.project_id)
     )
   );
+
+-- ============================================================
+-- KPI Center Policies
+-- ============================================================
+DROP POLICY IF EXISTS "kpi_definitions_select" ON kpi_definitions;
+CREATE POLICY "kpi_definitions_select" ON kpi_definitions
+  FOR SELECT USING (
+    auth.uid() IS NOT NULL
+    AND active = TRUE
+    AND (
+      get_my_role() = 'admin'
+      OR visibility = 'team'
+      OR (
+        get_my_role() = 'project_manager'
+        AND visibility IN ('project_managers', 'team')
+      )
+    )
+  );
+
+DROP POLICY IF EXISTS "kpi_definitions_admin_insert" ON kpi_definitions;
+CREATE POLICY "kpi_definitions_admin_insert" ON kpi_definitions
+  FOR INSERT WITH CHECK (get_my_role() = 'admin');
+
+DROP POLICY IF EXISTS "kpi_definitions_admin_update" ON kpi_definitions;
+CREATE POLICY "kpi_definitions_admin_update" ON kpi_definitions
+  FOR UPDATE USING (get_my_role() = 'admin');
+
+DROP POLICY IF EXISTS "kpi_definitions_admin_delete" ON kpi_definitions;
+CREATE POLICY "kpi_definitions_admin_delete" ON kpi_definitions
+  FOR DELETE USING (get_my_role() = 'admin');
+
+DROP POLICY IF EXISTS "kpi_values_select" ON kpi_values;
+CREATE POLICY "kpi_values_select" ON kpi_values
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1
+      FROM kpi_definitions kd
+      WHERE kd.id = kpi_values.kpi_id
+        AND kd.active = TRUE
+        AND (
+          get_my_role() = 'admin'
+          OR kd.visibility = 'team'
+          OR (
+            get_my_role() = 'project_manager'
+            AND kd.visibility IN ('project_managers', 'team')
+          )
+        )
+    )
+  );
+
+DROP POLICY IF EXISTS "kpi_values_admin_insert" ON kpi_values;
+CREATE POLICY "kpi_values_admin_insert" ON kpi_values
+  FOR INSERT WITH CHECK (get_my_role() = 'admin');
+
+DROP POLICY IF EXISTS "kpi_values_admin_update" ON kpi_values;
+CREATE POLICY "kpi_values_admin_update" ON kpi_values
+  FOR UPDATE USING (get_my_role() = 'admin');
+
+DROP POLICY IF EXISTS "kpi_values_admin_delete" ON kpi_values;
+CREATE POLICY "kpi_values_admin_delete" ON kpi_values
+  FOR DELETE USING (get_my_role() = 'admin');
+
+DROP POLICY IF EXISTS "kpi_share_links_admin_select" ON kpi_share_links;
+CREATE POLICY "kpi_share_links_admin_select" ON kpi_share_links
+  FOR SELECT USING (get_my_role() = 'admin');
+
+DROP POLICY IF EXISTS "kpi_share_links_admin_insert" ON kpi_share_links;
+CREATE POLICY "kpi_share_links_admin_insert" ON kpi_share_links
+  FOR INSERT WITH CHECK (get_my_role() = 'admin');
+
+DROP POLICY IF EXISTS "kpi_share_links_admin_update" ON kpi_share_links;
+CREATE POLICY "kpi_share_links_admin_update" ON kpi_share_links
+  FOR UPDATE USING (get_my_role() = 'admin');
+
+DROP POLICY IF EXISTS "kpi_share_links_admin_delete" ON kpi_share_links;
+CREATE POLICY "kpi_share_links_admin_delete" ON kpi_share_links
+  FOR DELETE USING (get_my_role() = 'admin');
 
 -- ============================================================
 -- Comments Policies

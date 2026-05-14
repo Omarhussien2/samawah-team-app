@@ -1,5 +1,13 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 export type TaskProgressMode = "manual" | "quantity";
+export type KpiDirection = "higher_is_better" | "lower_is_better";
+export type KpiCalculationMethod = "auto" | "manual" | "semi_auto";
+export type KpiFrequency = "daily" | "weekly" | "monthly" | "quarterly" | "yearly";
+export type KpiVisibility = "management" | "project_managers" | "team";
+export type KpiPeriodType = "monthly" | "quarterly";
+export type KpiStatus = "green" | "yellow" | "red" | "neutral";
+export type KpiTrend = "up" | "down" | "flat" | "unknown";
+export type KpiValueSource = "auto" | "manual" | "semi_auto";
 
 export interface Database {
   public: {
@@ -409,6 +417,168 @@ export interface Database {
         };
         Relationships: [];
       };
+      kpi_definitions: {
+        Row: {
+          id: string;
+          code: string;
+          name: string;
+          description: string | null;
+          perspective: string;
+          strategic_goal: string | null;
+          measurement_label: string | null;
+          target_value: number | null;
+          target_text: string | null;
+          target_unit: string | null;
+          direction: KpiDirection;
+          calculation_method: KpiCalculationMethod;
+          auto_source: string | null;
+          frequency: KpiFrequency;
+          visibility: KpiVisibility;
+          owner_id: string | null;
+          active: boolean;
+          sort_order: number | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          code: string;
+          name: string;
+          description?: string | null;
+          perspective: string;
+          strategic_goal?: string | null;
+          measurement_label?: string | null;
+          target_value?: number | null;
+          target_text?: string | null;
+          target_unit?: string | null;
+          direction?: KpiDirection;
+          calculation_method?: KpiCalculationMethod;
+          auto_source?: string | null;
+          frequency?: KpiFrequency;
+          visibility?: KpiVisibility;
+          owner_id?: string | null;
+          active?: boolean;
+          sort_order?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          code?: string;
+          name?: string;
+          description?: string | null;
+          perspective?: string;
+          strategic_goal?: string | null;
+          measurement_label?: string | null;
+          target_value?: number | null;
+          target_text?: string | null;
+          target_unit?: string | null;
+          direction?: KpiDirection;
+          calculation_method?: KpiCalculationMethod;
+          auto_source?: string | null;
+          frequency?: KpiFrequency;
+          visibility?: KpiVisibility;
+          owner_id?: string | null;
+          active?: boolean;
+          sort_order?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      kpi_values: {
+        Row: {
+          id: string;
+          kpi_id: string;
+          period_type: KpiPeriodType;
+          period_start: string;
+          period_end: string;
+          actual_value: number | null;
+          actual_text: string | null;
+          target_value: number | null;
+          status: KpiStatus | null;
+          trend: KpiTrend | null;
+          source: KpiValueSource;
+          notes: string | null;
+          updated_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          kpi_id: string;
+          period_type?: KpiPeriodType;
+          period_start: string;
+          period_end: string;
+          actual_value?: number | null;
+          actual_text?: string | null;
+          target_value?: number | null;
+          status?: KpiStatus | null;
+          trend?: KpiTrend | null;
+          source?: KpiValueSource;
+          notes?: string | null;
+          updated_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          kpi_id?: string;
+          period_type?: KpiPeriodType;
+          period_start?: string;
+          period_end?: string;
+          actual_value?: number | null;
+          actual_text?: string | null;
+          target_value?: number | null;
+          status?: KpiStatus | null;
+          trend?: KpiTrend | null;
+          source?: KpiValueSource;
+          notes?: string | null;
+          updated_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      kpi_share_links: {
+        Row: {
+          id: string;
+          name: string;
+          token_hash: string;
+          active: boolean;
+          expires_at: string | null;
+          created_by: string | null;
+          last_viewed_at: string | null;
+          views_count: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name?: string;
+          token_hash: string;
+          active?: boolean;
+          expires_at?: string | null;
+          created_by?: string | null;
+          last_viewed_at?: string | null;
+          views_count?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          token_hash?: string;
+          active?: boolean;
+          expires_at?: string | null;
+          created_by?: string | null;
+          last_viewed_at?: string | null;
+          views_count?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       comments: {
         Row: {
           id: string;
@@ -575,6 +745,9 @@ export type Document = Database["public"]["Tables"]["documents"]["Row"];
 export type ProjectFormTemplate = Database["public"]["Tables"]["project_form_templates"]["Row"];
 export type ProjectFormInstance = Database["public"]["Tables"]["project_form_instances"]["Row"];
 export type ProjectFormShare = Database["public"]["Tables"]["project_form_shares"]["Row"];
+export type KpiDefinition = Database["public"]["Tables"]["kpi_definitions"]["Row"];
+export type KpiValue = Database["public"]["Tables"]["kpi_values"]["Row"];
+export type KpiShareLink = Database["public"]["Tables"]["kpi_share_links"]["Row"];
 export type Comment = Database["public"]["Tables"]["comments"]["Row"];
 export type Notification = Database["public"]["Tables"]["notifications"]["Row"];
 export type AutomationLog = Database["public"]["Tables"]["automation_logs"]["Row"];

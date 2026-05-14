@@ -344,3 +344,88 @@ ON CONFLICT (id) DO UPDATE SET
   active = TRUE,
   sort_order = EXCLUDED.sort_order,
   updated_at = NOW();
+
+-- ============================================================
+-- KPI Center definitions: مؤشرات سماوة 2026
+-- Source: مؤشرات سماوة 2026 (1).pptx
+-- ============================================================
+INSERT INTO kpi_definitions (
+  code,
+  name,
+  description,
+  perspective,
+  strategic_goal,
+  measurement_label,
+  target_value,
+  target_text,
+  target_unit,
+  direction,
+  calculation_method,
+  auto_source,
+  frequency,
+  visibility,
+  sort_order
+) VALUES
+  ('REV_GOV_ANNUAL', 'المستهدف المالي السنوي الحكومي', 'مساهمة الإيرادات الحكومية في مستهدف 2026.', 'الإيرادات', 'الإيرادات المالية', 'الإيرادات الحكومية', 2200000, '2,200,000', 'ريال', 'higher_is_better', 'manual', NULL, 'monthly', 'management', 10),
+  ('REV_NON_GOV', 'إيرادات غير حكومية', 'مساهمة الإيرادات غير الحكومية في مستهدف 2026.', 'الإيرادات', 'الإيرادات المالية', 'إيرادات غير حكومية', 1000000, '1,000,000', 'ريال', 'higher_is_better', 'manual', NULL, 'monthly', 'management', 20),
+  ('REV_PRODUCTS', 'منتجات', 'مساهمة إيرادات المنتجات في مستهدف 2026.', 'الإيرادات', 'الإيرادات المالية', 'إيرادات المنتجات', 800000, '800,000', 'ريال', 'higher_is_better', 'manual', NULL, 'monthly', 'management', 30),
+
+  ('CLIENT_STRATEGIC', 'عملاء نوعيين', 'استقطاب جهة حكومية أو مشروع مليوني.', 'العقود والعملاء', 'استقطاب العملاء', 'عملاء نوعيين', 1, '1 عميل', 'عميل', 'higher_is_better', 'manual', NULL, 'monthly', 'management', 110),
+  ('CLIENT_NEW', 'كسب عملاء جدد', 'عدد العملاء الجدد خلال 2026.', 'العقود والعملاء', 'استقطاب العملاء', 'عملاء جدد', 10, '10 عملاء', 'عميل', 'higher_is_better', 'manual', NULL, 'monthly', 'management', 120),
+  ('CLIENT_PROPOSALS', 'التقديم على الجهات بعروض فنية ومالية', 'عدد العروض الفنية والمالية المقدمة للجهات.', 'العقود والعملاء', 'تنمية الفرص', 'العروض المقدمة', 55, '55 عرض', 'عرض', 'higher_is_better', 'manual', NULL, 'monthly', 'management', 130),
+  ('CLIENT_SATISFACTION', 'نسبة رضا العملاء', 'متوسط رضا العملاء عن الخدمات والمخرجات.', 'العقود والعملاء', 'الاحتفاظ بالعملاء', 'رضا العملاء', 86, '86%', '%', 'higher_is_better', 'manual', NULL, 'monthly', 'management', 140),
+  ('CLIENT_REPEAT', 'عميل متكرر', 'عدد العملاء المتكررين.', 'العقود والعملاء', 'الاحتفاظ بالعملاء', 'عملاء متكررون', 2, '2', 'عميل', 'higher_is_better', 'manual', NULL, 'monthly', 'management', 150),
+
+  ('AUD_YOUTUBE_SUBS', 'إجمالي عدد مشتركي يوتيوب', 'إجمالي مشتركي قناة يوتيوب.', 'الجمهور والمشتركين', 'الاشتراكات', 'مشتركو يوتيوب', 250000, '250,000 مشترك', 'مشترك', 'higher_is_better', 'manual', NULL, 'monthly', 'management', 210),
+  ('AUD_OTHER_PLATFORM_SUBS', 'إجمالي عدد مشتركي باقي المنصات', 'إجمالي المشتركين في المنصات الأخرى.', 'الجمهور والمشتركين', 'الاشتراكات', 'مشتركو باقي المنصات', 100000, '100,000 مشترك', 'مشترك', 'higher_is_better', 'manual', NULL, 'monthly', 'management', 220),
+  ('AUD_PAID_VIEWS', 'متوسط المشاهدات بالترويج المدفوع للحلقة الواحدة', 'متوسط مشاهدات الحلقة عند استخدام الترويج المدفوع.', 'الجمهور والمشتركين', 'الوصول', 'مشاهدات مدفوعة', 90000, '90,000 مشاهدة', 'مشاهدة', 'higher_is_better', 'manual', NULL, 'monthly', 'management', 230),
+  ('AUD_ORGANIC_VIEWS', 'متوسط المشاهدات بدون ترويج للحلقة الواحدة', 'متوسط مشاهدات الحلقة بدون ترويج وبالأدوات التسويقية.', 'الجمهور والمشتركين', 'الوصول', 'مشاهدات عضوية', 10000, '10,000 مشاهدة', 'مشاهدة', 'higher_is_better', 'manual', NULL, 'monthly', 'management', 240),
+  ('AUD_INFLUENCER_REACH', 'إجمالي عدد متابعين المؤثرين المتعاون معهم', 'حجم الوصول من المؤثرين المتعاون معهم.', 'الجمهور والمشتركين', 'الوصول', 'متابعو المؤثرين', 5000000, '5,000,000 متابع', 'متابع', 'higher_is_better', 'manual', NULL, 'monthly', 'management', 250),
+  ('AUD_TOP_EPISODE', 'كسر حاجز الحد الأعلى لمشاهدة الحلقة الواحدة', 'أعلى عدد مشاهدات لحلقة واحدة.', 'الجمهور والمشتركين', 'الوصول', 'أعلى مشاهدة للحلقة', 1000000, '1,000,000 مشاهدة', 'مشاهدة', 'higher_is_better', 'manual', NULL, 'monthly', 'management', 260),
+
+  ('OPS_CPI', 'معدل CPI المحقق', 'متوسط مؤشر كفاءة التكلفة للمشاريع.', 'العمليات والمشاريع', 'الأداء والفعالية', 'CPI', 1, 'متوسط 1', 'مؤشر', 'higher_is_better', 'semi_auto', 'project_performance_updates', 'monthly', 'team', 310),
+  ('OPS_SPI', 'معدل SPI المحقق', 'متوسط مؤشر كفاءة الجدول الزمني للمشاريع.', 'العمليات والمشاريع', 'الأداء والفعالية', 'SPI', 0.85, 'متوسط ≥ 0.85', 'مؤشر', 'higher_is_better', 'semi_auto', 'project_performance_updates', 'monthly', 'team', 320),
+  ('OPS_UPDATED_REPORTS', 'نسبة المشاريع التي لديها تقارير أداء محدثة', 'نسبة المشاريع التي لديها تقارير أداء حديثة.', 'العمليات والمشاريع', 'الانضباط الإداري', 'تقارير أداء محدثة', 80, '80%', '%', 'higher_is_better', 'semi_auto', 'project_performance_updates', 'monthly', 'team', 330),
+  ('OPS_ISO_21500', 'نسبة امتثال ISO 21500', 'نسبة الامتثال لمعيار ISO 21500.', 'العمليات والمشاريع', 'الانضباط الإداري', 'ISO 21500', 70, 'نسبة امتثال 70%', '%', 'higher_is_better', 'manual', NULL, 'quarterly', 'team', 340),
+  ('OPS_AUTOMATION_TOOLS', 'أتمتة العمليات الداخلية وبناء حلول إدارية', 'عدد أدوات الأتمتة والحلول الإدارية المبنية.', 'العمليات والمشاريع', 'التحول الرقمي', 'أدوات الأتمتة', 4, '4 أدوات', 'أداة', 'higher_is_better', 'manual', NULL, 'quarterly', 'team', 350),
+  ('OPS_PM_COMPLIANCE', 'نسبة الامتثال لمنهجيات إدارة المشاريع', 'مدى تطبيق منهجيات إدارة المشاريع.', 'العمليات والمشاريع', 'التحول الرقمي', 'امتثال المنهجيات', 85, '85%', '%', 'higher_is_better', 'manual', NULL, 'quarterly', 'team', 360),
+  ('OPS_INTERNAL_TRAINING', 'التدريب والتطوير الداخلي', 'ساعات التدريب الداخلي لكل موظف.', 'العمليات والمشاريع', 'الفريق وبناء القدرات', 'تدريب داخلي', 90, '90 ساعة للموظف', 'ساعة/موظف', 'higher_is_better', 'manual', NULL, 'quarterly', 'team', 370),
+  ('OPS_EXTERNAL_TRAINING', 'التدريب والتطوير الخارجي', 'ساعات التدريب الخارجي لكل موظف.', 'العمليات والمشاريع', 'الفريق وبناء القدرات', 'تدريب خارجي', 20, '20 ساعة للموظف', 'ساعة/موظف', 'higher_is_better', 'manual', NULL, 'quarterly', 'team', 380),
+  ('OPS_PROGRAM_INTEGRATION', 'التكامل بين البرامج', 'نسبة البرامج التي بينها تكامل تشغيلي.', 'العمليات والمشاريع', 'التكامل والأنظمة', 'تكامل البرامج', 30, '30% من البرامج', '%', 'higher_is_better', 'manual', NULL, 'quarterly', 'team', 390),
+  ('OPS_REVISION_ROUNDS', 'متوسط عدد جولات التعديلات', 'متوسط جولات التعديلات لكل مشروع.', 'العمليات والمشاريع', 'إدارة المخاطر', 'جولات التعديلات', 2, '<2 للمشروع', 'جولة/مشروع', 'lower_is_better', 'manual', NULL, 'monthly', 'team', 400),
+  ('OPS_RISK_COVERAGE', 'مؤشر إدارة المخاطر', 'نسبة تغطية المخاطر وإدارتها.', 'العمليات والمشاريع', 'إدارة المخاطر', 'تغطية المخاطر', 80, '80%', '%', 'higher_is_better', 'manual', NULL, 'monthly', 'team', 410),
+
+  ('SERV_PODCAST', 'إنتاج بودكاست', 'عدد حلقات البودكاست المنتجة.', 'البرامج والخدمات', 'البرامج المرئية', 'حلقات بودكاست', 30, '30 حلقة', 'حلقة', 'higher_is_better', 'manual', NULL, 'monthly', 'team', 510),
+  ('SERV_YOUTUBE_PROGRAMS', 'برنامج يوتيوب معرفي', 'عدد برامج يوتيوب المعرفية والحلقات التابعة لها.', 'البرامج والخدمات', 'البرامج المرئية', 'برامج يوتيوب معرفية', 2, '2 برامج بعدد 10 حلقات', 'برنامج', 'higher_is_better', 'manual', NULL, 'monthly', 'team', 520),
+  ('SERV_MEDIA_REPORTS', 'التقارير الإعلامية', 'عدد التقارير الإعلامية المكتوبة.', 'البرامج والخدمات', 'البرامج المكتوبة', 'تقارير إعلامية', 4, '4', 'تقرير', 'higher_is_better', 'manual', NULL, 'monthly', 'team', 530),
+
+  ('PROD_DIGITAL_PRODUCTS', 'بناء وإطلاق منتجات رقمية', 'عدد المنتجات الرقمية التي تم بناؤها وإطلاقها.', 'المنتجات', 'البرامج والخدمات', 'منتجات رقمية', 2, '2 منتج', 'منتج', 'higher_is_better', 'semi_auto', 'indicator_products', 'quarterly', 'project_managers', 610),
+  ('PROD_HUDNA_MAGAZINE', 'مجلة هدنة', 'عدد مبيعات مجلة هدنة.', 'المنتجات', 'البرامج والخدمات', 'مبيعات مجلة هدنة', 4000, '4000 بيع', 'بيع', 'higher_is_better', 'semi_auto', 'indicator_products', 'monthly', 'project_managers', 620),
+  ('PROD_TAQREERAK', 'منصة تقريرك', 'عدد مشتركي منصة تقريرك.', 'المنتجات', 'البرامج والخدمات', 'مشتركو منصة تقريرك', 5000, '5000 مشترك', 'مشترك', 'higher_is_better', 'semi_auto', 'indicator_products', 'monthly', 'project_managers', 630),
+  ('PROD_OTHER_DIGITAL_PLATFORMS', 'المنصات الرقمية الأخرى', 'عدد مشتركي المنصات الرقمية الأخرى.', 'المنتجات', 'البرامج والخدمات', 'مشتركو المنصات الأخرى', 2000, '2000 مشترك', 'مشترك', 'higher_is_better', 'semi_auto', 'indicator_products', 'monthly', 'project_managers', 640),
+  ('PROD_JLAS_MEETINGS', 'جلاس – عدد اللقاءات', 'عدد لقاءات منتج جلاس.', 'المنتجات', 'البرامج والخدمات', 'لقاءات جلاس', 10, '10', 'لقاء', 'higher_is_better', 'semi_auto', 'indicator_products', 'monthly', 'project_managers', 650),
+  ('PROD_STATIONERY_SALES', 'منتجات قرطاسية للمتجر', 'مبيعات المنتجات القرطاسية للمتجر.', 'المنتجات', 'البرامج والخدمات', 'مبيعات قرطاسية', 250, '250 بيع', 'بيع', 'higher_is_better', 'semi_auto', 'indicator_products', 'monthly', 'project_managers', 660),
+
+  ('PART_AWARDS', 'الترشح لجوائز', 'عدد الجوائز التي يتم الترشح لها.', 'الشراكات والتموضع', 'التموضع والتوسع', 'الجوائز', 2, '2', 'ترشيح', 'higher_is_better', 'manual', NULL, 'quarterly', 'management', 710),
+  ('PART_SPONSORSHIPS', 'الرعايات للجهات', 'رعاية فعاليات حكومية أو بارزة.', 'الشراكات والتموضع', 'التموضع والتوسع', 'رعايات الجهات', 2, '2', 'رعاية', 'higher_is_better', 'manual', NULL, 'quarterly', 'management', 720),
+  ('PART_EVENTS', 'الحضور والمشاركة', 'التواجد في معارض ومؤتمرات.', 'الشراكات والتموضع', 'التموضع والتوسع', 'المعارض والمؤتمرات', 3, '3', 'مشاركة', 'higher_is_better', 'manual', NULL, 'quarterly', 'management', 730),
+  ('PART_PRODUCT_SPONSORS', 'رعايات المنتجات', 'استقطاب رعاة لمنتجات سماوة.', 'الشراكات والتموضع', 'التموضع والتوسع', 'رعاة المنتجات', 10, '10', 'راعٍ', 'higher_is_better', 'manual', NULL, 'quarterly', 'management', 740),
+  ('PART_INTEGRATIONS', 'الشراكات والتكامل في الخدمات الفنية', 'عدد الشراكات والتكاملات مع الجهات.', 'الشراكات والتموضع', 'التموضع والتوسع', 'شراكات وتكاملات', 5, '5', 'شراكة', 'higher_is_better', 'manual', NULL, 'quarterly', 'management', 750),
+  ('PART_SPEAKING', 'التحدث واللقاءات', 'مشاركة أعضاء الفريق كمتحدثين في مناسبات.', 'الشراكات والتموضع', 'التموضع والتوسع', 'مشاركات تحدث', 4, '4', 'مشاركة', 'higher_is_better', 'manual', NULL, 'quarterly', 'management', 760)
+ON CONFLICT (code) DO UPDATE SET
+  name = EXCLUDED.name,
+  description = EXCLUDED.description,
+  perspective = EXCLUDED.perspective,
+  strategic_goal = EXCLUDED.strategic_goal,
+  measurement_label = EXCLUDED.measurement_label,
+  target_value = EXCLUDED.target_value,
+  target_text = EXCLUDED.target_text,
+  target_unit = EXCLUDED.target_unit,
+  direction = EXCLUDED.direction,
+  calculation_method = EXCLUDED.calculation_method,
+  auto_source = EXCLUDED.auto_source,
+  frequency = EXCLUDED.frequency,
+  visibility = EXCLUDED.visibility,
+  active = TRUE,
+  sort_order = EXCLUDED.sort_order,
+  updated_at = NOW();

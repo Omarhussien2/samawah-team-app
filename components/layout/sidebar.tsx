@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, FolderKanban, CheckSquare, KanbanSquare,
   AlertTriangle, FileText, Users, Zap, Settings, Upload, X, Bell,
-  ChevronDown, ChevronLeft, Star, Folder, Hash, ListTodo
+  ChevronDown, ChevronLeft, Star, Folder, Hash, ListTodo, BarChart3
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { Project } from "@/lib/supabase/types";
@@ -16,6 +16,7 @@ import type { Project } from "@/lib/supabase/types";
 const globalNavItems = [
   { href: "/dashboard",     label: "الرئيسية",   icon: LayoutDashboard },
   { href: "/projects",      label: "المشاريع",   icon: FolderKanban },
+  { href: "/kpis",          label: "مركز المؤشرات", icon: BarChart3 },
   { href: "/my-tasks",      label: "مهامي",      icon: CheckSquare },
   { href: "/notifications", label: "الإشعارات",  icon: Bell },
 ];

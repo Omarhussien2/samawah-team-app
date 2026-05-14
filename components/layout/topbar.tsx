@@ -53,6 +53,7 @@ export function Topbar({ user, onMenuClick }: TopbarProps) {
       currentPath += `/${part}`;
       let label = part;
       if (part === "projects") label = "المشاريع";
+      else if (part === "kpis") label = "مركز المؤشرات";
       else if (part === "my-tasks") label = "مهامي";
       else if (part === "board") label = "اللوحة";
       else if (part === "documents") label = "المستندات";
