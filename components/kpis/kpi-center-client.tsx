@@ -12,9 +12,10 @@ import { KpiExecutiveOverview } from "@/components/kpis/kpi-executive-overview";
 import { OperationsWorkspace } from "@/components/kpis/operations-workspace";
 import { ProductsWorkspace } from "@/components/kpis/products-workspace";
 import { ShareLinkPanel } from "@/components/kpis/share-link-panel";
+import { SimpleSectionWorkspace } from "@/components/kpis/simple-section-workspace";
 import { findPeriodOption, getCurrentKpiPeriod, getPeriodOptions, type KpiPeriodOption } from "@/lib/kpis/periods";
 import { getValueForKpi } from "@/lib/kpis/status";
-import { fetchKpiDefinitions, fetchKpiValues, kpiKeys, type KpiShareLinkSafe, type ProjectPerformanceRecord } from "@/lib/queries/kpis";
+import { fetchKpiDefinitions, fetchKpiValues, kpiKeys, type KpiShareLinkSafe, type ProjectPerformanceRecord, type SimpleWorkspaceKind, type SimpleWorkspaceRecord } from "@/lib/queries/kpis";
 import type { IndicatorProduct, KpiDefinition, KpiPeriodType, KpiValue, Profile, Project } from "@/lib/supabase/types";
 
 interface Props {
@@ -25,22 +26,28 @@ interface Props {
   initialProducts: IndicatorProduct[];
   initialProjects: Pick<Project, "id" | "name" | "manager_id" | "total_budget" | "progress">[];
   initialProjectUpdates: ProjectPerformanceRecord[];
+  initialSimpleWorkspaces: Record<SimpleWorkspaceKind, SimpleWorkspaceRecord[]>;
   initialPeriod: KpiPeriodOption;
 }
 
 const EXECUTIVE_TAB = "النظرة التنفيذية";
+const REVENUE_TAB = "الإيرادات";
+const CLIENTS_TAB = "العقود والعملاء";
+const AUDIENCE_TAB = "الجمهور والمشتركين";
 const OPERATIONS_TAB = "العمليات والمشاريع";
+const SERVICES_TAB = "البرامج والخدمات";
 const PRODUCTS_TAB = "المنتجات";
+const PARTNERSHIPS_TAB = "الشراكات والتموضع";
 
 const TABS = [
   EXECUTIVE_TAB,
-  "الإيرادات",
-  "العقود والعملاء",
-  "الجمهور والمشتركين",
+  REVENUE_TAB,
+  CLIENTS_TAB,
+  AUDIENCE_TAB,
   OPERATIONS_TAB,
-  "البرامج والخدمات",
+  SERVICES_TAB,
   PRODUCTS_TAB,
-  "الشراكات والتموضع",
+  PARTNERSHIPS_TAB,
 ];
 
 export function KpiCenterClient({
@@ -51,6 +58,7 @@ export function KpiCenterClient({
   initialProducts,
   initialProjects,
   initialProjectUpdates,
+  initialSimpleWorkspaces,
   initialPeriod,
 }: Props) {
   const [activeTab, setActiveTab] = useState(TABS[0]);
@@ -77,8 +85,12 @@ export function KpiCenterClient({
 
   const isAdmin = currentUser.role === "admin";
   const visibleSections = useMemo(
-    () => TABS.filter((tab) => tab === EXECUTIVE_TAB || tab === PRODUCTS_TAB || tab === OPERATIONS_TAB || definitions.some((item) => item.perspective === tab)),
-    [definitions]
+    () => TABS.filter((tab) => {
+      if (tab === REVENUE_TAB) return isAdmin;
+      if ([EXECUTIVE_TAB, CLIENTS_TAB, AUDIENCE_TAB, PRODUCTS_TAB, OPERATIONS_TAB, SERVICES_TAB, PARTNERSHIPS_TAB].includes(tab)) return true;
+      return definitions.some((item) => item.perspective === tab);
+    }),
+    [definitions, isAdmin]
   );
 
   const changePeriodType = (nextType: KpiPeriodType) => {
@@ -88,6 +100,22 @@ export function KpiCenterClient({
   };
 
   const renderSection = (section: string) => {
+    const simpleKind = getSimpleKind(section);
+    if (simpleKind) {
+      return (
+        <SimpleSectionWorkspace
+          kind={simpleKind}
+          section={section}
+          currentUser={currentUser}
+          definitions={definitions}
+          initialRecords={initialSimpleWorkspaces[simpleKind]}
+          periodType={periodType}
+          periodStart={selectedPeriod.periodStart}
+          periodEnd={selectedPeriod.periodEnd}
+        />
+      );
+    }
+
     if (section === PRODUCTS_TAB) {
       return (
         <ProductsWorkspace
@@ -239,4 +267,13 @@ export function KpiCenterClient({
       />
     </>
   );
+}
+
+function getSimpleKind(section: string): SimpleWorkspaceKind | null {
+  if (section === REVENUE_TAB) return "revenue";
+  if (section === CLIENTS_TAB) return "clients";
+  if (section === AUDIENCE_TAB) return "audience";
+  if (section === SERVICES_TAB) return "services";
+  if (section === PARTNERSHIPS_TAB) return "partnerships";
+  return null;
 }

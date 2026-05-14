@@ -283,6 +283,78 @@ CREATE TABLE IF NOT EXISTS project_performance_updates (
   UNIQUE(project_id, period_type, period_start, period_end)
 );
 
+CREATE TABLE IF NOT EXISTS revenue_entries (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  entry_date   DATE NOT NULL,
+  revenue_type TEXT NOT NULL CHECK (revenue_type IN ('government', 'non_government', 'product')),
+  client_name  TEXT,
+  project_id   UUID REFERENCES projects(id) ON DELETE SET NULL,
+  amount       NUMERIC NOT NULL DEFAULT 0 CHECK (amount >= 0),
+  status       TEXT NOT NULL DEFAULT 'confirmed' CHECK (status IN ('expected', 'confirmed', 'collected')),
+  notes        TEXT,
+  created_by   UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS client_opportunities (
+  id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_name        TEXT NOT NULL,
+  client_type        TEXT,
+  record_type        TEXT NOT NULL CHECK (record_type IN ('strategic_client', 'new_client', 'proposal', 'repeat_client', 'satisfaction')),
+  project_id         UUID REFERENCES projects(id) ON DELETE SET NULL,
+  opportunity_value  NUMERIC,
+  status             TEXT NOT NULL DEFAULT 'contacted' CHECK (status IN ('contacted', 'proposal_submitted', 'won', 'lost', 'repeat')),
+  submitted_at       DATE,
+  satisfaction_score NUMERIC CHECK (satisfaction_score >= 0 AND satisfaction_score <= 100),
+  notes              TEXT,
+  created_by         UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS audience_metrics (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  metric_date       DATE NOT NULL,
+  platform          TEXT NOT NULL,
+  subscribers       NUMERIC NOT NULL DEFAULT 0 CHECK (subscribers >= 0),
+  paid_views_avg    NUMERIC NOT NULL DEFAULT 0 CHECK (paid_views_avg >= 0),
+  organic_views_avg NUMERIC NOT NULL DEFAULT 0 CHECK (organic_views_avg >= 0),
+  top_episode_views NUMERIC NOT NULL DEFAULT 0 CHECK (top_episode_views >= 0),
+  influencer_reach  NUMERIC NOT NULL DEFAULT 0 CHECK (influencer_reach >= 0),
+  notes             TEXT,
+  created_by        UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS service_outputs (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  output_type   TEXT NOT NULL CHECK (output_type IN ('podcast', 'youtube_program', 'media_report', 'other')),
+  name          TEXT NOT NULL,
+  project_id    UUID REFERENCES projects(id) ON DELETE SET NULL,
+  quantity      NUMERIC NOT NULL DEFAULT 1 CHECK (quantity >= 0),
+  status        TEXT NOT NULL DEFAULT 'planned' CHECK (status IN ('planned', 'in_progress', 'completed', 'cancelled')),
+  delivery_date DATE,
+  notes         TEXT,
+  created_by    UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS partnership_activities (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  activity_type  TEXT NOT NULL CHECK (activity_type IN ('award', 'sponsorship', 'event', 'partnership', 'speaker', 'product_sponsor')),
+  entity_name    TEXT NOT NULL,
+  activity_date  DATE,
+  status         TEXT NOT NULL DEFAULT 'planned' CHECK (status IN ('planned', 'contacted', 'confirmed', 'completed', 'cancelled')),
+  impact_value   NUMERIC,
+  notes          TEXT,
+  created_by     UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 ALTER TABLE documents
   ADD COLUMN IF NOT EXISTS form_instance_id UUID;
 
@@ -421,6 +493,31 @@ CREATE TRIGGER update_project_performance_updates_updated_at
   BEFORE UPDATE ON project_performance_updates
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_revenue_entries_updated_at ON revenue_entries;
+CREATE TRIGGER update_revenue_entries_updated_at
+  BEFORE UPDATE ON revenue_entries
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_client_opportunities_updated_at ON client_opportunities;
+CREATE TRIGGER update_client_opportunities_updated_at
+  BEFORE UPDATE ON client_opportunities
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_audience_metrics_updated_at ON audience_metrics;
+CREATE TRIGGER update_audience_metrics_updated_at
+  BEFORE UPDATE ON audience_metrics
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_service_outputs_updated_at ON service_outputs;
+CREATE TRIGGER update_service_outputs_updated_at
+  BEFORE UPDATE ON service_outputs
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_partnership_activities_updated_at ON partnership_activities;
+CREATE TRIGGER update_partnership_activities_updated_at
+  BEFORE UPDATE ON partnership_activities
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 DROP TRIGGER IF EXISTS update_challenges_updated_at ON challenges;
 CREATE TRIGGER update_challenges_updated_at
   BEFORE UPDATE ON challenges
@@ -535,6 +632,11 @@ CREATE INDEX IF NOT EXISTS idx_indicator_products_kpi ON indicator_products(kpi_
 CREATE INDEX IF NOT EXISTS idx_indicator_products_status ON indicator_products(status);
 CREATE INDEX IF NOT EXISTS idx_project_performance_updates_project ON project_performance_updates(project_id);
 CREATE INDEX IF NOT EXISTS idx_project_performance_updates_period ON project_performance_updates(period_type, period_start, period_end);
+CREATE INDEX IF NOT EXISTS idx_revenue_entries_type_date ON revenue_entries(revenue_type, entry_date);
+CREATE INDEX IF NOT EXISTS idx_client_opportunities_type_status ON client_opportunities(record_type, status);
+CREATE INDEX IF NOT EXISTS idx_audience_metrics_platform_date ON audience_metrics(platform, metric_date);
+CREATE INDEX IF NOT EXISTS idx_service_outputs_type_status ON service_outputs(output_type, status);
+CREATE INDEX IF NOT EXISTS idx_partnership_activities_type_status ON partnership_activities(activity_type, status);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_challenges_project ON challenges(project_id);
 CREATE INDEX IF NOT EXISTS idx_documents_project ON documents(project_id);
@@ -551,3 +653,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON kpi_values TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON kpi_share_links TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON indicator_products TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON project_performance_updates TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON revenue_entries TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON client_opportunities TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON audience_metrics TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON service_outputs TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON partnership_activities TO authenticated;

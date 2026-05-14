@@ -10,7 +10,19 @@ export default async function KpisPage() {
   const supabase = await createClient();
   const initialPeriod = getCurrentKpiPeriod("monthly");
 
-  const [{ data: definitions }, { data: values }, { data: shareLinks }, { data: products }, { data: projects }, { data: projectUpdates }] = await Promise.all([
+  const [
+    { data: definitions },
+    { data: values },
+    { data: shareLinks },
+    { data: products },
+    { data: projects },
+    { data: projectUpdates },
+    { data: revenueEntries },
+    { data: clientOpportunities },
+    { data: audienceMetrics },
+    { data: serviceOutputs },
+    { data: partnershipActivities },
+  ] = await Promise.all([
     supabase
       .from("kpi_definitions")
       .select("*")
@@ -44,6 +56,13 @@ export default async function KpisPage() {
       .eq("period_start", initialPeriod.periodStart)
       .eq("period_end", initialPeriod.periodEnd)
       .order("updated_at", { ascending: false }),
+    user.role === "admin"
+      ? supabase.from("revenue_entries").select("*").order("entry_date", { ascending: false })
+      : Promise.resolve({ data: [] }),
+    supabase.from("client_opportunities").select("*").order("updated_at", { ascending: false }),
+    supabase.from("audience_metrics").select("*").order("metric_date", { ascending: false }),
+    supabase.from("service_outputs").select("*").order("updated_at", { ascending: false }),
+    supabase.from("partnership_activities").select("*").order("updated_at", { ascending: false }),
   ]);
 
   return (
@@ -56,6 +75,13 @@ export default async function KpisPage() {
         initialProducts={products ?? []}
         initialProjects={projects ?? []}
         initialProjectUpdates={projectUpdates ?? []}
+        initialSimpleWorkspaces={{
+          revenue: revenueEntries ?? [],
+          clients: clientOpportunities ?? [],
+          audience: audienceMetrics ?? [],
+          services: serviceOutputs ?? [],
+          partnerships: partnershipActivities ?? [],
+        }}
         initialPeriod={initialPeriod}
       />
     </div>
