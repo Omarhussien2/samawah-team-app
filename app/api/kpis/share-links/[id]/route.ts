@@ -51,3 +51,20 @@ export async function PATCH(
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
   return NextResponse.json({ link: data });
 }
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const { supabase, error } = await getAdminContext();
+  if (error) return NextResponse.json({ error }, { status: error === "ØºÙŠØ± Ù…ØµØ±Ø­" ? 401 : 403 });
+
+  const { error: deleteError } = await supabase
+    .from("kpi_share_links")
+    .delete()
+    .eq("id", id);
+
+  if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}

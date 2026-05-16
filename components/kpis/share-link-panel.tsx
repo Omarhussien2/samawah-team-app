@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, ExternalLink, Link2, RotateCcw, ShieldCheck } from "lucide-react";
+import { Copy, ExternalLink, Link2, RotateCcw, ShieldCheck, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   createKpiShareLink,
+  deleteKpiShareLink,
   fetchKpiShareLinks,
   kpiKeys,
   updateKpiShareLink,
@@ -55,6 +56,22 @@ export function ShareLinkPanel({ initialLinks }: Props) {
       toast.error(error instanceof Error ? error.message : "تعذر تحديث الرابط");
     },
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteKpiShareLink,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: kpiKeys.shareLinks() });
+      toast.success("تم حذف رابط مجلس الإدارة");
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "تعذر حذف الرابط");
+    },
+  });
+
+  const deleteLink = (id: string) => {
+    if (!window.confirm("هل تريد حذف رابط مجلس الإدارة؟ لن يعمل الرابط بعد الحذف.")) return;
+    deleteMutation.mutate(id);
+  };
 
   const copyLink = async (url: string) => {
     await navigator.clipboard.writeText(url);
@@ -125,15 +142,27 @@ export function ShareLinkPanel({ initialLinks }: Props) {
                   {link.expires_at ? ` | ينتهي: ${new Date(link.expires_at).toLocaleDateString("ar-SA")}` : ""}
                 </p>
               </div>
-              <Button
-                size="sm"
-                variant={link.active ? "destructive" : "outline"}
-                onClick={() => updateMutation.mutate({ id: link.id, active: !link.active })}
-                disabled={updateMutation.isPending}
-              >
-                <RotateCcw size={14} />
-                {link.active ? "تعطيل" : "تفعيل"}
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant={link.active ? "destructive" : "outline"}
+                  onClick={() => updateMutation.mutate({ id: link.id, active: !link.active })}
+                  disabled={updateMutation.isPending || deleteMutation.isPending}
+                >
+                  <RotateCcw size={14} />
+                  {link.active ? "تعطيل" : "تفعيل"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => deleteLink(link.id)}
+                  disabled={updateMutation.isPending || deleteMutation.isPending}
+                  className="border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800"
+                >
+                  <Trash2 size={14} />
+                  حذف
+                </Button>
+              </div>
             </div>
           ))
         )}

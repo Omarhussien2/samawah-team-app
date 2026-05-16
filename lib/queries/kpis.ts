@@ -428,3 +428,13 @@ export async function updateKpiShareLink(
   const data = await response.json();
   return data.link;
 }
+
+export async function deleteKpiShareLink(id: string): Promise<void> {
+  const response = await fetch(`/api/kpis/share-links/${id}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error ?? "تعذر حذف رابط مجلس الإدارة");
+  }
+}
