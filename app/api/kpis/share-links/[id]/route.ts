@@ -9,7 +9,7 @@ async function getAdminContext() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) return { supabase, error: "غير مصرح" };
+  if (!user) return { supabase, error: "غير مصرح", status: 401 };
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -17,8 +17,10 @@ async function getAdminContext() {
     .eq("id", user.id)
     .single();
 
-  if (profile?.role !== "admin") return { supabase, error: "هذه العملية متاحة لمدير النظام فقط" };
-  return { supabase, error: null };
+  if (profile?.role !== "admin") {
+    return { supabase, error: "هذه العملية متاحة لمدير النظام فقط", status: 403 };
+  }
+  return { supabase, error: null, status: 200 };
 }
 
 export async function PATCH(
@@ -26,8 +28,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const { supabase, error } = await getAdminContext();
-  if (error) return NextResponse.json({ error }, { status: error === "غير مصرح" ? 401 : 403 });
+  const { supabase, error, status } = await getAdminContext();
+  if (error) return NextResponse.json({ error }, { status });
 
   let body: { name?: string; active?: boolean; expires_at?: string | null };
   try {
@@ -57,8 +59,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const { supabase, error } = await getAdminContext();
-  if (error) return NextResponse.json({ error }, { status: error === "ØºÙŠØ± Ù…ØµØ±Ø­" ? 401 : 403 });
+  const { supabase, error, status } = await getAdminContext();
+  if (error) return NextResponse.json({ error }, { status });
 
   const { error: deleteError } = await supabase
     .from("kpi_share_links")
