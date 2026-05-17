@@ -12,7 +12,7 @@ export default async function DashboardPage() {
     { data: comments },
   ] = await Promise.all([
     supabase.from("projects").select("id, name, status, progress, end_date"),
-    supabase.from("tasks").select("id, title, status, due_date, priority, alert_level, owner_id, project_id, created_at, updated_at"),
+    supabase.from("tasks").select("id, title, sub_task, category, status, due_date, priority, alert_level, owner_id, project_id, created_at, updated_at"),
     supabase.from("comments").select("id, body, created_at, task_id, user:profiles(full_name)").order("created_at", { ascending: false }).limit(10),
   ]);
 

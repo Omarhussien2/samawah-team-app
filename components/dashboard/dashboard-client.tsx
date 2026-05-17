@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { cn, getStatusColor, getStatusLabel, getPriorityColor, getPriorityLabel, formatDateShort, getAlertLevelColor } from "@/lib/utils";
 import { recalcProjectProgress } from "@/lib/utils/recalc-progress";
+import { TaskTitleStack } from "@/components/tasks/task-title-stack";
 import type { Task, Profile } from "@/lib/supabase/types";
 
 interface Props {
@@ -172,7 +173,13 @@ export function DashboardClient({ user, projects, tasks, comments }: Props) {
                     return (
                        <tr key={task.id} className="hover:bg-slate-50 cursor-pointer transition-colors" onClick={() => handleMarkDone(task.id, task.project_id)}>
                         <td className="px-5 py-3">
-                          <p className="font-medium text-slate-800 line-clamp-1">{task.title}</p>
+                          <TaskTitleStack
+                            title={task.title}
+                            subTask={task.sub_task}
+                            category={task.category}
+                            done={task.status === "Done"}
+                            primaryClassName="text-slate-800 line-clamp-1"
+                          />
                           {task.alert_level && task.alert_level !== "Low" && (
                             <span className={cn("text-xs px-1.5 py-0.5 rounded-full mt-1 inline-block", getAlertLevelColor(task.alert_level))}>
                               {task.alert_level}
@@ -283,8 +290,13 @@ export function DashboardClient({ user, projects, tasks, comments }: Props) {
                     <button onClick={() => handleMarkDone(task.id)} className="mt-0.5 text-slate-300 hover:text-emerald-500 transition-colors">
                       <CheckCircle2 size={18} />
                     </button>
-                    <div>
-                      <p className="text-sm font-medium text-slate-700 group-hover:text-slate-900 leading-tight">{task.title}</p>
+                    <div className="min-w-0">
+                      <TaskTitleStack
+                        title={task.title}
+                        subTask={task.sub_task}
+                        category={task.category}
+                        primaryClassName="text-sm text-slate-700 group-hover:text-slate-900 leading-tight"
+                      />
                       <p className="text-xs text-slate-400 mt-1">{projects.find(p => p.id === task.project_id)?.name}</p>
                     </div>
                   </div>

@@ -122,3 +122,11 @@ This file tracks the implementation state for agent-led work so a future session
 - Reason: User reported PDF upload failure: `Invalid key` for a Storage path that included the Arabic original file name.
 - Fix: Store uploaded files under an ASCII-safe technical object key (`uuid-document.ext`) while preserving the original file name in `documents.file_name` for display/search.
 - Verification: `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build` passed.
+
+### Task - Task Display Hierarchy
+
+- Branch: `codex/task-display-hierarchy`
+- Started: 2026-05-17
+- UX decision: In task lists/cards, show the sub task as the bold primary line because it carries the actionable task name, then show the task category/section below it as supporting context.
+- Implementation notes: Added a shared `TaskTitleStack` and `getTaskDisplayLines()` helper; wired task table, board cards, My Tasks cards, and dashboard task lists to the same hierarchy.
+- Verification: `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build` passed.
