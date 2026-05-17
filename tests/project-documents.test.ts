@@ -12,8 +12,16 @@ describe("project document utilities", () => {
   it("stores uploaded documents below their project folder", () => {
     vi.spyOn(crypto, "randomUUID").mockReturnValue("00000000-0000-4000-8000-000000000000");
 
-    expect(buildDocumentStoragePath("project-1", "خطة المشروع النهائية.pdf")).toBe(
-      "projects/project-1/00000000-0000-4000-8000-000000000000-خطة-المشروع-النهائية.pdf"
+    expect(buildDocumentStoragePath("project-1", "عقد استكتاب - صفية الجفري.pdf")).toBe(
+      "projects/project-1/00000000-0000-4000-8000-000000000000-document.pdf"
+    );
+  });
+
+  it("falls back to a safe extension for invalid file extensions", () => {
+    vi.spyOn(crypto, "randomUUID").mockReturnValue("00000000-0000-4000-8000-000000000001");
+
+    expect(buildDocumentStoragePath("project-1", "document.عقد")).toBe(
+      "projects/project-1/00000000-0000-4000-8000-000000000001-document.file"
     );
   });
 });

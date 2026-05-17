@@ -114,3 +114,11 @@ This file tracks the implementation state for agent-led work so a future session
 - Reason: User reported upload failure: `new row violates row-level security policy`.
 - Fix: Rework Storage policies through explicit `TO authenticated` policies and security-definer helpers; add `supabase/project-documents-storage-rls-fix.sql` for immediate Supabase SQL Editor application.
 - Result: User confirmed document upload works after applying the SQL fix in Supabase.
+
+### Follow-up Fix - Document Storage Key
+
+- Branch: `codex/fix-document-storage-key`
+- Started: 2026-05-17
+- Reason: User reported PDF upload failure: `Invalid key` for a Storage path that included the Arabic original file name.
+- Fix: Store uploaded files under an ASCII-safe technical object key (`uuid-document.ext`) while preserving the original file name in `documents.file_name` for display/search.
+- Verification: `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build` passed.
