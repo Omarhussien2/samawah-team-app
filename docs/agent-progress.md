@@ -15,7 +15,8 @@ This file tracks the implementation state for agent-led work so a future session
 
 - Branch: `fix/search-functionality`
 - Started: 2026-05-17
-- Status: In progress
+- PR: https://github.com/Omarhussien2/samawah-team-app/pull/24
+- Status: Draft PR opened
 
 ### UX Decisions
 
