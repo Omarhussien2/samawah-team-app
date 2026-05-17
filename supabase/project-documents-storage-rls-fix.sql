@@ -39,8 +39,7 @@ $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
 DROP POLICY IF EXISTS "documents_storage_select" ON storage.objects;
 CREATE POLICY "documents_storage_select" ON storage.objects
-  TO authenticated
-  FOR SELECT USING (
+  FOR SELECT TO authenticated USING (
     bucket_id = 'documents'
     AND (storage.foldername(name))[1] = 'projects'
     AND can_read_project_document_storage(((storage.foldername(name))[2])::uuid)
@@ -48,8 +47,7 @@ CREATE POLICY "documents_storage_select" ON storage.objects
 
 DROP POLICY IF EXISTS "documents_storage_insert" ON storage.objects;
 CREATE POLICY "documents_storage_insert" ON storage.objects
-  TO authenticated
-  FOR INSERT WITH CHECK (
+  FOR INSERT TO authenticated WITH CHECK (
     bucket_id = 'documents'
     AND (storage.foldername(name))[1] = 'projects'
     AND can_write_project_document_storage(((storage.foldername(name))[2])::uuid)
@@ -57,8 +55,7 @@ CREATE POLICY "documents_storage_insert" ON storage.objects
 
 DROP POLICY IF EXISTS "documents_storage_delete" ON storage.objects;
 CREATE POLICY "documents_storage_delete" ON storage.objects
-  TO authenticated
-  FOR DELETE USING (
+  FOR DELETE TO authenticated USING (
     bucket_id = 'documents'
     AND (storage.foldername(name))[1] = 'projects'
     AND can_delete_project_document_storage(name)
