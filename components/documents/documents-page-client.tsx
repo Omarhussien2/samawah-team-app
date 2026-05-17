@@ -1,60 +1,221 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Search, ExternalLink, X } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { Download, ExternalLink, FileText, Loader2, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { createClient } from "@/lib/supabase/client";
 import { formatRelativeAr } from "@/lib/utils";
 import { createSearchMatcher } from "@/lib/utils/search";
+import {
+  buildDocumentStoragePath,
+  DOCUMENT_BUCKET,
+  DOCUMENT_STAGES,
+  DOCUMENT_TYPES,
+  formatFileSize,
+} from "@/lib/documents/utils";
 import type { Document, Profile, Project } from "@/lib/supabase/types";
 
+type DocumentWithRelations = Document & {
+  creator?: { id: string; full_name: string | null } | null;
+  project?: { id: string; name: string } | null;
+};
+
 interface Props {
-  documents: (Document & {
-    creator?: { id: string; full_name: string | null } | null;
-    project?: { id: string; name: string } | null;
-  })[];
+  documents: DocumentWithRelations[];
   projects: Pick<Project, "id" | "name">[];
   currentUser: Profile;
 }
 
-const DOC_TYPES = ["تقرير", "عقد", "خطة", "تصميم", "مرجع", "أخرى"];
+const EMPTY_FORM = { title: "", project_id: "", url: "", type: "أخرى", stage: "" };
 
-const TYPE_ICONS: Record<string, string> = {
-  "تقرير": "📄", "عقد": "📋", "خطة": "🗺️", "تصميم": "🎨", "مرجع": "📚", "أخرى": "📎",
-};
+function canModifyDocument(doc: DocumentWithRelations, currentUser: Profile) {
+  return currentUser.role === "admin" || currentUser.role === "project_manager" || doc.created_by === currentUser.id;
+}
 
 export function DocumentsPageClient({ documents, projects, currentUser }: Props) {
   const router = useRouter();
   const [search, setSearch] = useState("");
-  const [filterType, setFilterType] = useState("");
+  const [filterType, setFilterType] = useState("all");
+  const [filterStage, setFilterStage] = useState("all");
+  const [filterProject, setFilterProject] = useState("all");
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ title: "", project_id: "", url: "", type: "أخرى" });
+  const [editing, setEditing] = useState<DocumentWithRelations | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [openingId, setOpeningId] = useState<string | null>(null);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
 
   const filtered = useMemo(() => {
     const matchesSearch = createSearchMatcher(search);
 
-    return documents.filter((d) => {
-      if (!matchesSearch([d.title, d.type, d.project?.name, d.creator?.full_name, d.url, d.file_path])) {
+    return documents.filter((doc) => {
+      if (!matchesSearch([doc.title, doc.type, doc.stage, doc.project?.name, doc.creator?.full_name, doc.url, doc.file_path, doc.file_name])) {
         return false;
       }
-      if (filterType && d.type !== filterType) return false;
+      if (filterType !== "all" && doc.type !== filterType) return false;
+      if (filterStage !== "all" && (doc.stage ?? "none") !== filterStage) return false;
+      if (filterProject !== "all" && doc.project_id !== filterProject) return false;
       return true;
     });
-  }, [documents, search, filterType]);
+  }, [documents, search, filterType, filterStage, filterProject]);
+
+  const closeDialogs = () => {
+    setShowCreate(false);
+    setEditing(null);
+    setForm(EMPTY_FORM);
+    setSelectedFile(null);
+  };
+
+  const openEdit = (doc: DocumentWithRelations) => {
+    setEditing(doc);
+    setForm({
+      title: doc.title,
+      project_id: doc.project_id,
+      url: doc.url ?? "",
+      type: doc.type ?? "أخرى",
+      stage: doc.stage ?? "",
+    });
+    setSelectedFile(null);
+  };
 
   const handleCreate = async () => {
-    if (!form.title || !form.project_id) { toast.error("العنوان والمشروع مطلوبان"); return; }
+    if (!form.title.trim() || !form.project_id) {
+      toast.error("العنوان والمشروع مطلوبان");
+      return;
+    }
+    if (!selectedFile && !form.url.trim()) {
+      toast.error("أضف ملفًا أو رابطًا للمستند");
+      return;
+    }
+
     setSaving(true);
     const supabase = createClient();
+    let filePath: string | null = null;
+
+    if (selectedFile) {
+      filePath = buildDocumentStoragePath(form.project_id, selectedFile.name);
+      const { error: uploadError } = await supabase.storage
+        .from(DOCUMENT_BUCKET)
+        .upload(filePath, selectedFile, {
+          cacheControl: "3600",
+          contentType: selectedFile.type || "application/octet-stream",
+          upsert: false,
+        });
+
+      if (uploadError) {
+        toast.error(`فشل رفع الملف: ${uploadError.message}`);
+        setSaving(false);
+        return;
+      }
+    }
+
     const { error } = await supabase.from("documents").insert({
-      title: form.title, project_id: form.project_id, url: form.url || null, type: form.type,
+      title: form.title.trim(),
+      project_id: form.project_id,
+      url: form.url.trim() || null,
+      file_path: filePath,
+      file_name: selectedFile?.name ?? null,
+      file_type: selectedFile?.type || null,
+      file_size: selectedFile?.size ?? null,
+      type: form.type,
+      stage: form.stage || null,
       created_by: currentUser.id,
     });
-    if (error) toast.error("ما نجح إنشاء المستند");
-    else { toast.success("تم إنشاء المستند"); setShowCreate(false); setForm({ title: "", project_id: "", url: "", type: "أخرى" }); router.refresh(); }
+
+    if (error) {
+      if (filePath) await supabase.storage.from(DOCUMENT_BUCKET).remove([filePath]);
+      toast.error(`ما نجح إنشاء المستند: ${error.message}`);
+    } else {
+      toast.success("تم إنشاء المستند");
+      closeDialogs();
+      router.refresh();
+    }
     setSaving(false);
+  };
+
+  const handleUpdate = async () => {
+    if (!editing || !form.title.trim() || !form.project_id) {
+      toast.error("العنوان والمشروع مطلوبان");
+      return;
+    }
+
+    setSaving(true);
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("documents")
+      .update({
+        title: form.title.trim(),
+        url: form.url.trim() || null,
+        type: form.type,
+        stage: form.stage || null,
+      })
+      .eq("id", editing.id);
+
+    if (error) {
+      toast.error(`فشل تحديث المستند: ${error.message}`);
+    } else {
+      toast.success("تم تحديث المستند");
+      closeDialogs();
+      router.refresh();
+    }
+    setSaving(false);
+  };
+
+  const handleOpenFile = async (doc: DocumentWithRelations) => {
+    if (doc.url && !doc.file_path) {
+      window.open(doc.url, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    if (!doc.file_path) return;
+    setOpeningId(doc.id);
+    const supabase = createClient();
+    const { data, error } = await supabase.storage.from(DOCUMENT_BUCKET).createSignedUrl(doc.file_path, 60);
+
+    if (error || !data?.signedUrl) {
+      toast.error(error?.message ?? "تعذر فتح الملف");
+    } else {
+      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    }
+    setOpeningId(null);
+  };
+
+  const handleDelete = async (doc: DocumentWithRelations) => {
+    if (!confirm(`حذف "${doc.title}"؟`)) return;
+
+    setDeletingId(doc.id);
+    const supabase = createClient();
+
+    if (doc.file_path) {
+      const { error: storageError } = await supabase.storage.from(DOCUMENT_BUCKET).remove([doc.file_path]);
+      if (storageError) {
+        toast.error(`فشل حذف الملف: ${storageError.message}`);
+        setDeletingId(null);
+        return;
+      }
+    }
+
+    const { error } = await supabase.from("documents").delete().eq("id", doc.id);
+    if (error) toast.error(`فشل حذف المستند: ${error.message}`);
+    else {
+      toast.success("تم حذف المستند");
+      router.refresh();
+    }
+    setDeletingId(null);
   };
 
   return (
@@ -62,18 +223,23 @@ export function DocumentsPageClient({ documents, projects, currentUser }: Props)
       <div className="section-header">
         <div>
           <h1 className="text-2xl font-bold text-foreground">المستندات</h1>
-          <p className="text-muted-foreground text-sm mt-1">{filtered.length} مستند</p>
+          <p className="mt-1 text-sm text-muted-foreground">{filtered.length} مستند</p>
         </div>
-        <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 font-medium text-sm">
+        <Button onClick={() => setShowCreate(true)}>
           <Plus size={16} /> مستند جديد
-        </button>
+        </Button>
       </div>
 
-      <div className="flex gap-3 mb-6">
-        <div className="relative flex-1 max-w-xs">
+      <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_180px_180px_220px]">
+        <div className="relative">
           <Search size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input type="text"                  placeholder="ابحث..." value={search} onChange={(e) => setSearch(e.target.value)}
-            className="w-full pr-9 pl-9 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
+          <Input
+            type="text"
+            placeholder="ابحث..."
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="pr-9"
+          />
           {search && (
             <button
               type="button"
@@ -85,74 +251,282 @@ export function DocumentsPageClient({ documents, projects, currentUser }: Props)
             </button>
           )}
         </div>
-        <select value={filterType} onChange={(e) => setFilterType(e.target.value)}
-          className="px-3 py-2 text-sm border border-border rounded-lg focus:outline-none bg-white">
-          <option value="">كل الأنواع</option>
-          {DOC_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
+
+        <Select value={filterType} onValueChange={setFilterType}>
+          <SelectTrigger>
+            <SelectValue placeholder="النوع" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">كل الأنواع</SelectItem>
+            {DOCUMENT_TYPES.map((type) => (
+              <SelectItem key={type} value={type}>
+                {type}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={filterStage} onValueChange={setFilterStage}>
+          <SelectTrigger>
+            <SelectValue placeholder="المرحلة" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">كل المراحل</SelectItem>
+            <SelectItem value="none">غير محدد</SelectItem>
+            {DOCUMENT_STAGES.map((stage) => (
+              <SelectItem key={stage} value={stage}>
+                {stage}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={filterProject} onValueChange={setFilterProject}>
+          <SelectTrigger>
+            <SelectValue placeholder="المشروع" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">كل المشاريع</SelectItem>
+            {projects.map((project) => (
+              <SelectItem key={project.id} value={project.id}>
+                {project.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {filtered.length === 0 ? (
-        <div className="text-center py-20 text-muted-foreground">
-          <div className="text-5xl mb-4">📂</div>
-           <p className="font-medium">ما فيه مستندات</p>
+        <div className="rounded-xl border border-dashed border-border py-20 text-center text-muted-foreground">
+          <p className="font-medium">ما فيه مستندات</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filtered.map((doc) => (
-            <div key={doc.id} className="bg-white rounded-xl border border-border p-4 hover:shadow-md transition-all hover:border-primary/30">
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-xl flex-shrink-0">
-                  {TYPE_ICONS[doc.type ?? "أخرى"] ?? "📎"}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {filtered.map((doc) => {
+            const isBusy = deletingId === doc.id || openingId === doc.id;
+            return (
+              <div key={doc.id} className="rounded-xl border border-border bg-white p-4 transition-all hover:border-primary/30 hover:shadow-md">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                    <FileText size={18} className="text-primary" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h4 className="line-clamp-1 text-sm font-medium text-foreground">{doc.title}</h4>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{doc.project?.name ?? "غير محدد"}</p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="font-medium text-foreground text-sm line-clamp-1">{doc.title}</h4>
-                  <p className="text-xs text-muted-foreground mt-0.5">{doc.project?.name ?? "—"}</p>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary">{doc.type ?? "أخرى"}</Badge>
+                  <Badge variant="outline">{doc.stage ?? "غير محدد"}</Badge>
+                </div>
+
+                <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+                  <p className="line-clamp-1">{doc.file_name ? doc.file_name : "رابط خارجي"}</p>
+                  <p>{doc.file_name ? formatFileSize(doc.file_size) : doc.url}</p>
+                  <p>{formatRelativeAr(doc.created_at)}</p>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleOpenFile(doc)}
+                    disabled={isBusy || (!doc.file_path && !doc.url)}
+                  >
+                    {openingId === doc.id ? <Loader2 className="animate-spin" /> : doc.file_path ? <Download /> : <ExternalLink />}
+                    فتح
+                  </Button>
+
+                  {canModifyDocument(doc, currentUser) && (
+                    <div className="flex items-center gap-1">
+                      <Button type="button" variant="ghost" size="icon" onClick={() => openEdit(doc)} disabled={isBusy} aria-label="تعديل المستند">
+                        <Pencil />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(doc)}
+                        disabled={isBusy}
+                        aria-label="حذف المستند"
+                        className="text-destructive hover:text-destructive"
+                      >
+                        {deletingId === doc.id ? <Loader2 className="animate-spin" /> : <Trash2 />}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </div>
-              <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-                <span>{doc.type ?? "—"}</span>
-                <span>{formatRelativeAr(doc.created_at)}</span>
-              </div>
-              {doc.url && (
-                <a href={doc.url} target="_blank" rel="noreferrer"
-                  className="mt-3 flex items-center gap-1.5 text-xs text-primary hover:underline">
-                  <ExternalLink size={12} /> فتح الرابط
-                </a>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
-            <h2 className="text-lg font-bold mb-4">مستند جديد</h2>
-            <div className="space-y-3">
-              <input value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
-                placeholder="عنوان المستند *" className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
-              <select value={form.project_id} onChange={(e) => setForm((p) => ({ ...p, project_id: e.target.value }))}
-                className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none bg-white">
-                <option value="">اختر المشروع *</option>
-                {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-              <select value={form.type} onChange={(e) => setForm((p) => ({ ...p, type: e.target.value }))}
-                className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none bg-white">
-                {DOC_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-              <input value={form.url} onChange={(e) => setForm((p) => ({ ...p, url: e.target.value }))}
-                placeholder="رابط المستند (اختياري)" className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
+      <DocumentDialog
+        open={showCreate || Boolean(editing)}
+        title={editing ? "تعديل المستند" : "مستند جديد"}
+        form={form}
+        projects={projects}
+        saving={saving}
+        selectedFile={selectedFile}
+        allowFileUpload={!editing}
+        allowProjectChange={!editing}
+        onOpenChange={(open) => {
+          if (!open) closeDialogs();
+        }}
+        onFormChange={setForm}
+        onFileChange={setSelectedFile}
+        onSubmit={editing ? handleUpdate : handleCreate}
+      />
+    </>
+  );
+}
+
+interface DocumentDialogProps {
+  open: boolean;
+  title: string;
+  form: typeof EMPTY_FORM;
+  projects: Pick<Project, "id" | "name">[];
+  saving: boolean;
+  selectedFile: File | null;
+  allowFileUpload: boolean;
+  allowProjectChange: boolean;
+  onOpenChange: (open: boolean) => void;
+  onFormChange: (form: typeof EMPTY_FORM) => void;
+  onFileChange: (file: File | null) => void;
+  onSubmit: () => void;
+}
+
+function DocumentDialog({
+  open,
+  title,
+  form,
+  projects,
+  saving,
+  selectedFile,
+  allowFileUpload,
+  allowProjectChange,
+  onOpenChange,
+  onFormChange,
+  onFileChange,
+  onSubmit,
+}: DocumentDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+
+        <div className="grid gap-4">
+          <div className="grid gap-2">
+            <Label htmlFor="document-title">العنوان</Label>
+            <Input
+              id="document-title"
+              value={form.title}
+              onChange={(event) => onFormChange({ ...form, title: event.target.value })}
+              placeholder="عنوان المستند"
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <Label>المشروع</Label>
+            <Select
+              value={form.project_id || "none"}
+              onValueChange={(value) => onFormChange({ ...form, project_id: value === "none" ? "" : value })}
+              disabled={!allowProjectChange}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="اختر المشروع" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">اختر المشروع</SelectItem>
+                {projects.map((project) => (
+                  <SelectItem key={project.id} value={project.id}>
+                    {project.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <Label>النوع</Label>
+              <Select value={form.type} onValueChange={(value) => onFormChange({ ...form, type: value })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DOCUMENT_TYPES.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <div className="flex gap-3 mt-5">
-              <button onClick={() => setShowCreate(false)} className="flex-1 py-2.5 border border-border rounded-lg text-sm">إلغاء</button>
-              <button onClick={handleCreate} disabled={saving} className="flex-1 py-2.5 bg-primary text-white rounded-lg text-sm font-medium disabled:opacity-60">
-                {saving ? "جاري الحفظ..." : "إنشاء"}
-              </button>
+
+            <div className="grid gap-2">
+              <Label>المرحلة</Label>
+              <Select value={form.stage || "none"} onValueChange={(value) => onFormChange({ ...form, stage: value === "none" ? "" : value })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">غير محدد</SelectItem>
+                  {DOCUMENT_STAGES.map((stage) => (
+                    <SelectItem key={stage} value={stage}>
+                      {stage}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="document-url">الرابط</Label>
+            <Input
+              id="document-url"
+              value={form.url}
+              onChange={(event) => onFormChange({ ...form, url: event.target.value })}
+              placeholder="https://"
+            />
+          </div>
+
+          {allowFileUpload && (
+            <div className="grid gap-2 rounded-lg border border-dashed border-border p-4">
+              <Label htmlFor="document-file" className="flex items-center gap-2">
+                <Upload size={15} /> الملف
+              </Label>
+              <Input
+                id="document-file"
+                type="file"
+                onChange={(event) => onFileChange(event.target.files?.[0] ?? null)}
+                className="h-auto py-2"
+              />
+              {selectedFile && (
+                <p className="text-xs text-muted-foreground">
+                  {selectedFile.name} · {formatFileSize(selectedFile.size)}
+                </p>
+              )}
+            </div>
+          )}
         </div>
-      )}
-    </>
+
+        <DialogFooter className="gap-2 sm:space-x-0">
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+            إلغاء
+          </Button>
+          <Button type="button" onClick={onSubmit} disabled={saving}>
+            {saving && <Loader2 className="animate-spin" />}
+            {saving ? "جاري الحفظ..." : "حفظ"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
