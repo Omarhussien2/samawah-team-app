@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -9,6 +10,12 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { X, Loader2, Zap } from "lucide-react";
 import { recalcProjectProgress } from "@/lib/utils/recalc-progress";
+import {
+  applyCreatedTaskToTaskQueries,
+  createTask,
+  taskKeys,
+  type TaskWithRelations,
+} from "@/lib/queries/tasks";
 
 const schema = z.object({
   title: z.string().min(1, "اسم المهمة مطلوب"),
@@ -23,17 +30,36 @@ type FormData = z.infer<typeof schema>;
 interface Props {
   open: boolean;
   onClose: () => void;
+  defaultProjectId?: string;
+  onTaskCreated?: (task: TaskWithRelations) => void;
 }
 
-export function QuickAddTaskModal({ open, onClose }: Props) {
+export function QuickAddTaskModal({ open, onClose, defaultProjectId, onTaskCreated }: Props) {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [profiles, setProfiles] = useState<{ id: string; full_name: string | null }[]>([]);
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { priority: "medium" },
+    defaultValues: { priority: "medium", project_id: defaultProjectId ?? "" },
+  });
+
+  const createTaskMutation = useMutation({
+    mutationFn: createTask,
+    onSuccess: (task) => {
+      applyCreatedTaskToTaskQueries(queryClient, task);
+      onTaskCreated?.(task);
+      queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      toast.success("تمت إضافة المهمة");
+      recalcProjectProgress(task.project_id);
+      reset({ priority: "medium", project_id: defaultProjectId ?? "" });
+      onClose();
+      router.refresh();
+    },
+    onError: () => {
+      toast.error("فشل إضافة المهمة");
+    },
   });
 
   useEffect(() => {
@@ -48,13 +74,17 @@ export function QuickAddTaskModal({ open, onClose }: Props) {
     });
   }, [open]);
 
+  useEffect(() => {
+    if (open && defaultProjectId) {
+      setValue("project_id", defaultProjectId);
+    }
+  }, [open, defaultProjectId, setValue]);
+
   if (!open) return null;
 
   const onSubmit = async (data: FormData) => {
-    setLoading(true);
-    const supabase = createClient();
     const owner = profiles.find((p) => p.id === data.owner_id);
-    const { error } = await supabase.from("tasks").insert({
+    createTaskMutation.mutate({
       title: data.title,
       project_id: data.project_id,
       owner_id: data.owner_id || null,
@@ -64,16 +94,6 @@ export function QuickAddTaskModal({ open, onClose }: Props) {
       status: "To Do",
       board_column: "To Do",
     });
-
-    if (error) toast.error("فشل إضافة المهمة");
-    else {
-      toast.success("تمت إضافة المهمة");
-      recalcProjectProgress(data.project_id);
-      reset();
-      onClose();
-      router.refresh();
-    }
-    setLoading(false);
   };
 
   return (
@@ -127,8 +147,8 @@ export function QuickAddTaskModal({ open, onClose }: Props) {
 
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="flex-1 py-2.5 border border-border rounded-lg text-sm hover:bg-accent transition-colors">إلغاء</button>
-            <button type="submit" disabled={loading} className="flex-1 py-2.5 bg-primary text-white rounded-lg text-sm hover:bg-primary/90 transition-colors font-medium disabled:opacity-60 flex items-center justify-center gap-2">
-              {loading && <Loader2 size={15} className="animate-spin" />}
+            <button type="submit" disabled={createTaskMutation.isPending} className="flex-1 py-2.5 bg-primary text-white rounded-lg text-sm hover:bg-primary/90 transition-colors font-medium disabled:opacity-60 flex items-center justify-center gap-2">
+              {createTaskMutation.isPending && <Loader2 size={15} className="animate-spin" />}
               إضافة
             </button>
           </div>

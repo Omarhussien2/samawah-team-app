@@ -12,6 +12,7 @@ import { TaskModal } from "./task-modal";
 import { useRealtimeSubscription } from "@/lib/supabase/realtime";
 import {
   applyMyTaskRealtimeChange,
+  applyTaskToTaskQueries,
   fetchMyTasks,
   markTaskDone,
   taskKeys,
@@ -68,6 +69,7 @@ export function MyTasksClient({ tasks: initialTasks, currentUser, profiles }: Pr
   const markDoneMutation = useMutation({
     mutationFn: markTaskDone,
     onSuccess: (updatedTask) => {
+      applyTaskToTaskQueries(queryClient, updatedTask);
       applyMyTaskRealtimeChange(queryClient, currentUser.id, "UPDATE", updatedTask);
       toast.success("خلّصت المهمة! 🎉");
       recalcProjectProgress(updatedTask.project_id);
@@ -76,7 +78,7 @@ export function MyTasksClient({ tasks: initialTasks, currentUser, profiles }: Pr
       toast.error("فشل التحديث");
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: taskKeys.myTasks(currentUser.id) });
+      queryClient.invalidateQueries({ queryKey: taskKeys.all });
     },
   });
 

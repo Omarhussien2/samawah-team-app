@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   formatDateShort,
   getStatusLabel,
@@ -13,6 +13,7 @@ import {
 } from "@/lib/utils";
 import { createSearchMatcher } from "@/lib/utils/search";
 import { TaskModal } from "./task-modal";
+import { fetchTasks, taskKeys, type TaskWithRelations } from "@/lib/queries/tasks";
 import {
   Search,
   Filter,
@@ -22,13 +23,10 @@ import {
   FolderKanban,
   ChevronDown,
 } from "lucide-react";
-import type { Profile, Task } from "@/lib/supabase/types";
+import type { Profile } from "@/lib/supabase/types";
 
 interface Props {
-  tasks: (Task & {
-    project?: { id: string; name: string } | null;
-    owner?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null;
-  })[];
+  tasks: TaskWithRelations[];
   profiles: Pick<Profile, "id" | "full_name" | "avatar_url">[];
   projects?: { id: string; name: string }[];
   projectId?: string;
@@ -38,10 +36,8 @@ export function TasksTable({
   tasks: initialTasks,
   profiles,
   projects,
-  projectId: _projectId,
+  projectId,
 }: Props) {
-  const router = useRouter();
-  const [tasks, setTasks] = useState(initialTasks);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterOwner, setFilterOwner] = useState("");
@@ -50,9 +46,19 @@ export function TasksTable({
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-  const [selectedTask, setSelectedTask] = useState<
-    (typeof initialTasks)[0] | null
-  >(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+
+  const taskQueryKey = useMemo(() => (projectId ? taskKeys.byProject(projectId) : taskKeys.list()), [projectId]);
+  const { data: tasks = initialTasks } = useQuery({
+    queryKey: taskQueryKey,
+    queryFn: () => fetchTasks({ projectId }),
+    initialData: initialTasks,
+  });
+
+  const selectedTask = useMemo(
+    () => tasks.find((task) => task.id === selectedTaskId) ?? null,
+    [tasks, selectedTaskId]
+  );
 
   const activeFilterCount = [
     filterStatus,
@@ -71,13 +77,6 @@ export function TasksTable({
     setDateFrom("");
     setDateTo("");
   };
-
-  const handleTaskSaved = useCallback((updatedTask: Task) => {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === updatedTask.id ? { ...t, ...updatedTask } : t))
-    );
-    setSelectedTask((prev) => (prev?.id === updatedTask.id ? { ...prev, ...updatedTask } : prev));
-  }, []);
 
   const uniqueProjects = useMemo(() => {
     if (projects) return projects;
@@ -344,7 +343,7 @@ export function TasksTable({
                   <tr
                     key={task.id}
                     className="hover:bg-accent/50 cursor-pointer transition-colors"
-                    onClick={() => setSelectedTask(task)}
+                    onClick={() => setSelectedTaskId(task.id)}
                   >
                     <td className="px-4 py-3">
                       <p className="font-medium text-foreground line-clamp-1">
@@ -417,11 +416,7 @@ export function TasksTable({
         <TaskModal
           task={selectedTask}
           profiles={profiles}
-          onClose={() => {
-            setSelectedTask(null);
-            router.refresh();
-          }}
-          onTaskSaved={handleTaskSaved}
+          onClose={() => setSelectedTaskId(null)}
         />
       )}
     </>
