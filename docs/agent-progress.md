@@ -76,14 +76,12 @@ This file tracks the implementation state for agent-led work so a future session
 - `pnpm build`: Passed. Build still reports the existing Next.js middleware-to-proxy warning.
 - Browser smoke test: `http://localhost:3001/kpis` redirected to `/login` because no auth session was available; login page loaded with 0 console errors.
 
-## Current Task
-
 ### Project Documents V1 - Detailed Project-Only Attachments
 
 - Branch: `feat/project-documents-v1`
 - Started: 2026-05-17
 - PR: https://github.com/Omarhussien2/samawah-team-app/pull/27
-- Status: Draft PR opened
+- Status: Merged into `main`
 
 ### UX Decisions
 
@@ -112,6 +110,7 @@ This file tracks the implementation state for agent-led work so a future session
 - Branch: `fix/project-document-storage-rls`
 - Started: 2026-05-17
 - PR: https://github.com/Omarhussien2/samawah-team-app/pull/28
-- Status: Draft PR opened
+- Status: Merged into `main`
 - Reason: User reported upload failure: `new row violates row-level security policy`.
 - Fix: Rework Storage policies through explicit `TO authenticated` policies and security-definer helpers; add `supabase/project-documents-storage-rls-fix.sql` for immediate Supabase SQL Editor application.
+- Result: User confirmed document upload works after applying the SQL fix in Supabase.
