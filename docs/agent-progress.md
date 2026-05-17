@@ -139,3 +139,11 @@ This file tracks the implementation state for agent-led work so a future session
 - KPI decision: Link risk handling to the operations KPI `OPS_RISK_COVERAGE`. The current V1 calculation uses open items: low-risk or in-progress items count as handled; resolved/closed items are not counted as open exposure.
 - Implementation notes: Extended `challenges` with risk fields and generated `risk_score`/`risk_level`; updated the global challenges page and project challenges tab with summary cards, richer create/edit details, risk cards, and KPI syncing after create/status changes.
 - Verification: `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build` passed. Lint still reports existing warnings only.
+
+### Follow-up Fix - Challenges Risk SQL Patch
+
+- Branch: `codex/challenges-risk-fields-v1`
+- Started: 2026-05-17
+- Reason: User reported Supabase SQL Editor failure while applying `supabase/schema.sql`: `unterminated dollar-quoted string at or near "$$"`.
+- Diagnosis: The reported SQL included RLS statements inside the first `DO $$` block, which indicates the pasted SQL was incomplete or mixed across `schema.sql` and `rls.sql`.
+- Fix: Added `supabase/challenges-risk-fields-patch.sql` as a paste-safe SQL patch for existing databases. It avoids `DO $$` blocks and applies only the challenges/risk fields, indexes, policy update, grant, and KPI source update needed for this task.
