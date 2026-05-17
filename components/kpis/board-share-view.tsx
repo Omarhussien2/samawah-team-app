@@ -15,11 +15,13 @@ import {
   Target,
   TrendingUp,
   Users,
+  X,
 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { createSearchMatcher } from "@/lib/utils/search";
 import { buildKpiRadarModel, type KpiRadarIndicator, type KpiRadarQuarter } from "@/lib/kpis/radar";
 import { formatKpiValue, getKpiStatusLabel, getKpiStatusStyle } from "@/lib/kpis/status";
 import type { KpiBoardSnapshot } from "@/lib/kpis/share";
@@ -50,13 +52,20 @@ export function BoardShareView({ snapshot }: { snapshot: KpiBoardSnapshot }) {
   );
 
   const perspectives = model.summary.perspectives.map((item) => item.name);
-  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const matchesSearch = createSearchMatcher(searchQuery);
   const filteredIndicators = model.indicators.filter((indicator) => {
     const matchesPerspective = activePerspective === ALL_PERSPECTIVES || indicator.definition.perspective === activePerspective;
-    const matchesQuery = !normalizedQuery
-      || indicator.definition.name.toLowerCase().includes(normalizedQuery)
-      || indicator.definition.code.toLowerCase().includes(normalizedQuery)
-      || (indicator.definition.strategic_goal ?? "").toLowerCase().includes(normalizedQuery);
+    const matchesQuery = matchesSearch([
+      indicator.definition.name,
+      indicator.definition.code,
+      indicator.definition.perspective,
+      indicator.definition.strategic_goal,
+      indicator.definition.measurement_label,
+      indicator.definition.target_text,
+      indicator.definition.target_unit,
+      indicator.sourceLabel,
+      getKpiStatusLabel(indicator.annualStatus),
+    ]);
     return matchesPerspective && matchesQuery;
   });
 
@@ -173,8 +182,18 @@ export function BoardShareView({ snapshot }: { snapshot: KpiBoardSnapshot }) {
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
                   placeholder="ابحث عن مؤشر..."
-                  className="rounded-lg border-white/10 bg-white/[0.06] py-6 pr-11 text-right text-white placeholder:text-white/25 focus-visible:ring-teal-400/40"
+                  className="rounded-lg border-white/10 bg-white/[0.06] py-6 pl-10 pr-11 text-right text-white placeholder:text-white/25 focus-visible:ring-teal-400/40"
                 />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    aria-label="مسح البحث"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-white/30 transition hover:bg-white/10 hover:text-white"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
               </div>
             </div>
           </header>

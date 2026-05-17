@@ -16,11 +16,13 @@ import {
   Target,
   TrendingUp,
   Users,
+  X,
 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { createSearchMatcher } from "@/lib/utils/search";
 import { buildKpiRadarModel, type KpiRadarIndicator, type KpiRadarQuarter } from "@/lib/kpis/radar";
 import { formatKpiValue, getKpiStatusLabel, getKpiStatusStyle } from "@/lib/kpis/status";
 import type { KpiDefinition, KpiPeriodType, KpiValue } from "@/lib/supabase/types";
@@ -85,14 +87,21 @@ export function KpiRadarDashboard({
   const activePerspective = scopePerspective ?? perspective;
   const perspectives = model.summary.perspectives.map((item) => item.name);
   const activePerspectiveName = activePerspective === ALL_PERSPECTIVES ? "كل المؤشرات" : activePerspective;
-  const normalizedQuery = query.trim().toLowerCase();
+  const matchesSearch = createSearchMatcher(query);
 
   const filteredIndicators = model.indicators.filter((indicator) => {
     const matchesPerspective = activePerspective === ALL_PERSPECTIVES || indicator.definition.perspective === activePerspective;
-    const matchesQuery = !normalizedQuery
-      || indicator.definition.name.toLowerCase().includes(normalizedQuery)
-      || indicator.definition.code.toLowerCase().includes(normalizedQuery)
-      || (indicator.definition.strategic_goal ?? "").toLowerCase().includes(normalizedQuery);
+    const matchesQuery = matchesSearch([
+      indicator.definition.name,
+      indicator.definition.code,
+      indicator.definition.perspective,
+      indicator.definition.strategic_goal,
+      indicator.definition.measurement_label,
+      indicator.definition.target_text,
+      indicator.definition.target_unit,
+      indicator.sourceLabel,
+      getKpiStatusLabel(indicator.annualStatus),
+    ]);
     return matchesPerspective && matchesQuery;
   });
 
@@ -195,7 +204,17 @@ export function KpiRadarDashboard({
               )}
               <div className="relative min-w-64">
                 <Search className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
-                <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحث عن مؤشر" className="pr-9" />
+                <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحث عن مؤشر" className="pl-9 pr-9" />
+                {query && (
+                  <button
+                    type="button"
+                    aria-label="مسح البحث"
+                    onClick={() => setQuery("")}
+                    className="absolute left-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
               </div>
               {isScoped && isAdmin && (
                 <div className="flex gap-2">

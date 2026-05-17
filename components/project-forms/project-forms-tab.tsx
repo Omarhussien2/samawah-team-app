@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, ChevronDown, Download, FileText, Loader2, Plus, Search, Eye, Pencil, Trash2 } from "lucide-react";
+import { Check, ChevronDown, Download, FileText, Loader2, Plus, Search, Eye, Pencil, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { cn, formatRelativeAr } from "@/lib/utils";
+import { createSearchMatcher } from "@/lib/utils/search";
 import type { Profile, Project, ProjectFormTemplate } from "@/lib/supabase/types";
 import { FORM_STATUS_COLORS, FORM_STATUS_LABELS, type ProjectFormStatus } from "@/lib/project-forms/schema";
 import { mapInstanceToCard, type ProjectFormInstanceWithRelations, type ProjectFormTemplateWithInstance } from "@/lib/project-forms/types";
@@ -88,11 +89,24 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
   );
 
   const filteredForms = useMemo(() => {
+    const matchesSearch = createSearchMatcher(search);
+
     return forms.filter((form) => {
       if (statusFilter !== "all" && form.status !== statusFilter) return false;
       if (stageFilter !== "all" && form.template.stage !== stageFilter) return false;
       if (categoryFilter !== "all" && form.template.category !== categoryFilter) return false;
-      if (search && !form.template.name.toLowerCase().includes(search.toLowerCase())) return false;
+      if (
+        !matchesSearch([
+          form.template.name,
+          form.template.description,
+          form.template.category,
+          form.template.stage,
+          form.status,
+          form.statusLabel,
+        ])
+      ) {
+        return false;
+      }
       return true;
     });
   }, [forms, statusFilter, stageFilter, categoryFilter, search]);
@@ -243,7 +257,17 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
         <div className="grid gap-3 lg:grid-cols-[1fr_160px_160px_160px_300px]">
           <div className="relative">
             <Search size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث باسم النموذج" className="w-full rounded-lg border border-slate-200 py-2 pl-3 pr-9 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث باسم النموذج" className="w-full rounded-lg border border-slate-200 py-2 pl-9 pr-9 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" />
+            {search && (
+              <button
+                type="button"
+                aria-label="مسح البحث"
+                onClick={() => setSearch("")}
+                className="absolute left-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as "all" | ProjectFormStatus)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
             {STATUSES.map((status) => <option key={status} value={status}>{status === "all" ? "كل الحالات" : FORM_STATUS_LABELS[status]}</option>)}

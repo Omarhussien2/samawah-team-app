@@ -4,9 +4,10 @@ import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { CheckCircle2, AlertCircle, Clock, CalendarCheck, List } from "lucide-react";
-import { formatDateShort, getStatusColor, getStatusLabel, isOverdue, isDueToday, cn } from "@/lib/utils";
+import { CheckCircle2, AlertCircle, Clock, CalendarCheck, List, Search, X } from "lucide-react";
+import { formatDateShort, getPriorityLabel, getStatusColor, getStatusLabel, isOverdue, isDueToday, cn } from "@/lib/utils";
 import { recalcProjectProgress } from "@/lib/utils/recalc-progress";
+import { createSearchMatcher } from "@/lib/utils/search";
 import { TaskModal } from "./task-modal";
 import { useRealtimeSubscription } from "@/lib/supabase/realtime";
 import {
@@ -37,6 +38,7 @@ const FILTERS: { key: Filter; label: string; icon: React.ElementType }[] = [
 export function MyTasksClient({ tasks: initialTasks, currentUser, profiles }: Props) {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<Filter>("all");
+  const [search, setSearch] = useState("");
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   const { data: tasks = initialTasks } = useQuery({
@@ -85,14 +87,38 @@ export function MyTasksClient({ tasks: initialTasks, currentUser, profiles }: Pr
   }, []);
 
   const filtered = useMemo(() => {
+    const matchesSearch = createSearchMatcher(search);
+
     return tasks.filter((t) => {
-      if (filter === "today") return t.due_date && isDueToday(t.due_date) && !["Done", "Cancelled"].includes(t.status);
-      if (filter === "week") return t.due_date && new Date(t.due_date) <= weekEnd && !["Done", "Cancelled"].includes(t.status);
-      if (filter === "overdue") return isOverdue(t.due_date, t.status);
-      if (filter === "done") return t.status === "Done";
-      return true;
+      const matchesFilter =
+        filter === "today"
+          ? t.due_date && isDueToday(t.due_date) && !["Done", "Cancelled"].includes(t.status)
+          : filter === "week"
+            ? t.due_date && new Date(t.due_date) <= weekEnd && !["Done", "Cancelled"].includes(t.status)
+            : filter === "overdue"
+              ? isOverdue(t.due_date, t.status)
+              : filter === "done"
+                ? t.status === "Done"
+                : true;
+
+      if (!matchesFilter) return false;
+
+      return matchesSearch([
+        t.title,
+        t.sub_task,
+        t.project?.name,
+        t.owner?.full_name,
+        t.owner_name,
+        t.category,
+        t.status,
+        getStatusLabel(t.status),
+        t.priority,
+        getPriorityLabel(t.priority),
+        t.alert_level,
+        t.alert_message,
+      ]);
     });
-  }, [tasks, filter, weekEnd]);
+  }, [tasks, filter, search, weekEnd]);
 
   const counts = useMemo(
     () => ({
@@ -133,6 +159,27 @@ export function MyTasksClient({ tasks: initialTasks, currentUser, profiles }: Pr
         </div>
       </div>
 
+      <div className="relative mb-4 max-w-md">
+        <Search size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <input
+          type="text"
+          placeholder="ابحث في مهامك..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full rounded-lg border border-border py-2 pl-9 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+        />
+        {search && (
+          <button
+            type="button"
+            aria-label="مسح البحث"
+            onClick={() => setSearch("")}
+            className="absolute left-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition hover:bg-accent hover:text-foreground"
+          >
+            <X size={14} />
+          </button>
+        )}
+      </div>
+
       <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
         {FILTERS.map(({ key, label, icon: Icon }) => (
           <button
@@ -162,8 +209,12 @@ export function MyTasksClient({ tasks: initialTasks, currentUser, profiles }: Pr
       {filtered.length === 0 ? (
         <div className="text-center py-20 text-muted-foreground">
           <div className="text-5xl mb-4">✓</div>
-          <p className="font-medium">ما فيه مهام في هذه الفئة</p>
-          <p className="text-sm mt-1">يعطيك العافية! كمّل شغلك</p>
+          <p className="font-medium">
+            {search ? "لا توجد مهام مطابقة للبحث في هذه الفئة" : "ما فيه مهام في هذه الفئة"}
+          </p>
+          <p className="text-sm mt-1">
+            {search ? "جرّب كلمة أخرى أو امسح البحث لعرض القائمة." : "يعطيك العافية! كمّل شغلك"}
+          </p>
         </div>
       ) : (
         <div className="space-y-3">

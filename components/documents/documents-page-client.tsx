@@ -2,10 +2,11 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Search, ExternalLink } from "lucide-react";
+import { Plus, Search, ExternalLink, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { formatRelativeAr } from "@/lib/utils";
+import { createSearchMatcher } from "@/lib/utils/search";
 import type { Document, Profile, Project } from "@/lib/supabase/types";
 
 interface Props {
@@ -32,8 +33,12 @@ export function DocumentsPageClient({ documents, projects, currentUser }: Props)
   const [saving, setSaving] = useState(false);
 
   const filtered = useMemo(() => {
+    const matchesSearch = createSearchMatcher(search);
+
     return documents.filter((d) => {
-      if (search && !d.title.toLowerCase().includes(search.toLowerCase())) return false;
+      if (!matchesSearch([d.title, d.type, d.project?.name, d.creator?.full_name, d.url, d.file_path])) {
+        return false;
+      }
       if (filterType && d.type !== filterType) return false;
       return true;
     });
@@ -68,7 +73,17 @@ export function DocumentsPageClient({ documents, projects, currentUser }: Props)
         <div className="relative flex-1 max-w-xs">
           <Search size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input type="text"                  placeholder="ابحث..." value={search} onChange={(e) => setSearch(e.target.value)}
-            className="w-full pr-9 pl-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            className="w-full pr-9 pl-9 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
+          {search && (
+            <button
+              type="button"
+              aria-label="مسح البحث"
+              onClick={() => setSearch("")}
+              className="absolute left-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition hover:bg-accent hover:text-foreground"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
         <select value={filterType} onChange={(e) => setFilterType(e.target.value)}
           className="px-3 py-2 text-sm border border-border rounded-lg focus:outline-none bg-white">

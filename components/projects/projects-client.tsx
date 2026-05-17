@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { LayoutGrid, List, Plus, Search, FolderKanban, Clock } from "lucide-react";
+import { LayoutGrid, List, Plus, Search, FolderKanban, Clock, X } from "lucide-react";
 import { ProjectCard } from "./project-card";
 import { ProjectRow } from "./project-row";
 import { CreateProjectModal } from "./create-project-modal";
 import { getProjectStatusLabel } from "@/lib/utils";
+import { createSearchMatcher } from "@/lib/utils/search";
 import type { Profile, Project, ProjectTemplate } from "@/lib/supabase/types";
 
 interface Props {
@@ -25,8 +26,23 @@ export function ProjectsClient({ projects, profiles, templates, currentUser: _cu
   const [showCreate, setShowCreate] = useState(false);
 
   const filtered = useMemo(() => {
+    const matchesSearch = createSearchMatcher(search);
+
     return projects.filter((p) => {
-      if (search && !p.name.toLowerCase().includes(search.toLowerCase())) return false;
+      if (
+        !matchesSearch([
+          p.name,
+          p.manager?.full_name,
+          p.manager_name,
+          p.path,
+          p.current_stage,
+          p.description,
+          p.status,
+          getProjectStatusLabel(p.status),
+        ])
+      ) {
+        return false;
+      }
       if (filterStatus && p.status !== filterStatus) return false;
       if (filterManager && p.manager_id !== filterManager) return false;
       return true;
@@ -69,8 +85,18 @@ export function ProjectsClient({ projects, profiles, templates, currentUser: _cu
             placeholder="البحث في المشاريع..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pr-9 pl-3 py-2 text-sm bg-slate-50 border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all placeholder:text-slate-400"
+            className="w-full pr-9 pl-9 py-2 text-sm bg-slate-50 border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all placeholder:text-slate-400"
           />
+          {search && (
+            <button
+              type="button"
+              aria-label="مسح البحث"
+              onClick={() => setSearch("")}
+              className="absolute left-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-400 transition hover:bg-slate-200 hover:text-slate-700"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
 
         <select
