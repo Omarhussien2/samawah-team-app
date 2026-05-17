@@ -13,8 +13,10 @@ import { KanbanCard } from "./kanban-card";
 import { TaskModal } from "@/components/tasks/task-modal";
 import { QuickAddTaskModal } from "@/components/tasks/quick-add-task-modal";
 import { useTasksSubscription } from "@/lib/supabase/realtime";
-import { Search, Filter, LayoutGrid, List, Calendar, Plus } from "lucide-react";
+import { Search, Filter, LayoutGrid, List, Calendar, Plus, X } from "lucide-react";
 import { recalcProjectProgress } from "@/lib/utils/recalc-progress";
+import { getPriorityLabel, getStatusLabel } from "@/lib/utils";
+import { createSearchMatcher } from "@/lib/utils/search";
 import type { Profile, Task } from "@/lib/supabase/types";
 
 export const COLUMNS = [
@@ -142,9 +144,23 @@ export function KanbanBoard({ tasks: initialTasks, projectId, profiles }: Props)
 
   // Filtering
   const filteredTasks = useMemo(() => {
-    return tasks.filter(t => 
-      !searchQuery || t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.project?.name.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesSearch = createSearchMatcher(searchQuery);
+
+    return tasks.filter((task) =>
+      matchesSearch([
+        task.title,
+        task.sub_task,
+        task.project?.name,
+        task.owner?.full_name,
+        task.owner_name,
+        task.category,
+        task.status,
+        getStatusLabel(task.status),
+        task.priority,
+        getPriorityLabel(task.priority),
+        task.alert_level,
+        task.alert_message,
+      ])
     );
   }, [tasks, searchQuery]);
 
@@ -165,8 +181,18 @@ export function KanbanBoard({ tasks: initialTasks, projectId, profiles }: Props)
                placeholder="ابحث في المهام..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-3 pr-9 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-64 shadow-sm"
+              className="w-64 rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-9 text-sm shadow-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                aria-label="مسح البحث"
+                onClick={() => setSearchQuery("")}
+                className="absolute left-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
           <button className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 text-slate-700 text-sm rounded-lg hover:bg-slate-50 transition-colors shadow-sm font-medium">
             <Filter size={16} className="text-slate-500" /> فلترة

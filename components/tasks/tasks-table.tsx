@@ -11,6 +11,7 @@ import {
   getAlertLevelColor,
   cn,
 } from "@/lib/utils";
+import { createSearchMatcher } from "@/lib/utils/search";
 import { TaskModal } from "./task-modal";
 import {
   Search,
@@ -88,8 +89,25 @@ export function TasksTable({
   }, [tasks, projects]);
 
   const filtered = useMemo(() => {
+    const matchesSearch = createSearchMatcher(search);
+
     return tasks.filter((t) => {
-      if (search && !t.title.toLowerCase().includes(search.toLowerCase()) && !(t.sub_task?.toLowerCase().includes(search.toLowerCase())))
+      if (
+        !matchesSearch([
+          t.title,
+          t.sub_task,
+          t.project?.name,
+          t.owner?.full_name,
+          t.owner_name,
+          t.category,
+          t.status,
+          getStatusLabel(t.status),
+          t.priority,
+          getPriorityLabel(t.priority),
+          t.alert_level,
+          t.alert_message,
+        ])
+      )
         return false;
       if (filterStatus && t.status !== filterStatus) return false;
       if (filterOwner && t.owner_id !== filterOwner) return false;
@@ -115,8 +133,18 @@ export function TasksTable({
                placeholder="ابحث في المهام..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pr-9 pl-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full pr-9 pl-9 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
+            {search && (
+              <button
+                type="button"
+                aria-label="مسح البحث"
+                onClick={() => setSearch("")}
+                className="absolute left-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition hover:bg-accent hover:text-foreground"
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
 
           <select

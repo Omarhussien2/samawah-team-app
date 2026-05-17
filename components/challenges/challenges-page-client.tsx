@@ -2,10 +2,11 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Search, AlertTriangle } from "lucide-react";
+import { Plus, Search, AlertTriangle, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { formatRelativeAr, getChallengeStatusLabel, cn } from "@/lib/utils";
+import { createSearchMatcher } from "@/lib/utils/search";
 import type { Challenge, Profile, Project } from "@/lib/supabase/types";
 
 interface Props {
@@ -41,8 +42,25 @@ export function ChallengesPageClient({ challenges, profiles: _profiles, projects
   const [saving, setSaving] = useState(false);
 
   const filtered = useMemo(() => {
+    const matchesSearch = createSearchMatcher(search);
+
     return challenges.filter((c) => {
-      if (search && !c.title.toLowerCase().includes(search.toLowerCase())) return false;
+      if (
+        !matchesSearch([
+          c.title,
+          c.description,
+          c.project?.name,
+          c.task?.title,
+          c.owner?.full_name,
+          c.status,
+          getChallengeStatusLabel(c.status),
+          c.risk_impact,
+          c.risk_type,
+          c.resolution,
+        ])
+      ) {
+        return false;
+      }
       if (filterStatus && c.status !== filterStatus) return false;
       return true;
     });
@@ -92,7 +110,17 @@ export function ChallengesPageClient({ challenges, profiles: _profiles, projects
         <div className="relative flex-1 max-w-xs">
           <Search size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input type="text" placeholder="البحث..." value={search} onChange={(e) => setSearch(e.target.value)}
-            className="w-full pr-9 pl-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            className="w-full pr-9 pl-9 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
+          {search && (
+            <button
+              type="button"
+              aria-label="مسح البحث"
+              onClick={() => setSearch("")}
+              className="absolute left-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition hover:bg-accent hover:text-foreground"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
         <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
           className="px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white">
