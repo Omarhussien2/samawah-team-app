@@ -111,6 +111,7 @@ This file tracks the implementation state for agent-led work so a future session
 
 - Branch: `fix/project-document-storage-rls`
 - Started: 2026-05-17
-- Status: In progress
+- PR: https://github.com/Omarhussien2/samawah-team-app/pull/28
+- Status: Draft PR opened
 - Reason: User reported upload failure: `new row violates row-level security policy`.
 - Fix: Rework Storage policies through explicit `TO authenticated` policies and security-definer helpers; add `supabase/project-documents-storage-rls-fix.sql` for immediate Supabase SQL Editor application.
