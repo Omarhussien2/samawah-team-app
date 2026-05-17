@@ -29,12 +29,11 @@ export function formatFileSize(size: number | null | undefined) {
 }
 
 export function buildDocumentStoragePath(projectId: string, fileName: string) {
-  const extension = fileName.includes(".") ? fileName.split(".").pop() : "file";
-  const safeName = fileName
-    .replace(/\.[^/.]+$/, "")
-    .replace(/[^\p{L}\p{N}-]+/gu, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 48);
+  const rawExtension = fileName.includes(".") ? fileName.split(".").pop() : "";
+  const extension = (rawExtension ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+    .slice(0, 12) || "file";
 
-  return `projects/${projectId}/${crypto.randomUUID()}-${safeName || "document"}.${extension}`;
+  return `projects/${projectId}/${crypto.randomUUID()}-document.${extension}`;
 }
