@@ -54,8 +54,8 @@ This file tracks the implementation state for agent-led work so a future session
 
 - Branch: `fix/kpi-center-field-qa`
 - Started: 2026-05-17
-- PR: Pending
-- Status: Implementation in progress
+- PR: https://github.com/Omarhussien2/samawah-team-app/pull/26
+- Status: Draft PR opened
 
 ### UX Decisions
 
