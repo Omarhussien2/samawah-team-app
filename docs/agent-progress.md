@@ -142,7 +142,7 @@ This file tracks the implementation state for agent-led work so a future session
 
 ### Follow-up Fix - Challenges Risk SQL Patch
 
-- Branch: `codex/challenges-risk-fields-v1`
+- Branch: `codex/challenges-risk-sql-patch`
 - Started: 2026-05-17
 - Reason: User reported Supabase SQL Editor failure while applying `supabase/schema.sql`: `unterminated dollar-quoted string at or near "$$"`.
 - Diagnosis: The reported SQL included RLS statements inside the first `DO $$` block, which indicates the pasted SQL was incomplete or mixed across `schema.sql` and `rls.sql`.
