@@ -5,6 +5,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { formatDateShort, getAlertLevelColor, getPriorityColor, getAvatarUrl, cn } from "@/lib/utils";
 import { CalendarDays, AlertTriangle, MessageSquare, CheckSquare } from "lucide-react";
 import Image from "next/image";
+import { TaskTitleStack } from "@/components/tasks/task-title-stack";
 import type { Profile, Task } from "@/lib/supabase/types";
 
 interface Props {
@@ -75,13 +76,15 @@ export function KanbanCard({ task, onTaskClick, isDragging }: Props) {
         </div>
       </div>
 
-      {/* Title */}
-      <p className={cn(
-        "text-sm font-semibold text-slate-800 line-clamp-2 leading-snug mb-2",
-        task.status === "Done" && "line-through text-slate-500"
-      )}>
-        {task.title}
-      </p>
+      <TaskTitleStack
+        title={task.title}
+        subTask={task.sub_task}
+        category={task.category}
+        done={task.status === "Done"}
+        className="mb-2"
+        primaryClassName="text-sm text-slate-800"
+        secondaryClassName="text-[11px] text-slate-500"
+      />
 
       {/* Progress Bar (Thin) */}
       {(task.progress ?? 0) > 0 && task.status !== "Done" && (

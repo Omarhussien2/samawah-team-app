@@ -9,6 +9,7 @@ import { formatDateShort, getPriorityLabel, getStatusColor, getStatusLabel, isOv
 import { recalcProjectProgress } from "@/lib/utils/recalc-progress";
 import { createSearchMatcher } from "@/lib/utils/search";
 import { TaskModal } from "./task-modal";
+import { TaskTitleStack } from "./task-title-stack";
 import { useRealtimeSubscription } from "@/lib/supabase/realtime";
 import {
   applyMyTaskRealtimeChange,
@@ -248,8 +249,12 @@ export function MyTasksClient({ tasks: initialTasks, currentUser, profiles }: Pr
                         </span>
                       )}
                     </div>
-                    <p className="font-medium text-foreground">{task.title}</p>
-                    {task.sub_task && <p className="text-sm text-muted-foreground mt-0.5">{task.sub_task}</p>}
+                    <TaskTitleStack
+                      title={task.title}
+                      subTask={task.sub_task}
+                      category={task.category}
+                      done={task.status === "Done"}
+                    />
 
                     <div className="flex items-center gap-4 mt-2">
                       {task.due_date && (

@@ -13,6 +13,7 @@ import {
 } from "@/lib/utils";
 import { createSearchMatcher } from "@/lib/utils/search";
 import { TaskModal } from "./task-modal";
+import { TaskTitleStack } from "./task-title-stack";
 import { fetchTasks, taskKeys, type TaskWithRelations } from "@/lib/queries/tasks";
 import {
   Search,
@@ -346,14 +347,7 @@ export function TasksTable({
                     onClick={() => setSelectedTaskId(task.id)}
                   >
                     <td className="px-4 py-3">
-                      <p className="font-medium text-foreground line-clamp-1">
-                        {task.title}
-                      </p>
-                      {task.sub_task && (
-                        <p className="text-xs text-muted-foreground line-clamp-1">
-                          {task.sub_task}
-                        </p>
-                      )}
+                      <TaskTitleStack title={task.title} subTask={task.sub_task} category={task.category} />
                       {task.alert_level && task.alert_level !== "Low" && (
                         <span
                           className={cn(
