@@ -25,7 +25,8 @@ This file tracks the implementation state for agent-led work so a future session
 
 - Branch: `refactor/task-data-flow`
 - Started: 2026-05-17
-- Status: Implementation verified locally; PR pending
+- PR: https://github.com/Omarhussien2/samawah-team-app/pull/25
+- Status: Draft PR opened
 
 ### UX Decisions
 
