@@ -134,9 +134,14 @@ CREATE TABLE IF NOT EXISTS documents (
   title       TEXT NOT NULL,
   url         TEXT,
   file_path   TEXT,
+  file_name   TEXT,
+  file_type   TEXT,
+  file_size   BIGINT,
+  stage       TEXT,
   type        TEXT,
   created_by  UUID REFERENCES profiles(id) ON DELETE SET NULL,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- ============================================================
@@ -358,6 +363,17 @@ CREATE TABLE IF NOT EXISTS partnership_activities (
 ALTER TABLE documents
   ADD COLUMN IF NOT EXISTS form_instance_id UUID;
 
+ALTER TABLE documents
+  ADD COLUMN IF NOT EXISTS file_name TEXT,
+  ADD COLUMN IF NOT EXISTS file_type TEXT,
+  ADD COLUMN IF NOT EXISTS file_size BIGINT,
+  ADD COLUMN IF NOT EXISTS stage TEXT,
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('documents', 'documents', false)
+ON CONFLICT (id) DO UPDATE SET public = false;
+
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -570,6 +586,11 @@ CREATE TRIGGER update_challenges_updated_at
   BEFORE UPDATE ON challenges
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_documents_updated_at ON documents;
+CREATE TRIGGER update_documents_updated_at
+  BEFORE UPDATE ON documents
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- ============================================================
 -- Trigger: إنشاء profile تلقائياً عند تسجيل مستخدم جديد
 -- ============================================================
@@ -695,6 +716,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_dedupe
 CREATE INDEX IF NOT EXISTS idx_notification_preferences_user ON notification_preferences(user_id);
 CREATE INDEX IF NOT EXISTS idx_challenges_project ON challenges(project_id);
 CREATE INDEX IF NOT EXISTS idx_documents_project ON documents(project_id);
+CREATE INDEX IF NOT EXISTS idx_documents_stage ON documents(stage);
 CREATE INDEX IF NOT EXISTS idx_comments_task ON comments(task_id);
 
 -- ============================================================

@@ -238,7 +238,35 @@ CREATE POLICY "documents_select" ON documents
 
 DROP POLICY IF EXISTS "documents_insert" ON documents;
 CREATE POLICY "documents_insert" ON documents
-  FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+  FOR INSERT WITH CHECK (
+    auth.uid() IS NOT NULL
+    AND created_by = auth.uid()
+    AND (
+      get_my_role() = 'admin'
+      OR is_project_manager(project_id)
+      OR is_project_member(project_id)
+    )
+  );
+
+DROP POLICY IF EXISTS "documents_update" ON documents;
+CREATE POLICY "documents_update" ON documents
+  FOR UPDATE USING (
+    get_my_role() = 'admin'
+    OR created_by = auth.uid()
+    OR is_project_manager(project_id)
+  )
+  WITH CHECK (
+    (
+      get_my_role() = 'admin'
+      OR created_by = auth.uid()
+      OR is_project_manager(project_id)
+    )
+    AND (
+      get_my_role() = 'admin'
+      OR is_project_manager(project_id)
+      OR is_project_member(project_id)
+    )
+  );
 
 DROP POLICY IF EXISTS "documents_delete" ON documents;
 CREATE POLICY "documents_delete" ON documents
@@ -246,6 +274,62 @@ CREATE POLICY "documents_delete" ON documents
     get_my_role() = 'admin'
     OR created_by = auth.uid()
     OR is_project_manager(project_id)
+  );
+
+-- ============================================================
+-- Document Storage Policies
+-- ============================================================
+DROP POLICY IF EXISTS "documents_storage_select" ON storage.objects;
+CREATE POLICY "documents_storage_select" ON storage.objects
+  FOR SELECT USING (
+    bucket_id = 'documents'
+    AND (storage.foldername(name))[1] = 'projects'
+    AND EXISTS (
+      SELECT 1
+      FROM projects p
+      WHERE p.id::text = (storage.foldername(name))[2]
+        AND (
+          get_my_role() = 'admin'
+          OR is_project_manager(p.id)
+          OR is_project_member(p.id)
+        )
+    )
+  );
+
+DROP POLICY IF EXISTS "documents_storage_insert" ON storage.objects;
+CREATE POLICY "documents_storage_insert" ON storage.objects
+  FOR INSERT WITH CHECK (
+    bucket_id = 'documents'
+    AND auth.uid() IS NOT NULL
+    AND (storage.foldername(name))[1] = 'projects'
+    AND EXISTS (
+      SELECT 1
+      FROM projects p
+      WHERE p.id::text = (storage.foldername(name))[2]
+        AND (
+          get_my_role() = 'admin'
+          OR is_project_manager(p.id)
+          OR is_project_member(p.id)
+        )
+    )
+  );
+
+DROP POLICY IF EXISTS "documents_storage_delete" ON storage.objects;
+CREATE POLICY "documents_storage_delete" ON storage.objects
+  FOR DELETE USING (
+    bucket_id = 'documents'
+    AND (storage.foldername(name))[1] = 'projects'
+    AND EXISTS (
+      SELECT 1
+      FROM projects p
+      LEFT JOIN documents d ON d.file_path = storage.objects.name
+      WHERE p.id::text = (storage.foldername(storage.objects.name))[2]
+        AND (
+          get_my_role() = 'admin'
+          OR is_project_manager(p.id)
+          OR d.created_by = auth.uid()
+        )
+    )
   );
 
 -- ============================================================

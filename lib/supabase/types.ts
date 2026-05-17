@@ -272,9 +272,14 @@ export interface Database {
           title: string;
           url: string | null;
           file_path: string | null;
+          file_name: string | null;
+          file_type: string | null;
+          file_size: number | null;
+          stage: string | null;
           type: string | null;
           created_by: string | null;
           created_at: string;
+          updated_at: string;
         };
         Insert: {
           id?: string;
@@ -283,9 +288,14 @@ export interface Database {
           title?: string;
           url?: string | null;
           file_path?: string | null;
+          file_name?: string | null;
+          file_type?: string | null;
+          file_size?: number | null;
+          stage?: string | null;
           type?: string | null;
           created_by?: string | null;
           created_at?: string;
+          updated_at?: string;
         };
         Update: {
           id?: string;
@@ -294,9 +304,14 @@ export interface Database {
           title?: string;
           url?: string | null;
           file_path?: string | null;
+          file_name?: string | null;
+          file_type?: string | null;
+          file_size?: number | null;
+          stage?: string | null;
           type?: string | null;
           created_by?: string | null;
           created_at?: string;
+          updated_at?: string;
         };
         Relationships: [];
       };

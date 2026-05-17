@@ -48,14 +48,12 @@ This file tracks the implementation state for agent-led work so a future session
 - `pnpm build`: Passed. Build still reports the existing Next.js middleware-to-proxy warning.
 - Browser smoke test: `http://localhost:3001/board` redirected to `/login` because no auth session was available; login page loaded with 0 console errors.
 
-## Current Task
-
 ### Task 02 - KPI Center Field QA / Workspaces
 
 - Branch: `fix/kpi-center-field-qa`
 - Started: 2026-05-17
 - PR: https://github.com/Omarhussien2/samawah-team-app/pull/26
-- Status: Draft PR opened
+- Status: Merged into `main`
 
 ### UX Decisions
 
@@ -77,3 +75,34 @@ This file tracks the implementation state for agent-led work so a future session
 - `pnpm test`: Passed, 9 files / 28 tests.
 - `pnpm build`: Passed. Build still reports the existing Next.js middleware-to-proxy warning.
 - Browser smoke test: `http://localhost:3001/kpis` redirected to `/login` because no auth session was available; login page loaded with 0 console errors.
+
+## Current Task
+
+### Project Documents V1 - Detailed Project-Only Attachments
+
+- Branch: `feat/project-documents-v1`
+- Started: 2026-05-17
+- PR: https://github.com/Omarhussien2/samawah-team-app/pull/27
+- Status: Draft PR opened
+
+### UX Decisions
+
+- The user explicitly does not want task attachments. Document upload/detail work is project-only.
+- Use the existing `documents` table and the private `documents` Supabase Storage bucket instead of creating `task_attachments`.
+- A project document can be a real uploaded file, an external URL, or both.
+- Documents carry operational metadata: type, project stage, original file name, MIME type, file size, creator, and timestamps.
+- Project detail and global Documents pages should expose the same document actions: create, open, edit metadata, delete, and filter/search where relevant.
+
+### Implementation Notes
+
+- Added project-document metadata columns to `documents`: `file_name`, `file_type`, `file_size`, `stage`, and `updated_at`.
+- Added Storage RLS policies for files stored under `documents/projects/{projectId}/...`.
+- Task-related document UI remains out of scope for this task.
+
+### Verification
+
+- `pnpm lint`: Passed with existing warnings only.
+- `pnpm typecheck`: Passed.
+- `pnpm test`: Passed, 10 files / 30 tests.
+- `pnpm build`: Passed. Build still reports the existing Next.js middleware-to-proxy warning.
+- Browser smoke test: `http://127.0.0.1:3001/documents` and `/projects/test-project?tab=documents` redirected to `/login` because no auth session was available; login page loaded with 0 console errors.
