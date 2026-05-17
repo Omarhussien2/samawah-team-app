@@ -106,3 +106,11 @@ This file tracks the implementation state for agent-led work so a future session
 - `pnpm test`: Passed, 10 files / 30 tests.
 - `pnpm build`: Passed. Build still reports the existing Next.js middleware-to-proxy warning.
 - Browser smoke test: `http://127.0.0.1:3001/documents` and `/projects/test-project?tab=documents` redirected to `/login` because no auth session was available; login page loaded with 0 console errors.
+
+### Follow-up Fix - Storage RLS
+
+- Branch: `fix/project-document-storage-rls`
+- Started: 2026-05-17
+- Status: In progress
+- Reason: User reported upload failure: `new row violates row-level security policy`.
+- Fix: Rework Storage policies through explicit `TO authenticated` policies and security-definer helpers; add `supabase/project-documents-storage-rls-fix.sql` for immediate Supabase SQL Editor application.
