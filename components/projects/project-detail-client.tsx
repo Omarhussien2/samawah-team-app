@@ -19,7 +19,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Loader2, X } from "lucide-react";
 import { fetchTasks, taskKeys, type TaskWithRelations } from "@/lib/queries/tasks";
-import type { Profile, Project, Challenge, Document } from "@/lib/supabase/types";
+import { summarizeChallenges } from "@/lib/challenges/risk";
+import type { Profile, Project, Challenge, Document, KpiDefinition } from "@/lib/supabase/types";
 
 const TABS = [
   { key: "overview", label: "نظرة عامة" },
@@ -47,13 +48,17 @@ type EditFormData = z.infer<typeof editSchema>;
 interface Props {
   project: Project & { manager?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null };
   tasks: TaskWithRelations[];
-  challenges: (Challenge & { owner?: Pick<Profile, "id" | "full_name"> | null })[];
+  challenges: (Challenge & {
+    owner?: Pick<Profile, "id" | "full_name"> | null;
+    kpi?: Pick<KpiDefinition, "id" | "name" | "code"> | null;
+  })[];
   documents: (Document & { creator?: Pick<Profile, "id" | "full_name"> | null })[];
   profiles: Pick<Profile, "id" | "full_name" | "avatar_url">[];
+  kpiDefinitions: KpiDefinition[];
   currentUser: Profile;
 }
 
-export function ProjectDetailClient({ project, tasks: initialTasks, challenges, documents, profiles, currentUser }: Props) {
+export function ProjectDetailClient({ project, tasks: initialTasks, challenges, documents, profiles, kpiDefinitions, currentUser }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -163,6 +168,7 @@ export function ProjectDetailClient({ project, tasks: initialTasks, challenges, 
   };
 
   const progress = Math.round(project.progress ?? 0);
+  const challengeSummary = summarizeChallenges(challenges);
   const radius = 24;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (progress / 100) * circumference;
@@ -356,9 +362,12 @@ export function ProjectDetailClient({ project, tasks: initialTasks, challenges, 
                   <span className="font-semibold text-sm">التحديات</span>
                 </div>
                 <div className="flex items-end gap-2">
-                  <p className="text-3xl font-black text-slate-800">{challenges.filter(c => c.status === "open").length}</p>
+                  <p className="text-3xl font-black text-slate-800">{challengeSummary.open}</p>
                   <p className="text-sm font-medium text-slate-500 mb-1">مفتوحة</p>
                 </div>
+                <p className="mt-2 text-xs font-semibold text-slate-500">
+                  {challengeSummary.critical} حرجة، تغطية المخاطر {challengeSummary.riskCoverage}%
+                </p>
               </div>
             </div>
           </div>
@@ -381,7 +390,13 @@ export function ProjectDetailClient({ project, tasks: initialTasks, challenges, 
         {/* CHALLENGES TAB */}
         {activeTab === "challenges" && (
           <div className="animate-in fade-in duration-300">
-            <ChallengesList challenges={challenges} profiles={profiles} projectId={project.id} />
+            <ChallengesList
+              challenges={challenges}
+              profiles={profiles}
+              projectId={project.id}
+              currentUser={currentUser}
+              kpiDefinitions={kpiDefinitions}
+            />
           </div>
         )}
 

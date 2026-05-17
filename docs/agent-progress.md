@@ -130,3 +130,12 @@ This file tracks the implementation state for agent-led work so a future session
 - UX decision: In task lists/cards, show the sub task as the bold primary line because it carries the actionable task name, then show the task category/section below it as supporting context.
 - Implementation notes: Added a shared `TaskTitleStack` and `getTaskDisplayLines()` helper; wired task table, board cards, My Tasks cards, and dashboard task lists to the same hierarchy.
 - Verification: `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build` passed.
+
+### Task 07 - Challenges And Risk Management
+
+- Branch: `codex/challenges-risk-fields-v1`
+- Started: 2026-05-17
+- UX decision: Treat the page as a combined challenges and risks register. Each item carries a type, probability, impact, calculated risk score, response strategy, mitigation plan, contingency/escalation plan, follow-up date, owner, and optional linked KPI.
+- KPI decision: Link risk handling to the operations KPI `OPS_RISK_COVERAGE`. The current V1 calculation uses open items: low-risk or in-progress items count as handled; resolved/closed items are not counted as open exposure.
+- Implementation notes: Extended `challenges` with risk fields and generated `risk_score`/`risk_level`; updated the global challenges page and project challenges tab with summary cards, richer create/edit details, risk cards, and KPI syncing after create/status changes.
+- Verification: `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build` passed. Lint still reports existing warnings only.

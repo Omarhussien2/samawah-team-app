@@ -1,7 +1,8 @@
 import { averageMetric, selectLatestProjectPerformanceByProject } from "@/lib/kpis/operations";
 import { aggregateKpiActuals, getKpiAggregation, getKpiPeriodTarget } from "@/lib/kpis/aggregation";
 import { calculateKpiStatus } from "@/lib/kpis/status";
-import type { KpiValueUpsert, ProjectPerformanceRecord, SimpleWorkspaceKind, SimpleWorkspaceRecord } from "@/lib/queries/kpis";
+import { summarizeChallenges } from "@/lib/challenges/risk";
+import type { ChallengeRiskRecord, KpiValueUpsert, ProjectPerformanceRecord, SimpleWorkspaceKind, SimpleWorkspaceRecord } from "@/lib/queries/kpis";
 import type { IndicatorProduct, KpiDefinition, KpiPeriodType, KpiValue } from "@/lib/supabase/types";
 
 type KpiValueContext = {
@@ -70,6 +71,24 @@ export function buildOperationsKpiValues(
     ...context,
     notes: "تحديث تلقائي من مساحة العمليات والمشاريع",
   });
+}
+
+export function buildChallengeRiskKpiValues(
+  challenges: ChallengeRiskRecord[],
+  definitions: KpiDefinition[],
+  context: Omit<KpiValueContext, "notes">
+) {
+  const summary = summarizeChallenges(challenges);
+  return buildKpiValuesFromCodes(
+    {
+      OPS_RISK_COVERAGE: summary.riskCoverage,
+    },
+    definitions,
+    {
+      ...context,
+      notes: "تحديث تلقائي من سجل التحديات والمخاطر",
+    }
+  );
 }
 
 export function calculateSimpleWorkspaceActuals(
