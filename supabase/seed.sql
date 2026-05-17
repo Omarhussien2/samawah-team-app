@@ -393,7 +393,7 @@ INSERT INTO kpi_definitions (
   ('OPS_EXTERNAL_TRAINING', 'التدريب والتطوير الخارجي', 'ساعات التدريب الخارجي لكل موظف.', 'العمليات والمشاريع', 'الفريق وبناء القدرات', 'تدريب خارجي', 20, '20 ساعة للموظف', 'ساعة/موظف', 'higher_is_better', 'manual', NULL, 'quarterly', 'team', 380),
   ('OPS_PROGRAM_INTEGRATION', 'التكامل بين البرامج', 'نسبة البرامج التي بينها تكامل تشغيلي.', 'العمليات والمشاريع', 'التكامل والأنظمة', 'تكامل البرامج', 30, '30% من البرامج', '%', 'higher_is_better', 'manual', NULL, 'quarterly', 'team', 390),
   ('OPS_REVISION_ROUNDS', 'متوسط عدد جولات التعديلات', 'متوسط جولات التعديلات لكل مشروع.', 'العمليات والمشاريع', 'إدارة المخاطر', 'جولات التعديلات', 2, '<2 للمشروع', 'جولة/مشروع', 'lower_is_better', 'manual', NULL, 'monthly', 'team', 400),
-  ('OPS_RISK_COVERAGE', 'مؤشر إدارة المخاطر', 'نسبة تغطية المخاطر وإدارتها.', 'العمليات والمشاريع', 'إدارة المخاطر', 'تغطية المخاطر', 80, '80%', '%', 'higher_is_better', 'manual', NULL, 'monthly', 'team', 410),
+  ('OPS_RISK_COVERAGE', 'مؤشر إدارة المخاطر', 'نسبة تغطية المخاطر وإدارتها.', 'العمليات والمشاريع', 'إدارة المخاطر', 'تغطية المخاطر', 80, '80%', '%', 'higher_is_better', 'semi_auto', 'challenges', 'monthly', 'team', 410),
 
   ('SERV_PODCAST', 'إنتاج بودكاست', 'عدد حلقات البودكاست المنتجة.', 'البرامج والخدمات', 'البرامج المرئية', 'حلقات بودكاست', 30, '30 حلقة', 'حلقة', 'higher_is_better', 'manual', NULL, 'monthly', 'team', 510),
   ('SERV_YOUTUBE_PROGRAMS', 'برنامج يوتيوب معرفي', 'عدد برامج يوتيوب المعرفية والحلقات التابعة لها.', 'البرامج والخدمات', 'البرامج المرئية', 'برامج يوتيوب معرفية', 2, '2 برامج بعدد 10 حلقات', 'برنامج', 'higher_is_better', 'manual', NULL, 'monthly', 'team', 520),
@@ -475,3 +475,7 @@ WHERE code IN ('SERV_PODCAST', 'SERV_YOUTUBE_PROGRAMS', 'SERV_MEDIA_REPORTS');
 UPDATE kpi_definitions
 SET calculation_method = 'semi_auto', auto_source = 'partnership_activities', updated_at = NOW()
 WHERE code IN ('PART_AWARDS', 'PART_SPONSORSHIPS', 'PART_EVENTS', 'PART_PRODUCT_SPONSORS', 'PART_INTEGRATIONS', 'PART_SPEAKING');
+
+UPDATE kpi_definitions
+SET calculation_method = 'semi_auto', auto_source = 'challenges', updated_at = NOW()
+WHERE code = 'OPS_RISK_COVERAGE';

@@ -8,12 +8,17 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const { user } = await getUser();
   const supabase = await createClient();
 
-  const [{ data: project }, { data: tasks }, { data: challenges }, { data: documents }, { data: profiles }] = await Promise.all([
+  const [{ data: project }, { data: tasks }, { data: challenges }, { data: documents }, { data: profiles }, { data: kpiDefinitions }] = await Promise.all([
     supabase.from("projects").select("*, manager:profiles!projects_manager_id_fkey(id,full_name,avatar_url)").eq("id", id).single(),
     supabase.from("tasks").select("*, owner:profiles(id,full_name,avatar_url)").eq("project_id", id).order("sort_order"),
-    supabase.from("challenges").select("*, owner:profiles(id,full_name)").eq("project_id", id).order("created_at", { ascending: false }),
+    supabase
+      .from("challenges")
+      .select("*, owner:profiles(id,full_name), kpi:kpi_definitions(id,name,code)")
+      .eq("project_id", id)
+      .order("created_at", { ascending: false }),
     supabase.from("documents").select("*, creator:profiles(id,full_name)").eq("project_id", id).order("created_at", { ascending: false }),
     supabase.from("profiles").select("id,full_name,avatar_url").eq("active", true),
+    supabase.from("kpi_definitions").select("*").eq("active", true).eq("perspective", "العمليات والمشاريع").order("sort_order", { ascending: true }),
   ]);
 
   if (!project) notFound();
@@ -26,6 +31,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         challenges={challenges ?? []}
         documents={documents ?? []}
         profiles={profiles ?? []}
+        kpiDefinitions={kpiDefinitions ?? []}
         currentUser={user}
       />
     </div>

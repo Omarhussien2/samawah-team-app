@@ -116,12 +116,52 @@ CREATE TABLE IF NOT EXISTS challenges (
   description TEXT,
   status      TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','in_progress','resolved','closed')),
   owner_id    UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  kind        TEXT NOT NULL DEFAULT 'challenge' CHECK (kind IN ('challenge','risk','issue')),
   risk_impact TEXT,
   risk_type   TEXT,
+  probability_score SMALLINT NOT NULL DEFAULT 3 CHECK (probability_score BETWEEN 1 AND 5),
+  impact_score      SMALLINT NOT NULL DEFAULT 3 CHECK (impact_score BETWEEN 1 AND 5),
+  risk_score        SMALLINT GENERATED ALWAYS AS (probability_score * impact_score) STORED,
+  risk_level        TEXT GENERATED ALWAYS AS (
+    CASE
+      WHEN probability_score * impact_score >= 20 THEN 'critical'
+      WHEN probability_score * impact_score >= 12 THEN 'high'
+      WHEN probability_score * impact_score >= 6 THEN 'medium'
+      ELSE 'low'
+    END
+  ) STORED,
+  response_strategy TEXT NOT NULL DEFAULT 'mitigate' CHECK (response_strategy IN ('mitigate','avoid','transfer','accept','monitor')),
+  mitigation_plan   TEXT,
+  contingency_plan  TEXT,
+  due_date          DATE,
+  identified_at     DATE NOT NULL DEFAULT CURRENT_DATE,
+  resolved_at       TIMESTAMPTZ,
+  kpi_id            UUID,
   resolution  TEXT,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE challenges ADD COLUMN IF NOT EXISTS form_instance_id UUID;
+ALTER TABLE challenges ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'challenge' CHECK (kind IN ('challenge','risk','issue'));
+ALTER TABLE challenges ADD COLUMN IF NOT EXISTS probability_score SMALLINT NOT NULL DEFAULT 3 CHECK (probability_score BETWEEN 1 AND 5);
+ALTER TABLE challenges ADD COLUMN IF NOT EXISTS impact_score SMALLINT NOT NULL DEFAULT 3 CHECK (impact_score BETWEEN 1 AND 5);
+ALTER TABLE challenges ADD COLUMN IF NOT EXISTS risk_score SMALLINT GENERATED ALWAYS AS (probability_score * impact_score) STORED;
+ALTER TABLE challenges ADD COLUMN IF NOT EXISTS risk_level TEXT GENERATED ALWAYS AS (
+  CASE
+    WHEN probability_score * impact_score >= 20 THEN 'critical'
+    WHEN probability_score * impact_score >= 12 THEN 'high'
+    WHEN probability_score * impact_score >= 6 THEN 'medium'
+    ELSE 'low'
+  END
+) STORED;
+ALTER TABLE challenges ADD COLUMN IF NOT EXISTS response_strategy TEXT NOT NULL DEFAULT 'mitigate' CHECK (response_strategy IN ('mitigate','avoid','transfer','accept','monitor'));
+ALTER TABLE challenges ADD COLUMN IF NOT EXISTS mitigation_plan TEXT;
+ALTER TABLE challenges ADD COLUMN IF NOT EXISTS contingency_plan TEXT;
+ALTER TABLE challenges ADD COLUMN IF NOT EXISTS due_date DATE;
+ALTER TABLE challenges ADD COLUMN IF NOT EXISTS identified_at DATE NOT NULL DEFAULT CURRENT_DATE;
+ALTER TABLE challenges ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ;
+ALTER TABLE challenges ADD COLUMN IF NOT EXISTS kpi_id UUID;
 
 -- ============================================================
 -- 6. جدول المستندات (documents)
@@ -385,6 +425,31 @@ BEGIN
     ALTER TABLE documents
       ADD CONSTRAINT documents_form_instance_id_fkey
       FOREIGN KEY (form_instance_id) REFERENCES project_form_instances(id) ON DELETE SET NULL;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'challenges_form_instance_id_fkey'
+      AND conrelid = 'challenges'::regclass
+  ) THEN
+    ALTER TABLE challenges
+      ADD CONSTRAINT challenges_form_instance_id_fkey
+      FOREIGN KEY (form_instance_id) REFERENCES project_form_instances(id) ON DELETE SET NULL;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'challenges_kpi_id_fkey'
+      AND conrelid = 'challenges'::regclass
+  ) THEN
+    ALTER TABLE challenges
+      ADD CONSTRAINT challenges_kpi_id_fkey
+      FOREIGN KEY (kpi_id) REFERENCES kpi_definitions(id) ON DELETE SET NULL;
   END IF;
 END $$;
 
@@ -715,6 +780,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_dedupe
   WHERE dedupe_key IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_notification_preferences_user ON notification_preferences(user_id);
 CREATE INDEX IF NOT EXISTS idx_challenges_project ON challenges(project_id);
+CREATE INDEX IF NOT EXISTS idx_challenges_status ON challenges(status);
+CREATE INDEX IF NOT EXISTS idx_challenges_risk_level ON challenges(risk_level);
+CREATE INDEX IF NOT EXISTS idx_challenges_kpi ON challenges(kpi_id);
 CREATE INDEX IF NOT EXISTS idx_documents_project ON documents(project_id);
 CREATE INDEX IF NOT EXISTS idx_documents_stage ON documents(stage);
 CREATE INDEX IF NOT EXISTS idx_comments_task ON comments(task_id);
@@ -725,6 +793,7 @@ CREATE INDEX IF NOT EXISTS idx_comments_task ON comments(task_id);
 GRANT SELECT ON project_form_templates TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON project_form_instances TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON project_form_shares TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON challenges TO authenticated;
 GRANT SELECT ON kpi_definitions TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON kpi_values TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON kpi_share_links TO authenticated;

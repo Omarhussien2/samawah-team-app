@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildChallengeRiskKpiValues,
   buildOperationsKpiValues,
   buildProductKpiValues,
   buildQuarterlyKpiValueRollups,
   buildSimpleWorkspaceKpiValues,
   calculateSimpleWorkspaceActuals,
 } from "../lib/kpis/auto-calculations";
-import type { ProjectPerformanceRecord, SimpleWorkspaceRecord } from "../lib/queries/kpis";
+import type { ChallengeRiskRecord, ProjectPerformanceRecord, SimpleWorkspaceRecord } from "../lib/queries/kpis";
 import type { KpiDefinition, KpiValue } from "../lib/supabase/types";
 
 const periodContext = {
@@ -92,6 +93,22 @@ describe("KPI auto calculations", () => {
 
     expect(byKpi.cpi.actual_value).toBe(1);
     expect(byKpi.coverage.actual_value).toBe(50);
+  });
+
+  it("syncs OPS_RISK_COVERAGE from open challenge handling", () => {
+    const [definition] = [kpiDefinition("OPS_RISK_COVERAGE", "risk-coverage", 80, "challenges")];
+    const values = buildChallengeRiskKpiValues([
+      challengeRisk({ id: "critical", status: "open", probability_score: 5, impact_score: 5 }),
+      challengeRisk({ id: "handled", status: "in_progress", probability_score: 3, impact_score: 4 }),
+      challengeRisk({ id: "closed", status: "resolved", probability_score: 5, impact_score: 5 }),
+    ], [definition], periodContext);
+
+    expect(values).toHaveLength(1);
+    expect(values[0]).toMatchObject({
+      kpi_id: "risk-coverage",
+      actual_value: 50,
+      source: "semi_auto",
+    });
   });
 
   it("rolls monthly KPI values into quarterly values without dropping existing Q1 cache entries", () => {
@@ -187,6 +204,23 @@ function performanceUpdate(patch: Partial<ProjectPerformanceRecord>): ProjectPer
       total_budget: patch.project?.total_budget ?? 1000,
       progress: patch.project?.progress ?? 0,
     },
+  };
+}
+
+function challengeRisk(patch: Partial<ChallengeRiskRecord>): ChallengeRiskRecord {
+  const probability = patch.probability_score ?? 3;
+  const impact = patch.impact_score ?? 3;
+  const score = probability * impact;
+  return {
+    id: patch.id ?? "challenge-1",
+    project_id: patch.project_id ?? "project-1",
+    status: patch.status ?? "open",
+    probability_score: probability,
+    impact_score: impact,
+    risk_score: score,
+    risk_level: patch.risk_level ?? (score >= 20 ? "critical" : score >= 12 ? "high" : score >= 6 ? "medium" : "low"),
+    kpi_id: patch.kpi_id ?? null,
+    updated_at: patch.updated_at ?? "2026-05-01T00:00:00Z",
   };
 }
 

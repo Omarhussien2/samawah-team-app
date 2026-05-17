@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/client";
 import type {
   Database,
   AudienceMetric,
+  Challenge,
   ClientOpportunity,
   IndicatorProduct,
   KpiDefinition,
@@ -49,6 +50,10 @@ export type SimpleWorkspaceRecord =
   | AudienceMetric
   | ServiceOutput
   | PartnershipActivity;
+export type ChallengeRiskRecord = Pick<
+  Challenge,
+  "id" | "project_id" | "status" | "probability_score" | "impact_score" | "risk_score" | "risk_level" | "kpi_id" | "updated_at"
+>;
 export type SimpleWorkspacePayload =
   | (RevenueEntryInsert & { id?: string })
   | (ClientOpportunityInsert & { id?: string })
@@ -66,6 +71,7 @@ export const kpiKeys = {
   products: () => [...kpiKeys.all, "products"] as const,
   projectPerformance: (periodType: KpiPeriodType, periodStart: string, periodEnd: string) =>
     [...kpiKeys.all, "project-performance", periodType, periodStart, periodEnd] as const,
+  challengeRisks: () => [...kpiKeys.all, "challenge-risks"] as const,
   simpleWorkspace: (kind: SimpleWorkspaceKind, periodType?: KpiPeriodType, periodStart?: string, periodEnd?: string) =>
     periodType && periodStart && periodEnd
       ? ([...kpiKeys.all, "simple-workspace", kind, periodType, periodStart, periodEnd] as const)
@@ -257,6 +263,17 @@ export async function fetchActiveProjectsForPerformance(): Promise<
     .select("id,name,manager_id,total_budget,progress")
     .neq("status", "cancelled")
     .order("name", { ascending: true });
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function fetchChallengeRiskRecords(): Promise<ChallengeRiskRecord[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("challenges")
+    .select("id,project_id,status,probability_score,impact_score,risk_score,risk_level,kpi_id,updated_at")
+    .order("updated_at", { ascending: false });
 
   if (error) throw error;
   return data ?? [];
