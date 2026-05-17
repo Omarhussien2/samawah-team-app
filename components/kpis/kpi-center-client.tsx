@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KpiBulkUpdateModal } from "@/components/kpis/kpi-bulk-update-modal";
 import { KpiRadarDashboard } from "@/components/kpis/kpi-radar-dashboard";
 import { KpiTargetsModal } from "@/components/kpis/kpi-targets-modal";
+import { KpiWorkspace } from "@/components/kpis/kpi-workspace";
 import { ShareLinkPanel } from "@/components/kpis/share-link-panel";
 import { findPeriodOption, getCurrentKpiPeriod, getPeriodOptions, type KpiPeriodOption } from "@/lib/kpis/periods";
 import {
@@ -47,6 +48,16 @@ const TABS = [
   PRODUCTS_TAB,
   PARTNERSHIPS_TAB,
 ];
+
+const WORKSPACE_BY_TAB = {
+  [REVENUE_TAB]: "revenue",
+  [CLIENTS_TAB]: "clients",
+  [AUDIENCE_TAB]: "audience",
+  [OPERATIONS_TAB]: "operations",
+  [SERVICES_TAB]: "services",
+  [PRODUCTS_TAB]: "products",
+  [PARTNERSHIPS_TAB]: "partnerships",
+} as const;
 
 type BulkScope = {
   section?: string;
@@ -137,6 +148,11 @@ export function KpiCenterClient({
     setBulkOpen(true);
   };
 
+  const canManageWorkspace = (tab: string) => {
+    if (tab === REVENUE_TAB) return isAdmin;
+    return isAdmin || currentUser.role === "project_manager";
+  };
+
   return (
     <>
       <div className="space-y-6">
@@ -218,20 +234,34 @@ export function KpiCenterClient({
             return (
               <TabsContent key={tab} value={tab} className="mt-6">
                 {sectionDefinitions.length > 0 ? (
-                  <KpiRadarDashboard
-                    definitions={sectionDefinitions}
-                    values={values}
-                    yearValues={yearValues}
-                    periodType={periodType}
-                    periodLabel={selectedPeriod.label}
-                    year={selectedYear}
-                    isFetching={isFetching || isFetchingYearValues}
-                    isAdmin={isAdmin}
-                    scopePerspective={tab}
-                    onOpenBulkUpdate={() => openBulkUpdate(tab)}
-                    onOpenTargets={() => setTargetsOpen(true)}
-                    onEditIndicator={openIndicatorUpdate}
-                  />
+                  <div className="space-y-6">
+                    <KpiRadarDashboard
+                      definitions={sectionDefinitions}
+                      values={values}
+                      yearValues={yearValues}
+                      periodType={periodType}
+                      periodLabel={selectedPeriod.label}
+                      year={selectedYear}
+                      isFetching={isFetching || isFetchingYearValues}
+                      isAdmin={isAdmin}
+                      scopePerspective={tab}
+                      onOpenBulkUpdate={() => openBulkUpdate(tab)}
+                      onOpenTargets={() => setTargetsOpen(true)}
+                      onEditIndicator={openIndicatorUpdate}
+                    />
+                    <KpiWorkspace
+                      kind={WORKSPACE_BY_TAB[tab as keyof typeof WORKSPACE_BY_TAB]}
+                      title={tab}
+                      definitions={sectionDefinitions}
+                      values={values}
+                      currentUserId={currentUser.id}
+                      periodType={periodType}
+                      periodStart={selectedPeriod.periodStart}
+                      periodEnd={selectedPeriod.periodEnd}
+                      periodLabel={selectedPeriod.label}
+                      canManage={canManageWorkspace(tab)}
+                    />
+                  </div>
                 ) : (
                   <div className="rounded-xl border border-dashed border-slate-200 bg-white p-10 text-center text-slate-500">
                     لا توجد مؤشرات متاحة لهذا القسم حسب صلاحيتك الحالية.

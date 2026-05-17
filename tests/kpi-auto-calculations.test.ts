@@ -3,6 +3,7 @@ import {
   buildOperationsKpiValues,
   buildProductKpiValues,
   buildQuarterlyKpiValueRollups,
+  buildSimpleWorkspaceKpiValues,
   calculateSimpleWorkspaceActuals,
 } from "../lib/kpis/auto-calculations";
 import type { ProjectPerformanceRecord, SimpleWorkspaceRecord } from "../lib/queries/kpis";
@@ -42,6 +43,18 @@ describe("KPI auto calculations", () => {
       actual_value: 0,
     });
     expect(values[0].target_value).toBeCloseTo(5000 / 12);
+  });
+
+  it("emits clearing values when simple workspace source records are removed", () => {
+    const [definition] = [kpiDefinition("REV_GOV_ANNUAL", "revenue-kpi", 1200, "revenue_entries")];
+    const values = buildSimpleWorkspaceKpiValues("revenue", [], [definition], periodContext);
+
+    expect(values).toHaveLength(1);
+    expect(values[0]).toMatchObject({
+      kpi_id: "revenue-kpi",
+      actual_value: 0,
+    });
+    expect(values[0].target_value).toBeCloseTo(1200 / 12);
   });
 
   it("emits neutral CPI/SPI values when the last project update is removed", () => {
