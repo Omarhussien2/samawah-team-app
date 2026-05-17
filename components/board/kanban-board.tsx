@@ -1,18 +1,25 @@
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   DndContext, DragEndEvent, DragOverlay, DragStartEvent,
   PointerSensor, useSensor, useSensors, closestCorners,
 } from "@dnd-kit/core";
-import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { KanbanColumn } from "./kanban-column";
 import { KanbanCard } from "./kanban-card";
 import { TaskModal } from "@/components/tasks/task-modal";
 import { QuickAddTaskModal } from "@/components/tasks/quick-add-task-modal";
 import { useTasksSubscription } from "@/lib/supabase/realtime";
+import {
+  applyTaskListChange,
+  applyTaskToTaskQueries,
+  fetchTasks,
+  taskKeys,
+  updateTask,
+  type TaskWithRelations,
+} from "@/lib/queries/tasks";
 import { Search, Filter, LayoutGrid, List, Calendar, Plus, X } from "lucide-react";
 import { recalcProjectProgress } from "@/lib/utils/recalc-progress";
 import { getPriorityLabel, getStatusLabel } from "@/lib/utils";
@@ -28,66 +35,88 @@ export const COLUMNS = [
 ];
 
 interface Props {
-  tasks: (Task & { 
-    owner?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null;
-    project?: { id: string; name: string } | null;
-  })[];
+  tasks: TaskWithRelations[];
   projectId: string;
   profiles: Pick<Profile, "id" | "full_name" | "avatar_url">[];
 }
 
 export function KanbanBoard({ tasks: initialTasks, projectId, profiles }: Props) {
-  const router = useRouter();
-  const [tasks, setTasks] = useState(initialTasks);
-  const [activeTask, setActiveTask] = useState<typeof initialTasks[0] | null>(null);
-  const [selectedTask, setSelectedTask] = useState<typeof initialTasks[0] | null>(null);
+  const queryClient = useQueryClient();
+  const taskQueryKey = useMemo(() => (projectId ? taskKeys.byProject(projectId) : taskKeys.list()), [projectId]);
+  const { data: tasks = initialTasks } = useQuery({
+    queryKey: taskQueryKey,
+    queryFn: () => fetchTasks({ projectId: projectId || null }),
+    initialData: initialTasks,
+  });
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"board" | "list" | "calendar">("board");
+
+  const activeTask = useMemo(
+    () => tasks.find((task) => task.id === activeTaskId) ?? null,
+    [tasks, activeTaskId]
+  );
+  const selectedTask = useMemo(
+    () => tasks.find((task) => task.id === selectedTaskId) ?? null,
+    [tasks, selectedTaskId]
+  );
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   // --- Realtime Subscription ---
   const handleTaskChange = useCallback(
     (payload: { eventType: string; task: Record<string, unknown> }) => {
-      const { eventType, task: changedTask } = payload;
-      const taskId = changedTask.id as string;
+      const changedTask = payload.task as unknown as TaskWithRelations;
 
-      if (eventType === "INSERT") {
-        setTasks((prev) => {
-          if (prev.some((t) => t.id === taskId)) return prev;
-          return [...prev, changedTask as unknown as typeof initialTasks[0]];
-        });
-      } else if (eventType === "UPDATE") {
-        setTasks((prev) =>
-          prev.map((t) =>
-            t.id === taskId ? { ...t, ...changedTask } as typeof initialTasks[0] : t
-          )
-        );
-      } else if (eventType === "DELETE") {
-        setTasks((prev) => prev.filter((t) => t.id !== taskId));
+      applyTaskListChange(queryClient, taskQueryKey, payload.eventType, changedTask, {
+        projectId: projectId || null,
+      });
+      queryClient.invalidateQueries({ queryKey: taskQueryKey });
+
+      if (payload.eventType === "DELETE" && selectedTaskId === changedTask.id) {
+        setSelectedTaskId(null);
       }
     },
-    [initialTasks]
+    [queryClient, taskQueryKey, projectId, selectedTaskId]
   );
 
   useTasksSubscription(projectId || null, handleTaskChange);
 
-  const handleTaskSaved = useCallback((updatedTask: Task) => {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === updatedTask.id ? { ...t, ...updatedTask } : t))
-    );
-    setSelectedTask((prev) => (prev?.id === updatedTask.id ? { ...prev, ...updatedTask } : prev));
-  }, []);
+  const moveTaskMutation = useMutation({
+    mutationFn: ({ task, targetColumn }: { task: TaskWithRelations; targetColumn: Task["status"] }) =>
+      updateTask(task.id, {
+        board_column: targetColumn,
+        status: targetColumn,
+        ...(targetColumn === "Done" ? { progress: 100 } : {}),
+      }),
+    onSuccess: (updatedTask) => {
+      applyTaskToTaskQueries(queryClient, updatedTask);
+      queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      recalcProjectProgress(updatedTask.project_id);
+    },
+    onError: () => {
+      toast.error("ما نجح تحديث حالة المهمة");
+    },
+  });
+
+  const handleTaskCreated = useCallback(
+    (task: TaskWithRelations) => {
+      applyTaskListChange(queryClient, taskQueryKey, "INSERT", task, { projectId: projectId || null });
+      queryClient.invalidateQueries({ queryKey: taskQueryKey });
+    },
+    [queryClient, taskQueryKey, projectId]
+  );
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const task = tasks.find((t) => t.id === event.active.id);
-    setActiveTask(task ?? null);
+    setActiveTaskId(task?.id ?? null);
   }, [tasks]);
 
   const handleDragEnd = useCallback(async (event: DragEndEvent) => {
     const { active, over } = event;
-    setActiveTask(null);
+    setActiveTaskId(null);
     if (!over) return;
 
     const draggedTask = tasks.find((t) => t.id === active.id);
@@ -103,28 +132,10 @@ export function KanbanBoard({ tasks: initialTasks, projectId, profiles }: Props)
     if (draggedTask.board_column === targetColumn) return;
 
     const oldStatus = draggedTask.status;
+    const newStatus = targetColumn as Task["status"];
 
-    // Optimistic UI update
-    setTasks((prev) =>
-      prev.map((t) =>
-        t.id === draggedTask.id
-          ? { ...t, board_column: targetColumn, status: targetColumn as Task["status"] }
-          : t
-      )
-    );
-
-    const supabase = createClient();
-    const doneFix = targetColumn === "Done" ? { progress: 100 } : {};
-    const { error } = await supabase
-      .from("tasks")
-      .update({ board_column: targetColumn, status: targetColumn as Task["status"], ...doneFix })
-      .eq("id", draggedTask.id);
-
-    if (error) {
-      toast.error("ما نجح تحديث حالة المهمة");
-      setTasks(initialTasks);
-    } else {
-      recalcProjectProgress(draggedTask.project_id);
+    try {
+      await moveTaskMutation.mutateAsync({ task: draggedTask, targetColumn: newStatus });
       try {
         await fetch("/api/task-events", {
           method: "POST",
@@ -134,13 +145,12 @@ export function KanbanBoard({ tasks: initialTasks, projectId, profiles }: Props)
             task_title: draggedTask.title,
             project_id: draggedTask.project_id,
             old_status: oldStatus,
-            new_status: targetColumn,
+            new_status: newStatus,
           }),
         });
       } catch {}
-      router.refresh();
-    }
-  }, [tasks, initialTasks, router]);
+    } catch {}
+  }, [tasks, moveTaskMutation]);
 
   // Filtering
   const filteredTasks = useMemo(() => {
@@ -229,7 +239,7 @@ export function KanbanBoard({ tasks: initialTasks, projectId, profiles }: Props)
                 key={col.id}
                 column={col}
                 tasks={tasksByColumn[col.id]}
-                onTaskClick={setSelectedTask}
+                onTaskClick={(task) => setSelectedTaskId(task.id)}
                 projectId={projectId}
                 profiles={profiles}
               />
@@ -253,14 +263,15 @@ export function KanbanBoard({ tasks: initialTasks, projectId, profiles }: Props)
         <TaskModal
           task={selectedTask}
           profiles={profiles}
-          onClose={() => {
-            setSelectedTask(null);
-            router.refresh();
-          }}
-          onTaskSaved={handleTaskSaved}
+          onClose={() => setSelectedTaskId(null)}
         />
       )}
-      <QuickAddTaskModal open={showQuickAdd} onClose={() => setShowQuickAdd(false)} />
+      <QuickAddTaskModal
+        open={showQuickAdd}
+        onClose={() => setShowQuickAdd(false)}
+        defaultProjectId={projectId || undefined}
+        onTaskCreated={handleTaskCreated}
+      />
     </div>
   );
 }

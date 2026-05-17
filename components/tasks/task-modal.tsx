@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { getStatusLabel, getAlertLevelColor, formatRelativeAr, cn, getAvatarUrl, getPriorityColor } from "@/lib/utils";
 import { useCommentsSubscription } from "@/lib/supabase/realtime";
 import { recalcProjectProgress } from "@/lib/utils/recalc-progress";
-import { applyMyTaskRealtimeChange, taskKeys, updateTask } from "@/lib/queries/tasks";
+import { applyMyTaskRealtimeChange, applyTaskToTaskQueries, taskKeys, updateTask } from "@/lib/queries/tasks";
 import Image from "next/image";
 import type { Database, Profile, Task, TaskProgressMode } from "@/lib/supabase/types";
 
@@ -87,10 +87,11 @@ export function TaskModal({ task, profiles, onClose, onTaskSaved, myTasksOwnerId
   const updateTaskMutation = useMutation({
     mutationFn: ({ taskId, payload }: { taskId: string; payload: TaskUpdate }) => updateTask(taskId, payload),
     onSuccess: (updatedTask) => {
+      applyTaskToTaskQueries(queryClient, updatedTask);
       if (myTasksOwnerId) {
         applyMyTaskRealtimeChange(queryClient, myTasksOwnerId, "UPDATE", updatedTask);
-        queryClient.invalidateQueries({ queryKey: taskKeys.myTasks(myTasksOwnerId) });
       }
+      queryClient.invalidateQueries({ queryKey: taskKeys.all });
       onTaskSaved?.(updatedTask);
     },
   });

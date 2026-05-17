@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { ArrowRight, CalendarDays, Wallet, Target, Activity, Users, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { CalendarDays, Wallet, Target, Activity, Users, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { formatDateShort, getProjectStatusLabel, cn, getAvatarUrl } from "@/lib/utils";
@@ -17,7 +18,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Loader2, X } from "lucide-react";
-import type { Profile, Project, Task, Challenge, Document } from "@/lib/supabase/types";
+import { fetchTasks, taskKeys, type TaskWithRelations } from "@/lib/queries/tasks";
+import type { Profile, Project, Challenge, Document } from "@/lib/supabase/types";
 
 const TABS = [
   { key: "overview", label: "نظرة عامة" },
@@ -44,18 +46,23 @@ type EditFormData = z.infer<typeof editSchema>;
 
 interface Props {
   project: Project & { manager?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null };
-  tasks: (Task & { owner?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null })[];
+  tasks: TaskWithRelations[];
   challenges: (Challenge & { owner?: Pick<Profile, "id" | "full_name"> | null })[];
   documents: (Document & { creator?: Pick<Profile, "id" | "full_name"> | null })[];
   profiles: Pick<Profile, "id" | "full_name" | "avatar_url">[];
   currentUser: Profile;
 }
 
-export function ProjectDetailClient({ project, tasks, challenges, documents, profiles, currentUser }: Props) {
+export function ProjectDetailClient({ project, tasks: initialTasks, challenges, documents, profiles, currentUser }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const initialTab = searchParams.get("tab") || "overview";
+  const { data: tasks = initialTasks } = useQuery({
+    queryKey: taskKeys.byProject(project.id),
+    queryFn: () => fetchTasks({ projectId: project.id }),
+    initialData: initialTasks,
+  });
   
   const [activeTab, setActiveTab] = useState(initialTab);
   const [menuOpen, setMenuOpen] = useState(false);
