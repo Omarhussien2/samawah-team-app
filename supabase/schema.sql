@@ -75,6 +75,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   start_date      DATE,
   due_date        DATE,
   cost            NUMERIC,
+  planned_hours   NUMERIC NOT NULL DEFAULT 0 CHECK (planned_hours >= 0),
+  actual_hours    NUMERIC NOT NULL DEFAULT 0 CHECK (actual_hours >= 0),
   quantity_total  NUMERIC,
   quantity_done   NUMERIC,
   progress_mode   TEXT NOT NULL DEFAULT 'manual' CHECK (progress_mode IN ('manual', 'quantity')),
@@ -92,6 +94,10 @@ CREATE TABLE IF NOT EXISTS tasks (
 ALTER TABLE tasks
   ADD COLUMN IF NOT EXISTS progress_mode TEXT NOT NULL DEFAULT 'manual';
 
+ALTER TABLE tasks
+  ADD COLUMN IF NOT EXISTS planned_hours NUMERIC NOT NULL DEFAULT 0 CHECK (planned_hours >= 0),
+  ADD COLUMN IF NOT EXISTS actual_hours NUMERIC NOT NULL DEFAULT 0 CHECK (actual_hours >= 0);
+
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -104,6 +110,21 @@ BEGIN
       ADD CONSTRAINT tasks_progress_mode_check CHECK (progress_mode IN ('manual', 'quantity'));
   END IF;
 END $$;
+
+-- ============================================================
+-- 4.1. Task time entries
+-- ============================================================
+CREATE TABLE IF NOT EXISTS task_time_entries (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  task_id     UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  user_id     UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  logged_by   UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  work_date   DATE NOT NULL DEFAULT CURRENT_DATE,
+  hours       NUMERIC NOT NULL CHECK (hours > 0 AND hours <= 24),
+  note        TEXT,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 -- ============================================================
 -- 5. جدول التحديات (challenges)
@@ -586,6 +607,11 @@ CREATE TRIGGER update_tasks_updated_at
   BEFORE UPDATE ON tasks
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_task_time_entries_updated_at ON task_time_entries;
+CREATE TRIGGER update_task_time_entries_updated_at
+  BEFORE UPDATE ON task_time_entries
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 DROP TRIGGER IF EXISTS update_project_form_templates_updated_at ON project_form_templates;
 CREATE TRIGGER update_project_form_templates_updated_at
   BEFORE UPDATE ON project_form_templates
@@ -740,6 +766,43 @@ CREATE TRIGGER calc_task_progress_trigger
   FOR EACH ROW EXECUTE FUNCTION calc_task_progress();
 
 -- ============================================================
+-- Trigger: recalculate actual task hours from time entries
+-- ============================================================
+CREATE OR REPLACE FUNCTION recalc_task_actual_hours()
+RETURNS TRIGGER AS $$
+DECLARE
+  affected_task_id UUID;
+BEGIN
+  affected_task_id := COALESCE(NEW.task_id, OLD.task_id);
+
+  IF TG_OP = 'UPDATE' AND OLD.task_id IS DISTINCT FROM NEW.task_id THEN
+    UPDATE tasks
+    SET actual_hours = COALESCE((
+      SELECT SUM(hours)
+      FROM task_time_entries
+      WHERE task_id = OLD.task_id
+    ), 0)
+    WHERE id = OLD.task_id;
+  END IF;
+
+  UPDATE tasks
+  SET actual_hours = COALESCE((
+    SELECT SUM(hours)
+    FROM task_time_entries
+    WHERE task_id = affected_task_id
+  ), 0)
+  WHERE id = affected_task_id;
+
+  RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS recalc_task_actual_hours_trigger ON task_time_entries;
+CREATE TRIGGER recalc_task_actual_hours_trigger
+  AFTER INSERT OR UPDATE OR DELETE ON task_time_entries
+  FOR EACH ROW EXECUTE FUNCTION recalc_task_actual_hours();
+
+-- ============================================================
 -- Indexes
 -- ============================================================
 CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id);
@@ -747,6 +810,9 @@ CREATE INDEX IF NOT EXISTS idx_tasks_owner_id ON tasks(owner_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);
 CREATE INDEX IF NOT EXISTS idx_tasks_board_column ON tasks(board_column);
+CREATE INDEX IF NOT EXISTS idx_task_time_entries_task ON task_time_entries(task_id);
+CREATE INDEX IF NOT EXISTS idx_task_time_entries_user ON task_time_entries(user_id);
+CREATE INDEX IF NOT EXISTS idx_task_time_entries_work_date ON task_time_entries(work_date);
 CREATE INDEX IF NOT EXISTS idx_project_members_project ON project_members(project_id);
 CREATE INDEX IF NOT EXISTS idx_project_members_user ON project_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_project_form_templates_active ON project_form_templates(active);
@@ -806,3 +872,4 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON service_outputs TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON partnership_activities TO authenticated;
 GRANT SELECT, UPDATE ON notifications TO authenticated;
 GRANT SELECT, INSERT, UPDATE ON notification_preferences TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON task_time_entries TO authenticated;

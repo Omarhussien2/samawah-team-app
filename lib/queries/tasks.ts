@@ -1,12 +1,18 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
-import type { Database, Profile, Task } from "@/lib/supabase/types";
+import type { Database, Profile, Task, TaskTimeEntry } from "@/lib/supabase/types";
 
 export type TaskInsertPayload = Database["public"]["Tables"]["tasks"]["Insert"];
 export type TaskUpdatePayload = Database["public"]["Tables"]["tasks"]["Update"];
+export type TaskTimeEntryInsertPayload = Database["public"]["Tables"]["task_time_entries"]["Insert"];
+export type TaskTimeEntryUpdatePayload = Database["public"]["Tables"]["task_time_entries"]["Update"];
 export type TaskWithRelations = Task & {
   project?: { id: string; name: string } | null;
   owner?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null;
+};
+export type TaskTimeEntryWithUser = TaskTimeEntry & {
+  user?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null;
+  logger?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null;
 };
 export type TaskRealtimeEvent = "INSERT" | "UPDATE" | "DELETE" | string;
 
@@ -16,6 +22,8 @@ interface TaskListScope {
 }
 
 export const taskSelect = "*, project:projects(id,name), owner:profiles(id,full_name,avatar_url)";
+export const taskTimeEntrySelect =
+  "*, user:profiles!task_time_entries_user_id_fkey(id,full_name,avatar_url), logger:profiles!task_time_entries_logged_by_fkey(id,full_name,avatar_url)";
 
 export const taskKeys = {
   all: ["tasks"] as const,
@@ -23,6 +31,11 @@ export const taskKeys = {
   list: (projectId?: string | null) => [...taskKeys.lists(), projectId || "all"] as const,
   myTasks: (userId: string) => [...taskKeys.all, "my", userId] as const,
   byProject: (projectId: string) => taskKeys.list(projectId),
+};
+
+export const taskTimeKeys = {
+  all: ["task-time-entries"] as const,
+  byTask: (taskId: string) => [...taskTimeKeys.all, "task", taskId] as const,
 };
 
 export async function fetchTasks({ projectId }: { projectId?: string | null } = {}): Promise<TaskWithRelations[]> {
@@ -51,6 +64,14 @@ export async function fetchMyTasks(userId: string): Promise<TaskWithRelations[]>
   return (data ?? []) as TaskWithRelations[];
 }
 
+export async function fetchTaskById(taskId: string): Promise<TaskWithRelations> {
+  const supabase = createClient();
+  const { data, error } = await supabase.from("tasks").select(taskSelect).eq("id", taskId).single();
+
+  if (error) throw error;
+  return data as TaskWithRelations;
+}
+
 export async function createTask(payload: TaskInsertPayload): Promise<TaskWithRelations> {
   const supabase = createClient();
   const { data, error } = await supabase.from("tasks").insert(payload).select(taskSelect).single();
@@ -74,6 +95,56 @@ export async function updateTask(taskId: string, payload: TaskUpdatePayload): Pr
 
 export function markTaskDone(taskId: string) {
   return updateTask(taskId, { status: "Done", board_column: "Done", progress: 100 });
+}
+
+export async function fetchTaskTimeEntries(taskId: string): Promise<TaskTimeEntryWithUser[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("task_time_entries")
+    .select(taskTimeEntrySelect)
+    .eq("task_id", taskId)
+    .order("work_date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return (data ?? []) as TaskTimeEntryWithUser[];
+}
+
+export async function createTaskTimeEntry(
+  payload: TaskTimeEntryInsertPayload
+): Promise<TaskTimeEntryWithUser> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("task_time_entries")
+    .insert(payload)
+    .select(taskTimeEntrySelect)
+    .single();
+
+  if (error) throw error;
+  return data as TaskTimeEntryWithUser;
+}
+
+export async function updateTaskTimeEntry(
+  entryId: string,
+  payload: TaskTimeEntryUpdatePayload
+): Promise<TaskTimeEntryWithUser> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("task_time_entries")
+    .update(payload)
+    .eq("id", entryId)
+    .select(taskTimeEntrySelect)
+    .single();
+
+  if (error) throw error;
+  return data as TaskTimeEntryWithUser;
+}
+
+export async function deleteTaskTimeEntry(entryId: string): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.from("task_time_entries").delete().eq("id", entryId);
+
+  if (error) throw error;
 }
 
 export function upsertTaskInList(tasks: TaskWithRelations[] | undefined, task: TaskWithRelations) {

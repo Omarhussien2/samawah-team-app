@@ -17,6 +17,8 @@ function makeTask(overrides: Partial<TaskWithRelations> = {}): TaskWithRelations
     start_date: null,
     due_date: null,
     cost: null,
+    planned_hours: 0,
+    actual_hours: 0,
     quantity_total: null,
     quantity_done: null,
     progress_mode: "manual",

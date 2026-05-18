@@ -12,6 +12,8 @@ import {
   cn,
 } from "@/lib/utils";
 import { createSearchMatcher } from "@/lib/utils/search";
+import { formatHours, getTaskHourSummary } from "@/lib/tasks/hours";
+import { getTaskDateDuration } from "@/lib/tasks/duration";
 import { TaskModal } from "./task-modal";
 import { TaskTitleStack } from "./task-title-stack";
 import { fetchTasks, taskKeys, type TaskWithRelations } from "@/lib/queries/tasks";
@@ -321,6 +323,9 @@ export function TasksTable({
                 <th className="text-right px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">
                   الإنجاز
                 </th>
+                <th className="text-right px-4 py-3 font-medium text-muted-foreground hidden xl:table-cell">
+                  الساعات
+                </th>
                 <th className="text-right px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">
                   الاستحقاق
                 </th>
@@ -333,14 +338,24 @@ export function TasksTable({
               {filtered.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="text-center py-10 text-muted-foreground"
                   >
                     ما فيه مهام مطابقة للفلاتر
                   </td>
                 </tr>
               ) : (
-                filtered.map((task) => (
+                filtered.map((task) => {
+                  const hourSummary = getTaskHourSummary({
+                    plannedHours: task.planned_hours,
+                    actualHours: task.actual_hours,
+                  });
+                  const dateDuration = getTaskDateDuration({
+                    startDate: task.start_date,
+                    endDate: task.due_date,
+                  });
+
+                  return (
                   <tr
                     key={task.id}
                     className="hover:bg-accent/50 cursor-pointer transition-colors"
@@ -385,8 +400,38 @@ export function TasksTable({
                         </span>
                       </div>
                     </td>
+                    <td className="px-4 py-3 hidden xl:table-cell">
+                      <div className="min-w-24">
+                        <div className="flex items-center justify-between gap-2 text-xs">
+                          <span className={cn("font-semibold", hourSummary.isOverPlan ? "text-red-600" : "text-slate-700")}>
+                            {formatHours(hourSummary.actual)}
+                          </span>
+                          <span className="text-muted-foreground">
+                            / {hourSummary.hasPlan ? formatHours(hourSummary.planned) : "بدون مخطط"} س
+                          </span>
+                        </div>
+                        <div className="mt-1 h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                          <div
+                            className={cn("h-full rounded-full", hourSummary.isOverPlan ? "bg-red-500" : "bg-primary")}
+                            style={{
+                              width: `${hourSummary.hasPlan ? Math.min(100, hourSummary.utilization ?? 0) : hourSummary.actual > 0 ? 100 : 0}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
-                      {formatDateShort(task.due_date)}
+                      <div>{formatDateShort(task.due_date)}</div>
+                      {dateDuration.hasBothDates && (
+                        <div
+                          className={cn(
+                            "mt-1 text-[11px] font-medium",
+                            dateDuration.isValidRange ? "text-slate-500" : "text-red-600"
+                          )}
+                        >
+                          {dateDuration.isValidRange ? dateDuration.label : "راجع التواريخ"}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3 hidden xl:table-cell">
                       <span
@@ -399,7 +444,8 @@ export function TasksTable({
                       </span>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
