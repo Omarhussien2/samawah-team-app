@@ -179,7 +179,6 @@ export interface Database {
           due_date?: string | null;
           cost?: number | null;
           planned_hours?: number;
-          actual_hours?: number;
           quantity_total?: number | null;
           quantity_done?: number | null;
           progress_mode?: TaskProgressMode;
@@ -209,7 +208,6 @@ export interface Database {
           due_date?: string | null;
           cost?: number | null;
           planned_hours?: number;
-          actual_hours?: number;
           quantity_total?: number | null;
           quantity_done?: number | null;
           progress_mode?: TaskProgressMode;

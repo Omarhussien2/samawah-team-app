@@ -317,6 +317,10 @@ export function TaskModal({ task, profiles, onClose, onTaskSaved, myTasksOwnerId
   };
 
   const handleDeleteTimeEntry = async (entryId: string) => {
+    if (!window.confirm("هل تريد حذف سجل الساعات؟ سيتم تحديث الساعات الفعلية تلقائيا.")) {
+      return;
+    }
+
     try {
       await deleteTimeEntryMutation.mutateAsync(entryId);
       toast.success("تم حذف الساعات");

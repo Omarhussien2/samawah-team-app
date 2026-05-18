@@ -142,9 +142,17 @@ export async function updateTaskTimeEntry(
 
 export async function deleteTaskTimeEntry(entryId: string): Promise<void> {
   const supabase = createClient();
-  const { error } = await supabase.from("task_time_entries").delete().eq("id", entryId);
+  const { data, error } = await supabase
+    .from("task_time_entries")
+    .delete()
+    .eq("id", entryId)
+    .select("id")
+    .maybeSingle();
 
   if (error) throw error;
+  if (!data) {
+    throw new Error("لم يتم العثور على سجل الساعات أو لا تملك صلاحية حذفه");
+  }
 }
 
 export function upsertTaskInList(tasks: TaskWithRelations[] | undefined, task: TaskWithRelations) {
