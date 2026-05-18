@@ -148,6 +148,8 @@ export interface Database {
           start_date: string | null;
           due_date: string | null;
           cost: number | null;
+          planned_hours: number;
+          actual_hours: number;
           quantity_total: number | null;
           quantity_done: number | null;
           progress_mode: TaskProgressMode;
@@ -176,6 +178,8 @@ export interface Database {
           start_date?: string | null;
           due_date?: string | null;
           cost?: number | null;
+          planned_hours?: number;
+          actual_hours?: number;
           quantity_total?: number | null;
           quantity_done?: number | null;
           progress_mode?: TaskProgressMode;
@@ -204,6 +208,8 @@ export interface Database {
           start_date?: string | null;
           due_date?: string | null;
           cost?: number | null;
+          planned_hours?: number;
+          actual_hours?: number;
           quantity_total?: number | null;
           quantity_done?: number | null;
           progress_mode?: TaskProgressMode;
@@ -214,6 +220,42 @@ export interface Database {
           alert_action?: string | null;
           days_to_due?: number | null;
           sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      task_time_entries: {
+        Row: {
+          id: string;
+          task_id: string;
+          user_id: string;
+          logged_by: string | null;
+          work_date: string;
+          hours: number;
+          note: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          task_id: string;
+          user_id: string;
+          logged_by?: string | null;
+          work_date?: string;
+          hours: number;
+          note?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          task_id?: string;
+          user_id?: string;
+          logged_by?: string | null;
+          work_date?: string;
+          hours?: number;
+          note?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1189,6 +1231,7 @@ export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 export type Project = Database["public"]["Tables"]["projects"]["Row"];
 export type ProjectMember = Database["public"]["Tables"]["project_members"]["Row"];
 export type Task = Database["public"]["Tables"]["tasks"]["Row"];
+export type TaskTimeEntry = Database["public"]["Tables"]["task_time_entries"]["Row"];
 export type Challenge = Database["public"]["Tables"]["challenges"]["Row"];
 export type Document = Database["public"]["Tables"]["documents"]["Row"];
 export type ProjectFormTemplate = Database["public"]["Tables"]["project_form_templates"]["Row"];

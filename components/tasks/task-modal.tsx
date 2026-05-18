@@ -1,13 +1,28 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { X, Loader2, AlertTriangle, Send, MessageSquare, CalendarDays, AlignLeft, CheckSquare, Paperclip, MoreHorizontal } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { X, Loader2, AlertTriangle, Send, MessageSquare, CalendarDays, AlignLeft, CheckSquare, Paperclip, MoreHorizontal, Clock, Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { getStatusLabel, getAlertLevelColor, formatRelativeAr, cn, getAvatarUrl, getPriorityColor } from "@/lib/utils";
+import { getStatusLabel, getAlertLevelColor, formatRelativeAr, formatDateShort, cn, getAvatarUrl, getPriorityColor } from "@/lib/utils";
 import { useCommentsSubscription } from "@/lib/supabase/realtime";
+import { createClient } from "@/lib/supabase/client";
 import { recalcProjectProgress } from "@/lib/utils/recalc-progress";
-import { applyMyTaskRealtimeChange, applyTaskToTaskQueries, taskKeys, updateTask } from "@/lib/queries/tasks";
+import {
+  applyMyTaskRealtimeChange,
+  applyTaskToTaskQueries,
+  createTaskTimeEntry,
+  deleteTaskTimeEntry,
+  fetchTaskById,
+  fetchTaskTimeEntries,
+  taskKeys,
+  taskTimeKeys,
+  updateTask,
+  updateTaskTimeEntry,
+  type TaskTimeEntryWithUser,
+} from "@/lib/queries/tasks";
+import { formatHours, getTaskHourSummary } from "@/lib/tasks/hours";
+import { getTaskDateDuration } from "@/lib/tasks/duration";
 import Image from "next/image";
 import type { Database, Profile, Task, TaskProgressMode } from "@/lib/supabase/types";
 
@@ -43,7 +58,15 @@ export function TaskModal({ task, profiles, onClose, onTaskSaved, myTasksOwnerId
   const [quantityDone, setQuantityDone] = useState(task.quantity_done?.toString() ?? "");
   const [quantityTotal, setQuantityTotal] = useState(task.quantity_total?.toString() ?? "");
   const [ownerId, setOwnerId] = useState(task.owner_id ?? "");
+  const [startDate, setStartDate] = useState(task.start_date ?? "");
   const [dueDate, setDueDate] = useState(task.due_date ?? "");
+  const [plannedHours, setPlannedHours] = useState((task.planned_hours ?? 0).toString());
+  const [currentUserId, setCurrentUserId] = useState("");
+  const [timeUserId, setTimeUserId] = useState(task.owner_id ?? "");
+  const [timeDate, setTimeDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [timeHours, setTimeHours] = useState("");
+  const [timeNote, setTimeNote] = useState("");
+  const [editingTimeEntry, setEditingTimeEntry] = useState<TaskTimeEntryWithUser | null>(null);
   
   const [comment, setComment] = useState("");
   const [comments, setComments] = useState<CommentWithUser[]>([]);
@@ -69,6 +92,24 @@ export function TaskModal({ task, profiles, onClose, onTaskSaved, myTasksOwnerId
   useEffect(() => {
     fetchComments();
   }, [fetchComments]);
+
+  useEffect(() => {
+    setPlannedHours((task.planned_hours ?? 0).toString());
+  }, [task.planned_hours]);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      const userId = data.user?.id ?? "";
+      setCurrentUserId(userId);
+      setTimeUserId((current) => current || task.owner_id || userId);
+    });
+  }, [task.owner_id]);
+
+  const { data: timeEntries = [], isLoading: loadingTimeEntries } = useQuery({
+    queryKey: taskTimeKeys.byTask(task.id),
+    queryFn: () => fetchTaskTimeEntries(task.id),
+  });
 
   // Realtime comments subscription
   const handleNewComment = useCallback(
@@ -96,6 +137,30 @@ export function TaskModal({ task, profiles, onClose, onTaskSaved, myTasksOwnerId
     },
   });
 
+  const createTimeEntryMutation = useMutation({
+    mutationFn: createTaskTimeEntry,
+  });
+
+  const updateTimeEntryMutation = useMutation({
+    mutationFn: ({ entryId, payload }: { entryId: string; payload: Database["public"]["Tables"]["task_time_entries"]["Update"] }) =>
+      updateTaskTimeEntry(entryId, payload),
+  });
+
+  const deleteTimeEntryMutation = useMutation({
+    mutationFn: deleteTaskTimeEntry,
+  });
+
+  const refreshTaskAfterTimeChange = useCallback(async () => {
+    queryClient.invalidateQueries({ queryKey: taskTimeKeys.byTask(task.id) });
+    const updatedTask = await fetchTaskById(task.id);
+    applyTaskToTaskQueries(queryClient, updatedTask);
+    if (myTasksOwnerId) {
+      applyMyTaskRealtimeChange(queryClient, myTasksOwnerId, "UPDATE", updatedTask);
+    }
+    queryClient.invalidateQueries({ queryKey: taskKeys.all });
+    onTaskSaved?.(updatedTask);
+  }, [myTasksOwnerId, onTaskSaved, queryClient, task.id]);
+
   const calculatedProgress = useMemo(() => {
     if (status === "Done") return 100;
     if (progressMode === "manual") return progress;
@@ -107,24 +172,48 @@ export function TaskModal({ task, profiles, onClose, onTaskSaved, myTasksOwnerId
     return Math.min(100, Math.max(0, Math.round((done / total) * 100)));
   }, [progress, progressMode, quantityDone, quantityTotal, status]);
 
+  const hourSummary = useMemo(
+    () => getTaskHourSummary({ plannedHours: Number(plannedHours) || 0, actualHours: task.actual_hours ?? 0 }),
+    [plannedHours, task.actual_hours]
+  );
+
+  const hourProgressWidth = hourSummary.hasPlan
+    ? Math.min(100, hourSummary.utilization ?? 0)
+    : hourSummary.actual > 0
+      ? 100
+      : 0;
+
+  const dateDuration = useMemo(
+    () => getTaskDateDuration({ startDate, endDate: dueDate }),
+    [startDate, dueDate]
+  );
+
   const handleSave = async () => {
+    if (!dateDuration.isValidRange) {
+      toast.error("تاريخ نهاية المهمة يجب أن يكون بعد تاريخ البداية أو في نفس اليوم");
+      return;
+    }
+
     const owner = profiles.find((p) => p.id === ownerId);
     const previousOwnerId = task.owner_id;
 
     const progressVal = status === "Done" ? 100 : progressMode === "quantity" ? calculatedProgress : progress;
     const quantityDoneVal = quantityDone === "" ? null : Number(quantityDone);
     const quantityTotalVal = quantityTotal === "" ? null : Number(quantityTotal);
+    const plannedHoursVal = plannedHours === "" ? 0 : Math.max(0, Number(plannedHours) || 0);
     const updatePayload: TaskUpdate = {
       title,
       status,
       priority,
       board_column: status,
+      planned_hours: plannedHoursVal,
       progress_mode: progressMode,
       progress: progressVal,
       quantity_done: progressMode === "quantity" ? quantityDoneVal : task.quantity_done,
       quantity_total: progressMode === "quantity" ? quantityTotalVal : task.quantity_total,
       owner_id: ownerId || null,
       owner_name: owner?.full_name ?? null,
+      start_date: startDate || null,
       due_date: dueDate || null,
     };
 
@@ -156,6 +245,86 @@ export function TaskModal({ task, profiles, onClose, onTaskSaved, myTasksOwnerId
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       toast.error(`ما نجح حفظ التغييرات: ${message}`);
+    }
+  };
+
+  const resetTimeEntryForm = () => {
+    setEditingTimeEntry(null);
+    setTimeDate(new Date().toISOString().split("T")[0]);
+    setTimeHours("");
+    setTimeNote("");
+    setTimeUserId(task.owner_id || currentUserId);
+  };
+
+  const handleTimeEntrySubmit = async () => {
+    const hours = Number(timeHours);
+    const userId = timeUserId || currentUserId;
+
+    if (!currentUserId) {
+      toast.error("لم نتمكن من تحديد المستخدم الحالي");
+      return;
+    }
+    if (!userId) {
+      toast.error("اختر صاحب الساعات");
+      return;
+    }
+    if (!timeDate) {
+      toast.error("اختر تاريخ العمل");
+      return;
+    }
+    if (!hours || hours <= 0 || hours > 24) {
+      toast.error("عدد الساعات يجب أن يكون أكبر من صفر ولا يتجاوز 24");
+      return;
+    }
+
+    try {
+      if (editingTimeEntry) {
+        await updateTimeEntryMutation.mutateAsync({
+          entryId: editingTimeEntry.id,
+          payload: {
+            user_id: userId,
+            work_date: timeDate,
+            hours,
+            note: timeNote.trim() || null,
+          },
+        });
+        toast.success("تم تحديث الساعات");
+      } else {
+        await createTimeEntryMutation.mutateAsync({
+          task_id: task.id,
+          user_id: userId,
+          logged_by: currentUserId,
+          work_date: timeDate,
+          hours,
+          note: timeNote.trim() || null,
+        });
+        toast.success("تم تسجيل الساعات");
+      }
+      resetTimeEntryForm();
+      await refreshTaskAfterTimeChange();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      toast.error(`ما نجح حفظ الساعات: ${message}`);
+    }
+  };
+
+  const handleEditTimeEntry = (entry: TaskTimeEntryWithUser) => {
+    setEditingTimeEntry(entry);
+    setTimeUserId(entry.user_id);
+    setTimeDate(entry.work_date);
+    setTimeHours(entry.hours.toString());
+    setTimeNote(entry.note ?? "");
+  };
+
+  const handleDeleteTimeEntry = async (entryId: string) => {
+    try {
+      await deleteTimeEntryMutation.mutateAsync(entryId);
+      toast.success("تم حذف الساعات");
+      if (editingTimeEntry?.id === entryId) resetTimeEntryForm();
+      await refreshTaskAfterTimeChange();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      toast.error(`ما نجح حذف الساعات: ${message}`);
     }
   };
 
@@ -383,16 +552,224 @@ export function TaskModal({ task, profiles, onClose, onTaskSaved, myTasksOwnerId
                 </div>
               </div>
 
-              {/* Due Date */}
+              {/* Date Duration */}
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-2 flex items-center gap-1.5">
-                  تاريخ الاستحقاق
+                  مدة المهمة بالأيام
                 </label>
-                <div className="relative">
-                  <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)}
-                    className="w-full pl-3 pr-10 py-2.5 text-sm font-medium border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white shadow-sm hover:border-slate-300 transition-colors" 
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-500 mb-1">بدأت في</label>
+                    <div className="relative">
+                      <input
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className="w-full pl-2 pr-8 py-2 text-xs font-medium border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white shadow-sm hover:border-slate-300 transition-colors"
+                      />
+                      <CalendarDays size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-500 mb-1">انتهت في</label>
+                    <div className="relative">
+                      <input
+                        type="date"
+                        value={dueDate}
+                        onChange={(e) => setDueDate(e.target.value)}
+                        className="w-full pl-2 pr-8 py-2 text-xs font-medium border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white shadow-sm hover:border-slate-300 transition-colors"
+                      />
+                      <CalendarDays size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    </div>
+                  </div>
+                </div>
+                <div
+                  className={cn(
+                    "mt-2 rounded-lg border px-3 py-2 text-xs font-bold",
+                    dateDuration.isValidRange
+                      ? "border-indigo-100 bg-indigo-50 text-indigo-700"
+                      : "border-red-100 bg-red-50 text-red-600"
+                  )}
+                >
+                  {dateDuration.hasBothDates ? `استمرت: ${dateDuration.label}` : dateDuration.label}
+                </div>
+              </div>
+
+              {/* Planned and Actual Hours */}
+              <div className="pt-4 border-t border-slate-200">
+                <div className="flex items-center gap-2 mb-3">
+                  <Clock size={16} className="text-slate-400" />
+                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">الساعات</h4>
+                </div>
+
+                <div className="mb-3">
+                  <label className="block text-xs font-semibold text-slate-600 mb-2">الساعات المخططة</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.25}
+                    value={plannedHours}
+                    onChange={(e) => setPlannedHours(e.target.value)}
+                    className="w-full px-3 py-2 text-sm font-medium border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white shadow-sm"
+                    placeholder="0"
                   />
-                  <CalendarDays size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                </div>
+
+                <div
+                  className={cn(
+                    "rounded-xl border p-3 mb-3 bg-white",
+                    hourSummary.isOverPlan ? "border-red-200 bg-red-50/50" : "border-slate-200"
+                  )}
+                >
+                  <div className="flex items-center justify-between text-xs font-semibold text-slate-500 mb-2">
+                    <span>فعلي / مخطط</span>
+                    <span className={hourSummary.isOverPlan ? "text-red-600" : "text-indigo-600"}>
+                      {hourSummary.label}
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-1 mb-2">
+                    <span className="text-xl font-black text-slate-800">{formatHours(hourSummary.actual)}</span>
+                    <span className="text-xs text-slate-400">
+                      / {hourSummary.hasPlan ? formatHours(hourSummary.planned) : "بدون مخطط"} س
+                    </span>
+                  </div>
+                  <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+                    <div
+                      className={cn("h-full rounded-full", hourSummary.isOverPlan ? "bg-red-500" : "bg-indigo-500")}
+                      style={{ width: `${hourProgressWidth}%` }}
+                    />
+                  </div>
+                  <div className="mt-2 text-[11px] text-slate-500">
+                    {hourSummary.hasPlan
+                      ? hourSummary.isOverPlan
+                        ? `زائد ${formatHours(hourSummary.overrun)} س`
+                        : `متبقي ${formatHours(hourSummary.remaining)} س`
+                      : "الفعلية محفوظة بدون مخطط"}
+                    {hourSummary.utilization !== null && (
+                      <span className="mr-2 font-semibold">{hourSummary.utilization}%</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-1">التاريخ</label>
+                      <input
+                        type="date"
+                        value={timeDate}
+                        onChange={(e) => setTimeDate(e.target.value)}
+                        className="w-full px-2 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-1">الساعات</label>
+                      <input
+                        type="number"
+                        min={0.25}
+                        max={24}
+                        step={0.25}
+                        value={timeHours}
+                        onChange={(e) => setTimeHours(e.target.value)}
+                        className="w-full px-2 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+                        placeholder="1.5"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-500 mb-1">صاحب الساعات</label>
+                    <select
+                      value={timeUserId}
+                      onChange={(e) => setTimeUserId(e.target.value)}
+                      className="w-full px-2 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white"
+                    >
+                      <option value="">اختر المستخدم</option>
+                      {profiles.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.full_name ?? p.id}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <textarea
+                    value={timeNote}
+                    onChange={(e) => setTimeNote(e.target.value)}
+                    rows={2}
+                    className="w-full px-2 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 resize-none"
+                    placeholder="ملاحظة اختيارية"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleTimeEntrySubmit}
+                      disabled={createTimeEntryMutation.isPending || updateTimeEntryMutation.isPending}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-indigo-700 disabled:opacity-60"
+                    >
+                      {createTimeEntryMutation.isPending || updateTimeEntryMutation.isPending ? (
+                        <Loader2 size={12} className="animate-spin" />
+                      ) : editingTimeEntry ? (
+                        <Pencil size={12} />
+                      ) : (
+                        <Plus size={12} />
+                      )}
+                      {editingTimeEntry ? "تحديث" : "إضافة"}
+                    </button>
+                    {editingTimeEntry && (
+                      <button
+                        type="button"
+                        onClick={resetTimeEntryForm}
+                        className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                      >
+                        إلغاء
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-3 space-y-2">
+                  {loadingTimeEntries ? (
+                    <div className="flex justify-center py-3">
+                      <Loader2 size={16} className="animate-spin text-slate-300" />
+                    </div>
+                  ) : timeEntries.length === 0 ? (
+                    <p className="rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-500">لا توجد ساعات فعلية بعد.</p>
+                  ) : (
+                    timeEntries.map((entry) => (
+                      <div key={entry.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-slate-700">
+                              {formatHours(entry.hours)} س
+                              <span className="font-medium text-slate-400"> · {formatDateShort(entry.work_date)}</span>
+                            </p>
+                            <p className="mt-0.5 truncate text-[11px] text-slate-500">
+                              {entry.user?.full_name ?? "مستخدم"}
+                            </p>
+                            {entry.note && <p className="mt-1 line-clamp-2 text-[11px] text-slate-500">{entry.note}</p>}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              aria-label="تعديل الساعات"
+                              onClick={() => handleEditTimeEntry(entry)}
+                              className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-indigo-600"
+                            >
+                              <Pencil size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              aria-label="حذف الساعات"
+                              onClick={() => handleDeleteTimeEntry(entry.id)}
+                              disabled={deleteTimeEntryMutation.isPending}
+                              className="rounded-md p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
 

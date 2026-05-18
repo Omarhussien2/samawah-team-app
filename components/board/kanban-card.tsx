@@ -2,8 +2,10 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { formatDateShort, getAlertLevelColor, getPriorityColor, getAvatarUrl, cn } from "@/lib/utils";
-import { CalendarDays, AlertTriangle, MessageSquare, CheckSquare } from "lucide-react";
+import { formatDateShort, getAlertLevelColor, getAvatarUrl, cn } from "@/lib/utils";
+import { formatHours, getTaskHourSummary } from "@/lib/tasks/hours";
+import { getTaskDateDuration } from "@/lib/tasks/duration";
+import { CalendarDays, AlertTriangle, CheckSquare } from "lucide-react";
 import Image from "next/image";
 import { TaskTitleStack } from "@/components/tasks/task-title-stack";
 import type { Profile, Task } from "@/lib/supabase/types";
@@ -45,6 +47,14 @@ export function KanbanCard({ task, onTaskClick, isDragging }: Props) {
     critical: "bg-red-500",
   };
   const priorityColor = priorityColors[task.priority as keyof typeof priorityColors] || priorityColors.medium;
+  const hourSummary = getTaskHourSummary({
+    plannedHours: task.planned_hours,
+    actualHours: task.actual_hours,
+  });
+  const dateDuration = getTaskDateDuration({
+    startDate: task.start_date,
+    endDate: task.due_date,
+  });
 
   return (
     <div
@@ -93,6 +103,17 @@ export function KanbanCard({ task, onTaskClick, isDragging }: Props) {
         </div>
       )}
 
+      {(hourSummary.hasPlan || hourSummary.actual > 0) && (
+        <div
+          className={cn(
+            "mb-2 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-bold",
+            hourSummary.isOverPlan ? "bg-red-50 text-red-600" : "bg-slate-100 text-slate-600"
+          )}
+        >
+          {formatHours(hourSummary.actual)} / {hourSummary.hasPlan ? formatHours(hourSummary.planned) : "بدون مخطط"} س
+        </div>
+      )}
+
       {/* Footer */}
       <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100">
         
@@ -121,6 +142,16 @@ export function KanbanCard({ task, onTaskClick, isDragging }: Props) {
             <div className={cn("flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded border", dueDateColor)}>
               <CalendarDays size={11} />
               <span>{formatDateShort(task.due_date)}</span>
+            </div>
+          )}
+          {dateDuration.hasBothDates && (
+            <div
+              className={cn(
+                "rounded border px-1.5 py-0.5 text-[11px] font-medium",
+                dateDuration.isValidRange ? "bg-indigo-50 text-indigo-600 border-indigo-100" : "bg-red-50 text-red-600 border-red-100"
+              )}
+            >
+              {dateDuration.isValidRange ? dateDuration.label : "راجع التواريخ"}
             </div>
           )}
           

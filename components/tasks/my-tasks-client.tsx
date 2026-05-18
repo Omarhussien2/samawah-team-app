@@ -8,6 +8,8 @@ import { CheckCircle2, AlertCircle, Clock, CalendarCheck, List, Search, X } from
 import { formatDateShort, getPriorityLabel, getStatusColor, getStatusLabel, isOverdue, isDueToday, cn } from "@/lib/utils";
 import { recalcProjectProgress } from "@/lib/utils/recalc-progress";
 import { createSearchMatcher } from "@/lib/utils/search";
+import { formatHours, getTaskHourSummary } from "@/lib/tasks/hours";
+import { getTaskDateDuration } from "@/lib/tasks/duration";
 import { TaskModal } from "./task-modal";
 import { TaskTitleStack } from "./task-title-stack";
 import { useRealtimeSubscription } from "@/lib/supabase/realtime";
@@ -223,6 +225,14 @@ export function MyTasksClient({ tasks: initialTasks, currentUser, profiles }: Pr
         <div className="space-y-3">
           {filtered.map((task) => {
             const overdueTask = isOverdue(task.due_date, task.status);
+            const hourSummary = getTaskHourSummary({
+              plannedHours: task.planned_hours,
+              actualHours: task.actual_hours,
+            });
+            const dateDuration = getTaskDateDuration({
+              startDate: task.start_date,
+              endDate: task.due_date,
+            });
             return (
               <div
                 key={task.id}
@@ -263,6 +273,16 @@ export function MyTasksClient({ tasks: initialTasks, currentUser, profiles }: Pr
                           {formatDateShort(task.due_date)}
                         </span>
                       )}
+                      {dateDuration.hasBothDates && (
+                        <span
+                          className={cn(
+                            "text-xs rounded-full px-2 py-0.5 font-medium",
+                            dateDuration.isValidRange ? "bg-indigo-50 text-indigo-700" : "bg-red-50 text-red-600"
+                          )}
+                        >
+                          {dateDuration.isValidRange ? dateDuration.label : "راجع التواريخ"}
+                        </span>
+                      )}
                       {(task.progress ?? 0) > 0 && (
                         <div className="flex items-center gap-1.5">
                           <div className="w-16 h-1.5 bg-muted rounded-full">
@@ -270,6 +290,16 @@ export function MyTasksClient({ tasks: initialTasks, currentUser, profiles }: Pr
                           </div>
                           <span className="text-xs text-muted-foreground">{task.progress}%</span>
                         </div>
+                      )}
+                      {(hourSummary.hasPlan || hourSummary.actual > 0) && (
+                        <span
+                          className={cn(
+                            "text-xs rounded-full px-2 py-0.5 font-medium",
+                            hourSummary.isOverPlan ? "bg-red-50 text-red-600" : "bg-slate-100 text-slate-600"
+                          )}
+                        >
+                          {formatHours(hourSummary.actual)} / {hourSummary.hasPlan ? formatHours(hourSummary.planned) : "بدون مخطط"} س
+                        </span>
                       )}
                     </div>
                   </div>

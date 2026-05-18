@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -16,13 +16,22 @@ import {
   taskKeys,
   type TaskWithRelations,
 } from "@/lib/queries/tasks";
+import { getTaskDateDuration } from "@/lib/tasks/duration";
 
 const schema = z.object({
   title: z.string().min(1, "اسم المهمة مطلوب"),
   project_id: z.string().min(1, "المشروع مطلوب"),
   owner_id: z.string().optional(),
+  start_date: z.string().optional(),
   due_date: z.string().optional(),
   priority: z.enum(["low", "medium", "high", "critical"]).default("medium"),
+  planned_hours: z.preprocess(
+    (value) => {
+      const numericValue = Number(value);
+      return value === "" || value === undefined || Number.isNaN(numericValue) ? 0 : numericValue;
+    },
+    z.number().min(0).default(0)
+  ),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -40,10 +49,16 @@ export function QuickAddTaskModal({ open, onClose, defaultProjectId, onTaskCreat
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [profiles, setProfiles] = useState<{ id: string; full_name: string | null }[]>([]);
 
-  const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { priority: "medium", project_id: defaultProjectId ?? "" },
+    defaultValues: { priority: "medium", project_id: defaultProjectId ?? "", start_date: "", due_date: "", planned_hours: 0 },
   });
+  const watchedStartDate = watch("start_date");
+  const watchedDueDate = watch("due_date");
+  const dateDuration = useMemo(
+    () => getTaskDateDuration({ startDate: watchedStartDate, endDate: watchedDueDate }),
+    [watchedStartDate, watchedDueDate]
+  );
 
   const createTaskMutation = useMutation({
     mutationFn: createTask,
@@ -53,7 +68,7 @@ export function QuickAddTaskModal({ open, onClose, defaultProjectId, onTaskCreat
       queryClient.invalidateQueries({ queryKey: taskKeys.all });
       toast.success("تمت إضافة المهمة");
       recalcProjectProgress(task.project_id);
-      reset({ priority: "medium", project_id: defaultProjectId ?? "" });
+      reset({ priority: "medium", project_id: defaultProjectId ?? "", start_date: "", due_date: "", planned_hours: 0 });
       onClose();
       router.refresh();
     },
@@ -83,14 +98,22 @@ export function QuickAddTaskModal({ open, onClose, defaultProjectId, onTaskCreat
   if (!open) return null;
 
   const onSubmit = async (data: FormData) => {
+    const submittedDuration = getTaskDateDuration({ startDate: data.start_date, endDate: data.due_date });
+    if (!submittedDuration.isValidRange) {
+      toast.error("تاريخ نهاية المهمة يجب أن يكون بعد تاريخ البداية أو في نفس اليوم");
+      return;
+    }
+
     const owner = profiles.find((p) => p.id === data.owner_id);
     createTaskMutation.mutate({
       title: data.title,
       project_id: data.project_id,
       owner_id: data.owner_id || null,
       owner_name: owner?.full_name ?? null,
+      start_date: data.start_date || null,
       due_date: data.due_date || null,
       priority: data.priority,
+      planned_hours: data.planned_hours,
       status: "To Do",
       board_column: "To Do",
     });
@@ -130,8 +153,27 @@ export function QuickAddTaskModal({ open, onClose, defaultProjectId, onTaskCreat
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1.5">تاريخ الاستحقاق</label>
+              <label className="block text-sm font-medium mb-1.5">بدأت في</label>
+              <input type="date" {...register("start_date")} className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium mb-1.5">انتهت في</label>
               <input type="date" {...register("due_date")} className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1.5">مدة المهمة</label>
+              <div
+                className={`flex h-[38px] items-center rounded-lg border px-3 text-sm font-medium ${
+                  dateDuration.isValidRange
+                    ? "border-indigo-100 bg-indigo-50 text-indigo-700"
+                    : "border-red-100 bg-red-50 text-red-600"
+                }`}
+              >
+                {dateDuration.hasBothDates ? dateDuration.label : "بعد إدخال التاريخين"}
+              </div>
             </div>
           </div>
 
@@ -143,6 +185,18 @@ export function QuickAddTaskModal({ open, onClose, defaultProjectId, onTaskCreat
               <option value="high">عالية</option>
               <option value="critical">حرجة</option>
             </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1.5">الساعات المخططة</label>
+            <input
+              type="number"
+              min={0}
+              step={0.25}
+              {...register("planned_hours", { valueAsNumber: true })}
+              className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
+              placeholder="0"
+            />
           </div>
 
           <div className="flex gap-3 pt-2">

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, Wallet, Target, Activity, Users, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { CalendarDays, Wallet, Target, Activity, Users, MoreHorizontal, Pencil, Trash2, Clock } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { formatDateShort, getProjectStatusLabel, cn, getAvatarUrl } from "@/lib/utils";
@@ -20,6 +20,7 @@ import { z } from "zod";
 import { Loader2, X } from "lucide-react";
 import { fetchTasks, taskKeys, type TaskWithRelations } from "@/lib/queries/tasks";
 import { summarizeChallenges } from "@/lib/challenges/risk";
+import { formatHours } from "@/lib/tasks/hours";
 import type { Profile, Project, Challenge, Document, KpiDefinition } from "@/lib/supabase/types";
 
 const TABS = [
@@ -169,6 +170,19 @@ export function ProjectDetailClient({ project, tasks: initialTasks, challenges, 
 
   const progress = Math.round(project.progress ?? 0);
   const challengeSummary = summarizeChallenges(challenges);
+  const hourTotals = tasks.reduce(
+    (totals, task) => {
+      const planned = task.planned_hours ?? 0;
+      const actual = task.actual_hours ?? 0;
+      return {
+        planned: totals.planned + planned,
+        actual: totals.actual + actual,
+        overPlanCount: totals.overPlanCount + (planned > 0 && actual > planned ? 1 : 0),
+      };
+    },
+    { planned: 0, actual: 0, overPlanCount: 0 }
+  );
+  const hourVariance = hourTotals.actual - hourTotals.planned;
   const radius = 24;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (progress / 100) * circumference;
@@ -368,6 +382,38 @@ export function ProjectDetailClient({ project, tasks: initialTasks, challenges, 
                 <p className="mt-2 text-xs font-semibold text-slate-500">
                   {challengeSummary.critical} حرجة، تغطية المخاطر {challengeSummary.riskCoverage}%
                 </p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div className="flex items-center gap-3 text-indigo-600">
+                  <div className="p-2 bg-indigo-50 rounded-lg"><Clock size={18} /></div>
+                  <div>
+                    <h3 className="font-bold text-slate-800">ملخص الساعات</h3>
+                    <p className="text-xs font-medium text-slate-500 mt-1">الساعات لا تؤثر على نسبة الإنجاز الحالية</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+                  <div className="rounded-xl bg-slate-50 px-4 py-3">
+                    <p className="text-xs text-slate-500">المخطط</p>
+                    <p className="mt-1 text-lg font-black text-slate-800">{formatHours(hourTotals.planned)} س</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 px-4 py-3">
+                    <p className="text-xs text-slate-500">الفعلي</p>
+                    <p className="mt-1 text-lg font-black text-slate-800">{formatHours(hourTotals.actual)} س</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 px-4 py-3">
+                    <p className="text-xs text-slate-500">الفرق</p>
+                    <p className={cn("mt-1 text-lg font-black", hourVariance > 0 ? "text-red-600" : "text-emerald-600")}>
+                      {hourVariance > 0 ? "+" : hourVariance < 0 ? "-" : ""}{formatHours(Math.abs(hourVariance))} س
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 px-4 py-3">
+                    <p className="text-xs text-slate-500">تجاوزت المخطط</p>
+                    <p className="mt-1 text-lg font-black text-slate-800">{hourTotals.overPlanCount}</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

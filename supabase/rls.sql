@@ -8,6 +8,7 @@ ALTER TABLE profiles         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE projects         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE project_members  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tasks            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE task_time_entries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE challenges       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE documents        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE project_form_templates ENABLE ROW LEVEL SECURITY;
@@ -191,6 +192,101 @@ CREATE POLICY "tasks_delete" ON tasks
   FOR DELETE USING (
     get_my_role() = 'admin'
     OR is_project_manager(project_id)
+  );
+
+-- ============================================================
+-- Task Time Entries Policies
+-- ============================================================
+DROP POLICY IF EXISTS "task_time_entries_select" ON task_time_entries;
+CREATE POLICY "task_time_entries_select" ON task_time_entries
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1
+      FROM tasks
+      WHERE tasks.id = task_time_entries.task_id
+        AND (
+          get_my_role() = 'admin'
+          OR tasks.owner_id = auth.uid()
+          OR is_project_manager(tasks.project_id)
+          OR is_project_member(tasks.project_id)
+        )
+    )
+  );
+
+DROP POLICY IF EXISTS "task_time_entries_insert" ON task_time_entries;
+CREATE POLICY "task_time_entries_insert" ON task_time_entries
+  FOR INSERT WITH CHECK (
+    auth.uid() IS NOT NULL
+    AND logged_by = auth.uid()
+    AND (
+      EXISTS (
+        SELECT 1
+        FROM tasks
+        WHERE tasks.id = task_time_entries.task_id
+          AND (
+            get_my_role() = 'admin'
+            OR is_project_manager(tasks.project_id)
+            OR (
+              tasks.owner_id = auth.uid()
+              AND task_time_entries.user_id = auth.uid()
+            )
+          )
+      )
+    )
+  );
+
+DROP POLICY IF EXISTS "task_time_entries_update" ON task_time_entries;
+CREATE POLICY "task_time_entries_update" ON task_time_entries
+  FOR UPDATE USING (
+    EXISTS (
+      SELECT 1
+      FROM tasks
+      WHERE tasks.id = task_time_entries.task_id
+        AND (
+          get_my_role() = 'admin'
+          OR is_project_manager(tasks.project_id)
+          OR (
+            tasks.owner_id = auth.uid()
+            AND task_time_entries.user_id = auth.uid()
+            AND task_time_entries.logged_by = auth.uid()
+          )
+        )
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1
+      FROM tasks
+      WHERE tasks.id = task_time_entries.task_id
+        AND (
+          get_my_role() = 'admin'
+          OR is_project_manager(tasks.project_id)
+          OR (
+            tasks.owner_id = auth.uid()
+            AND task_time_entries.user_id = auth.uid()
+            AND task_time_entries.logged_by = auth.uid()
+          )
+        )
+    )
+  );
+
+DROP POLICY IF EXISTS "task_time_entries_delete" ON task_time_entries;
+CREATE POLICY "task_time_entries_delete" ON task_time_entries
+  FOR DELETE USING (
+    EXISTS (
+      SELECT 1
+      FROM tasks
+      WHERE tasks.id = task_time_entries.task_id
+        AND (
+          get_my_role() = 'admin'
+          OR is_project_manager(tasks.project_id)
+          OR (
+            tasks.owner_id = auth.uid()
+            AND task_time_entries.user_id = auth.uid()
+            AND task_time_entries.logged_by = auth.uid()
+          )
+        )
+    )
   );
 
 -- ============================================================
