@@ -147,3 +147,11 @@ This file tracks the implementation state for agent-led work so a future session
 - Reason: User reported Supabase SQL Editor failure while applying `supabase/schema.sql`: `unterminated dollar-quoted string at or near "$$"`.
 - Diagnosis: The reported SQL included RLS statements inside the first `DO $$` block, which indicates the pasted SQL was incomplete or mixed across `schema.sql` and `rls.sql`.
 - Fix: Added `supabase/challenges-risk-fields-patch.sql` as a paste-safe SQL patch for existing databases. It avoids `DO $$` blocks and applies only the challenges/risk fields, indexes, policy update, grant, and KPI source update needed for this task.
+
+### Follow-up Fix - Challenge Member Editing
+
+- Branch: `codex/fix-member-challenge-edit`
+- Started: 2026-05-18
+- Reason: User reported that a regular user can access the challenges page but cannot edit challenges/risks.
+- Diagnosis: `challenges_select` allowed project members to see project challenges, but `challenges_update` only allowed admins, project managers, or the row owner.
+- Fix: Allow project members to update challenges/risks for projects they belong to, while keeping delete limited to admins/project managers. Added `supabase/challenges-member-edit-rls-fix.sql` for immediate Supabase SQL Editor application.
