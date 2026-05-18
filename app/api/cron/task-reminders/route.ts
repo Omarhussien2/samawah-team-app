@@ -7,6 +7,11 @@ import {
   getOrCreateNotificationPreferences,
   shouldSendImportantEmail,
 } from "@/lib/notifications/preferences";
+import {
+  getCronScheduleContext,
+  isAllowedCronWeekday,
+  overdueTaskReminderWeekdays,
+} from "@/lib/notifications/cron-schedule";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 
@@ -17,36 +22,53 @@ export async function GET(request: NextRequest) {
   }
 
   const supabase = createServiceClient();
-  const today = new Date().toISOString().split("T")[0];
-
-  // Calculate 3 days from now for due-soon alerts
-  const threeDaysLater = new Date();
-  threeDaysLater.setDate(threeDaysLater.getDate() + 3);
-  const threeDaysLaterStr = threeDaysLater.toISOString().split("T")[0];
+  const schedule = getCronScheduleContext();
+  const today = schedule.date;
 
   try {
     const { data: log } = await supabase
       .from("automation_logs")
-      .insert({ type: "task-reminders", status: "running", payload: { date: today } })
+      .insert({
+        type: "task-reminders",
+        status: "running",
+        payload: { date: today, weekday: schedule.weekday, timezone: schedule.timezone },
+      })
       .select()
       .single();
 
-    // Get all tasks due today, overdue, or due within 3 days (not done/cancelled)
+    if (!isAllowedCronWeekday(schedule.weekday, overdueTaskReminderWeekdays)) {
+      const payload = {
+        date: today,
+        weekday: schedule.weekday,
+        timezone: schedule.timezone,
+        skipped: true,
+        reason: "outside_schedule",
+        allowedWeekdays: overdueTaskReminderWeekdays,
+      };
+
+      await supabase.from("automation_logs").update({ status: "success", payload }).eq("id", log?.id ?? "");
+      return NextResponse.json({ success: true, skipped: true, sent: 0, overdueEscalated: 0 });
+    }
+
+    // Get overdue tasks only (not done/cancelled). Schedule: Sunday, Tuesday, Thursday.
     type TaskReminder = { id: string; title: string; due_date: string | null; project_id: string | null; owner_id: string | null; owner_name: string | null; project: { name: string } | null };
     const { data: tasks } = (await supabase
       .from("tasks")
       .select("id, title, due_date, project_id, owner_id, owner_name, project:projects(name)")
       .not("owner_id", "is", null)
-      .lte("due_date", threeDaysLaterStr)
+      .lt("due_date", today)
       .not("status", "in", '("Done","Cancelled")')) as unknown as { data: TaskReminder[] | null };
 
     if (!tasks || tasks.length === 0) {
-      await supabase.from("automation_logs").update({ status: "success", payload: { sent: 0 } }).eq("id", log?.id ?? "");
+      await supabase
+        .from("automation_logs")
+        .update({ status: "success", payload: { sent: 0, overdueEscalated: 0, date: today } })
+        .eq("id", log?.id ?? "");
       return NextResponse.json({ success: true, sent: 0 });
     }
 
     // --- Auto-escalate overdue tasks to High alert ---
-    const overdueTasks = tasks.filter((t) => t.due_date && t.due_date < today);
+    const overdueTasks = tasks;
     if (overdueTasks.length > 0) {
       const overdueIds = overdueTasks.map((t) => t.id);
       await supabase
@@ -78,8 +100,7 @@ export async function GET(request: NextRequest) {
 
     for (const profile of profiles ?? []) {
       const userTasks = byOwner[profile.id] ?? [];
-      const overdueForUser = userTasks.filter((t) => t.due_date && t.due_date < today);
-      const dueSoon = userTasks.filter((t) => t.due_date && t.due_date >= today && t.due_date <= threeDaysLaterStr);
+      const overdueForUser = userTasks;
       const preferences = await getOrCreateNotificationPreferences(supabase, profile.id);
 
       // --- In-App Notification: Overdue ---
@@ -91,19 +112,14 @@ export async function GET(request: NextRequest) {
           priority: "high",
           title: `لديك ${overdueForUser.length} مهمة متأخرة`,
           body: overdueForUser.map((t) => `• ${t.title}`).join("\n").substring(0, 200),
-          sent_via: "in_app",
-        });
-      }
-
-      // --- In-App Notification: Due Soon (within 3 days) ---
-      if (preferences.in_app_enabled && dueSoon.length > 0) {
-        await createNotification({
-          user_id: profile.id,
-          type: "reminder",
-          category: "task",
-          priority: "medium",
-          title: `${dueSoon.length} مهمة تستحق خلال 3 أيام`,
-          body: dueSoon.map((t) => `• ${t.title}`).join("\n").substring(0, 200),
+          action_url: "/my-tasks",
+          dedupe_key: `overdue-tasks:${schedule.date}`,
+          metadata: {
+            schedule: "sunday-tuesday-thursday",
+            overdueCount: overdueForUser.length,
+            weekday: schedule.weekday,
+            timezone: schedule.timezone,
+          },
           sent_via: "in_app",
         });
       }
@@ -122,7 +138,7 @@ export async function GET(request: NextRequest) {
 
         const { success } = await sendEmail({
           to: profile.email,
-          subject: `⏰ تذكير بمهامك - سماوة`,
+          subject: `تنبيه بالمهام المتأخرة - سماوة`,
           html,
         });
 
@@ -130,12 +146,29 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    await supabase.from("automation_logs").update({ status: "success", payload: { sent: sentCount, overdueEscalated: overdueTasks.length } }).eq("id", log?.id ?? "");
+    await supabase
+      .from("automation_logs")
+      .update({
+        status: "success",
+        payload: {
+          sent: sentCount,
+          overdueEscalated: overdueTasks.length,
+          date: today,
+          weekday: schedule.weekday,
+          timezone: schedule.timezone,
+        },
+      })
+      .eq("id", log?.id ?? "");
     return NextResponse.json({ success: true, sent: sentCount, overdueEscalated: overdueTasks.length });
 
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    await supabase.from("automation_logs").insert({ type: "task-reminders", status: "error", error: errorMessage });
+    await supabase.from("automation_logs").insert({
+      type: "task-reminders",
+      status: "error",
+      error: errorMessage,
+      payload: { date: today, weekday: schedule.weekday, timezone: schedule.timezone },
+    });
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

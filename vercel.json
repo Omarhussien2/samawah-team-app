@@ -9,7 +9,11 @@
     },
     {
       "path": "/api/cron/task-reminders",
-      "schedule": "0 6 * * *"
+      "schedule": "0 6 * * 0,2,4"
+    },
+    {
+      "path": "/api/cron/task-update-reminders",
+      "schedule": "0 6 * * 1,3"
     },
     {
       "path": "/api/cron/weekly-summary",

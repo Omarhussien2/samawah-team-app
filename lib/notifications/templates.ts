@@ -169,6 +169,56 @@ export function taskReminderTemplate(data: TaskReminderData): string {
 </html>`.trim();
 }
 
+interface TaskUpdateReminderData {
+  userName: string;
+}
+
+const taskUpdateReminderBody = `
+نأمل أن يكون يومكم مليئًا بالإنجاز 🌟
+
+نود تذكيركم بتسجيل وتحديث المهام بشكل مستمر على منصة المشاريع، لما لذلك من أثر مباشر في تحسين سير العمل وتعزيز التعاون بين الفرق.
+
+كما أن كتابة المهام وتوثيقها على المنصة تساعدكم شخصيًا على ترتيب الأولويات وتخفيف الضغط الذهني، بحيث تنتقل المهام من “الذهن” إلى “النظام”، مما يمنحكم وضوحًا أكبر وتركيزًا أفضل خلال يوم العمل ✨
+
+شاكرين تعاونكم والتزامكم الدائم، وممتنون دائمًا لجهودكم وعطائكم 🤝
+
+مع خالص التقدير،
+`.trim();
+
+export function getTaskUpdateReminderBody(): string {
+  return taskUpdateReminderBody;
+}
+
+export function taskUpdateReminderTemplate(data: TaskUpdateReminderData): string {
+  const paragraphs = taskUpdateReminderBody
+    .split("\n\n")
+    .map((paragraph) => `<p style="margin:0 0 16px;line-height:1.9;color:#334155;font-size:15px;">${paragraph}</p>`)
+    .join("");
+
+  return `
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>${baseStyles}</style>
+</head>
+<body>
+  <div class="container">
+    ${headerBlock("تذكير بتحديث المهام", `مرحباً ${data.userName}`)}
+    <div class="content">
+      ${paragraphs}
+
+      <div style="text-align:center; margin-top: 20px;">
+        <a href="${APP_URL}/my-tasks" class="btn">تحديث مهامي</a>
+      </div>
+    </div>
+    ${footerBlock()}
+  </div>
+</body>
+</html>`.trim();
+}
+
 interface WeeklySummaryData {
   totalCompleted: number;
   totalOverdue: number;

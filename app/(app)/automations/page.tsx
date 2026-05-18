@@ -23,10 +23,17 @@ export default async function AutomationsPage() {
     },
     {
       name: "تذكير المهام",
-      description: "يُرسل تذكيراً بالمهام المستحقة اليوم أو المتأخرة",
+      description: "يُرسل تنبيهات للمهام المتأخرة فقط",
       endpoint: "/api/cron/task-reminders",
-      schedule: "يومياً 9:00 ص",
+      schedule: "الأحد والثلاثاء والخميس 9:00 ص",
       icon: "⏰",
+    },
+    {
+      name: "تحديث المهام",
+      description: "يُذكّر الفريق بتسجيل وتحديث المهام ومدخلاتها",
+      endpoint: "/api/cron/task-update-reminders",
+      schedule: "الاثنين والأربعاء 9:00 ص",
+      icon: "✍️",
     },
     {
       name: "ملخص أسبوعي",
@@ -59,7 +66,7 @@ export default async function AutomationsPage() {
       </div>
 
       {/* Automation Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
         {automations.map((auto) => (
           <div key={auto.name} className="bg-white rounded-xl border border-border p-5">
             <div className="flex items-center gap-3 mb-3">
