@@ -8,6 +8,7 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { formatDateShort, getProjectStatusLabel, cn, getAvatarUrl } from "@/lib/utils";
 import { KanbanBoard } from "@/components/board/kanban-board";
 import { TasksTable } from "@/components/tasks/tasks-table";
+import { TasksTimelineChart } from "@/components/tasks/tasks-timeline-chart";
 import { ChallengesList } from "@/components/challenges/challenges-list";
 import { DocumentsList } from "@/components/documents/documents-list";
 import { ProjectFormsTab } from "@/components/project-forms/project-forms-tab";
@@ -26,6 +27,7 @@ import type { Profile, Project, Challenge, Document, KpiDefinition } from "@/lib
 const TABS = [
   { key: "overview", label: "نظرة عامة" },
   { key: "tasks", label: "المهام" },
+  { key: "timeline", label: "المخطط الزمني" },
   { key: "board", label: "اللوحة" },
   { key: "challenges", label: "التحديات" },
   { key: "forms", label: "نماذج المشروع" },
@@ -430,6 +432,13 @@ export function ProjectDetailClient({ project, tasks: initialTasks, challenges, 
         {activeTab === "tasks" && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in duration-300">
             <TasksTable tasks={tasks} profiles={profiles} projectId={project.id} />
+          </div>
+        )}
+
+        {/* TIMELINE TAB */}
+        {activeTab === "timeline" && (
+          <div className="animate-in fade-in duration-300">
+            <TasksTimelineChart tasks={tasks} profiles={profiles} />
           </div>
         )}
 

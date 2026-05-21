@@ -11,6 +11,7 @@ import { KanbanColumn } from "./kanban-column";
 import { KanbanCard } from "./kanban-card";
 import { TaskModal } from "@/components/tasks/task-modal";
 import { QuickAddTaskModal } from "@/components/tasks/quick-add-task-modal";
+import { TasksTimelineChart } from "@/components/tasks/tasks-timeline-chart";
 import { useTasksSubscription } from "@/lib/supabase/realtime";
 import {
   applyTaskListChange,
@@ -252,6 +253,8 @@ export function KanbanBoard({ tasks: initialTasks, projectId, profiles }: Props)
             )}
           </DragOverlay>
         </DndContext>
+      ) : viewMode === "calendar" ? (
+        <TasksTimelineChart tasks={filteredTasks} profiles={profiles} />
       ) : (
         <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm flex items-center justify-center text-slate-500">
            <p>عرض ({viewMode}) قيد التطوير...</p>
