@@ -36,6 +36,7 @@ export default async function DashboardPage() {
   return (
     <div className="min-h-full bg-slate-50/50 p-6 lg:p-8">
       <DashboardClient 
+        mode="home"
         user={user} 
         projects={projects ?? []} 
         tasks={tasks ?? []} 
