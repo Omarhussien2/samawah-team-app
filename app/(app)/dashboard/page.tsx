@@ -9,11 +9,28 @@ export default async function DashboardPage() {
   const [
     { data: projects },
     { data: tasks },
+    { data: projectMembers },
+    { data: challenges },
     { data: comments },
   ] = await Promise.all([
-    supabase.from("projects").select("id, name, status, progress, end_date"),
-    supabase.from("tasks").select("id, title, sub_task, category, status, due_date, priority, alert_level, owner_id, project_id, planned_hours, actual_hours, created_at, updated_at"),
-    supabase.from("comments").select("id, body, created_at, task_id, user:profiles(full_name)").order("created_at", { ascending: false }).limit(10),
+    supabase
+      .from("projects")
+      .select("*, manager:profiles!projects_manager_id_fkey(id,full_name,avatar_url)")
+      .order("updated_at", { ascending: false }),
+    supabase
+      .from("tasks")
+      .select("*, owner:profiles(id,full_name,avatar_url), project:projects(id,name)")
+      .order("due_date", { ascending: true, nullsFirst: false }),
+    supabase.from("project_members").select("project_id,user_id,role_in_project"),
+    supabase
+      .from("challenges")
+      .select("*, owner:profiles(id,full_name), project:projects(id,name)")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("comments")
+      .select("id, body, created_at, task_id, user:profiles(full_name), task:tasks(id,title,project_id)")
+      .order("created_at", { ascending: false })
+      .limit(12),
   ]);
 
   return (
@@ -22,6 +39,8 @@ export default async function DashboardPage() {
         user={user} 
         projects={projects ?? []} 
         tasks={tasks ?? []} 
+        projectMembers={projectMembers ?? []}
+        challenges={challenges ?? []}
         comments={comments ?? []}
       />
     </div>

@@ -8,9 +8,11 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { formatDateShort, getProjectStatusLabel, cn, getAvatarUrl } from "@/lib/utils";
 import { KanbanBoard } from "@/components/board/kanban-board";
 import { TasksTable } from "@/components/tasks/tasks-table";
+import { TasksTimelineChart } from "@/components/tasks/tasks-timeline-chart";
 import { ChallengesList } from "@/components/challenges/challenges-list";
 import { DocumentsList } from "@/components/documents/documents-list";
 import { ProjectFormsTab } from "@/components/project-forms/project-forms-tab";
+import { ProjectOverviewAnalytics } from "@/components/projects/project-overview-analytics";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
@@ -21,11 +23,12 @@ import { Loader2, X } from "lucide-react";
 import { fetchTasks, taskKeys, type TaskWithRelations } from "@/lib/queries/tasks";
 import { summarizeChallenges } from "@/lib/challenges/risk";
 import { formatHours } from "@/lib/tasks/hours";
-import type { Profile, Project, Challenge, Document, KpiDefinition } from "@/lib/supabase/types";
+import type { Profile, Project, Challenge, Document, KpiDefinition, ProjectDailySnapshot } from "@/lib/supabase/types";
 
 const TABS = [
   { key: "overview", label: "نظرة عامة" },
   { key: "tasks", label: "المهام" },
+  { key: "timeline", label: "المخطط الزمني" },
   { key: "board", label: "اللوحة" },
   { key: "challenges", label: "التحديات" },
   { key: "forms", label: "نماذج المشروع" },
@@ -56,10 +59,20 @@ interface Props {
   documents: (Document & { creator?: Pick<Profile, "id" | "full_name"> | null })[];
   profiles: Pick<Profile, "id" | "full_name" | "avatar_url">[];
   kpiDefinitions: KpiDefinition[];
+  projectSnapshots: ProjectDailySnapshot[];
   currentUser: Profile;
 }
 
-export function ProjectDetailClient({ project, tasks: initialTasks, challenges, documents, profiles, kpiDefinitions, currentUser }: Props) {
+export function ProjectDetailClient({
+  project,
+  tasks: initialTasks,
+  challenges,
+  documents,
+  profiles,
+  kpiDefinitions,
+  projectSnapshots,
+  currentUser,
+}: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -416,6 +429,8 @@ export function ProjectDetailClient({ project, tasks: initialTasks, challenges, 
                 </div>
               </div>
             </div>
+
+            <ProjectOverviewAnalytics project={project} tasks={tasks} challenges={challenges} snapshots={projectSnapshots} />
           </div>
         )}
 
@@ -430,6 +445,13 @@ export function ProjectDetailClient({ project, tasks: initialTasks, challenges, 
         {activeTab === "tasks" && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in duration-300">
             <TasksTable tasks={tasks} profiles={profiles} projectId={project.id} />
+          </div>
+        )}
+
+        {/* TIMELINE TAB */}
+        {activeTab === "timeline" && (
+          <div className="animate-in fade-in duration-300">
+            <TasksTimelineChart tasks={tasks} profiles={profiles} />
           </div>
         )}
 

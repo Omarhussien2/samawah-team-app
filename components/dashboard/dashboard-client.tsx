@@ -1,337 +1,1498 @@
 "use client";
 
-import { useMemo, useState, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
-import { CheckCircle2, Clock, AlertTriangle, FolderKanban, ArrowUpRight, MessageSquare, CheckSquare, X, ListFilter } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import {
+  Activity,
+  AlertTriangle,
+  ArrowUpRight,
+  BarChart3,
+  Briefcase,
+  CheckCircle2,
+  CheckSquare,
+  Clock,
+  FolderKanban,
+  Gauge,
+  Layers3,
+  ListFilter,
+  MousePointerClick,
+  ShieldAlert,
+  SlidersHorizontal,
+  Sparkles,
+  TrendingUp,
+  Users,
+  Wallet,
+  X,
+} from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { cn, getStatusColor, getStatusLabel, getPriorityColor, getPriorityLabel, formatDateShort, getAlertLevelColor } from "@/lib/utils";
+import {
+  cn,
+  formatDateShort,
+  getAlertLevelColor,
+  getPriorityColor,
+  getPriorityLabel,
+  getProjectStatusLabel,
+  getStatusColor,
+  getStatusLabel,
+} from "@/lib/utils";
 import { recalcProjectProgress } from "@/lib/utils/recalc-progress";
 import { TaskTitleStack } from "@/components/tasks/task-title-stack";
-import type { Task, Profile } from "@/lib/supabase/types";
+import type { Challenge, Profile, Project, Task } from "@/lib/supabase/types";
 
-interface Props {
-  user: any;
-  projects: any[];
-  tasks: any[];
-  comments: any[];
+type DashboardViewMode = "portfolio" | "managed_projects" | "my_work";
+type ProjectUserRole = "manager" | "member";
+type ProjectHealth = "good" | "watch" | "risk";
+type FocusType = "today" | "overdue" | "critical" | "budget" | "tasks" | "projects" | null;
+type TaskStatusFilter = Task["status"] | "all";
+type TaskPriorityFilter = Task["priority"] | "all";
+type PeriodFilter = "all" | "today" | "week" | "month" | "overdue";
+
+type DashboardProject = Project & {
+  manager?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null;
+};
+
+type DashboardTask = Task & {
+  owner?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null;
+  project?: Pick<Project, "id" | "name"> | null;
+};
+
+type DashboardChallenge = Challenge & {
+  owner?: Pick<Profile, "id" | "full_name"> | null;
+  project?: Pick<Project, "id" | "name"> | null;
+};
+
+interface DashboardComment {
+  id: string;
+  body: string;
+  created_at: string;
+  task_id: string;
+  user?: Pick<Profile, "full_name"> | null;
+  task?: Pick<Task, "id" | "title" | "project_id"> | null;
 }
 
-type DrillDownType = "overdue" | "today" | "week-done" | "active" | null;
+interface DashboardProjectMember {
+  project_id: string;
+  user_id: string;
+  role_in_project: string;
+}
 
-export function DashboardClient({ user, projects, tasks, comments }: Props) {
-  const [localTasks, setLocalTasks] = useState(tasks);
-  const [drillDown, setDrillDown] = useState<DrillDownType>(null);
+interface Props {
+  user: Profile;
+  projects: DashboardProject[];
+  tasks: DashboardTask[];
+  projectMembers: DashboardProjectMember[];
+  challenges: DashboardChallenge[];
+  comments: DashboardComment[];
+}
 
+interface ProjectInfo {
+  project: DashboardProject;
+  role: ProjectUserRole | null;
+  tasks: DashboardTask[];
+  challenges: DashboardChallenge[];
+  overdueTasks: number;
+  myTasks: number;
+  spent: number;
+  budgetUsedPct: number | null;
+  health: ProjectHealth;
+  healthReason: string;
+}
+
+interface ProjectHealthChartEntry {
+  id: string;
+  name: string;
+  الإنجاز: number;
+  المتأخرة: number;
+  health: ProjectHealth;
+}
+
+interface TaskStatusChartEntry {
+  name: string;
+  rawStatus: Task["status"];
+  value: number;
+  color: string;
+  percent?: number;
+}
+
+interface TaskPriorityChartEntry {
+  name: string;
+  rawPriority: Task["priority"];
+  value: number;
+  color: string;
+  percent?: number;
+}
+
+interface BudgetChartEntry {
+  id: string;
+  name: string;
+  الميزانية: number;
+  التكلفة: number;
+  الاستهلاك: number;
+}
+
+interface WorkloadChartEntry {
+  id: string;
+  name: string;
+  مفتوحة: number;
+  منجزة: number;
+  متأخرة: number;
+  مخطط: number;
+  فعلي: number;
+}
+
+const TASK_STATUSES: Task["status"][] = ["Backlog", "To Do", "In Progress", "Review", "Done", "Cancelled"];
+const PROJECT_STATUSES: Project["status"][] = ["active", "paused", "completed", "cancelled"];
+const OPEN_TASK_STATUSES: Task["status"][] = ["Backlog", "To Do", "In Progress", "Review"];
+const TASK_PRIORITIES: Task["priority"][] = ["critical", "high", "medium", "low"];
+const OPEN_CHALLENGE_STATUSES = ["open", "in_progress"];
+const DASHBOARD_VIEW_STORAGE_KEY = "samawah_dashboard_view";
+
+const TASK_STATUS_COLORS: Record<Task["status"], string> = {
+  Backlog: "#a78bfa",
+  "To Do": "#94a3b8",
+  "In Progress": "#60a5fa",
+  Review: "#f59e0b",
+  Done: "#22c55e",
+  Cancelled: "#cbd5e1",
+};
+
+const TASK_PRIORITY_COLORS: Record<Task["priority"], string> = {
+  critical: "#ef4444",
+  high: "#f59e0b",
+  medium: "#60a5fa",
+  low: "#94a3b8",
+};
+
+const HEALTH_LABELS: Record<ProjectHealth, string> = {
+  good: "مستقر",
+  watch: "يحتاج متابعة",
+  risk: "خطر",
+};
+
+const HEALTH_COLORS: Record<ProjectHealth, string> = {
+  good: "bg-emerald-50 text-emerald-700 border-emerald-100",
+  watch: "bg-amber-50 text-amber-700 border-amber-100",
+  risk: "bg-red-50 text-red-700 border-red-100",
+};
+
+const CHART_TOOLTIP_STYLE = {
+  borderRadius: "12px",
+  border: "1px solid #e2e8f0",
+  boxShadow: "0 10px 24px rgb(15 23 42 / 0.08)",
+  direction: "rtl" as const,
+};
+
+function getDateKey(date: Date) {
+  return date.toISOString().split("T")[0];
+}
+
+function getTodayKey() {
+  return getDateKey(new Date());
+}
+
+function isOpenTask(task: DashboardTask) {
+  return OPEN_TASK_STATUSES.includes(task.status);
+}
+
+function isTaskOverdue(task: DashboardTask, todayKey: string) {
+  return Boolean(task.due_date && task.due_date < todayKey && isOpenTask(task));
+}
+
+function isTaskDueToday(task: DashboardTask, todayKey: string) {
+  return task.due_date === todayKey && isOpenTask(task);
+}
+
+function isTaskInPeriod(task: DashboardTask, period: PeriodFilter, todayKey: string) {
+  if (period === "all") return true;
+  if (period === "today") return isTaskDueToday(task, todayKey);
+  if (period === "overdue") return isTaskOverdue(task, todayKey);
+  if (!task.due_date) return false;
+
+  const dueDate = new Date(task.due_date);
+  const today = new Date(todayKey);
+  const days = Math.ceil((dueDate.getTime() - today.getTime()) / 86_400_000);
+
+  if (period === "week") return days >= 0 && days <= 7;
+  if (period === "month") return days >= 0 && days <= 30;
+  return true;
+}
+
+function getDaysUntil(date: string | null) {
+  if (!date) return null;
+  const today = new Date(getTodayKey());
+  const target = new Date(date);
+  return Math.ceil((target.getTime() - today.getTime()) / 86_400_000);
+}
+
+function formatCurrency(value: number) {
+  return `${Math.round(value).toLocaleString("ar")} ر.س`;
+}
+
+function shortName(name: string, max = 18) {
+  return name.length > max ? `${name.slice(0, max - 1)}…` : name;
+}
+
+function getProjectHealth(info: {
+  project: DashboardProject;
+  overdueTasks: number;
+  criticalChallenges: number;
+  budgetUsedPct: number | null;
+}): { health: ProjectHealth; reason: string } {
+  const progress = Math.round(info.project.progress ?? 0);
+  const daysUntilEnd = getDaysUntil(info.project.end_date);
+  const isPastEnd = daysUntilEnd !== null && daysUntilEnd < 0 && progress < 100;
+  const isDueSoonBehind = daysUntilEnd !== null && daysUntilEnd <= 14 && daysUntilEnd >= 0 && progress < 80;
+  const isBudgetRisk = info.budgetUsedPct !== null && info.budgetUsedPct > 100;
+  const isBudgetWatch = info.budgetUsedPct !== null && info.budgetUsedPct >= 80;
+
+  if (info.criticalChallenges > 0) return { health: "risk", reason: "مخاطر حرجة مفتوحة" };
+  if (isPastEnd) return { health: "risk", reason: "تجاوز تاريخ الانتهاء" };
+  if (isBudgetRisk) return { health: "risk", reason: "تجاوز في الميزانية" };
+  if (info.overdueTasks >= 3) return { health: "risk", reason: "تراكم مهام متأخرة" };
+  if (info.overdueTasks > 0) return { health: "watch", reason: "توجد مهام متأخرة" };
+  if (isDueSoonBehind) return { health: "watch", reason: "قريب من الانتهاء والإنجاز منخفض" };
+  if (isBudgetWatch) return { health: "watch", reason: "استهلاك ميزانية مرتفع" };
+  return { health: "good", reason: "المؤشرات مستقرة" };
+}
+
+export function DashboardClient({ user, projects, tasks, projectMembers, challenges, comments }: Props) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [localTasks, setLocalTasks] = useState<DashboardTask[]>(tasks);
+
+  const todayKey = getTodayKey();
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "صباح الخير" : hour < 18 ? "مساء الخير" : "طاب مساؤك";
-  const todayStr = new Date().toISOString().split("T")[0];
+  const firstName = user.full_name?.split(" ")[0] || "هلا";
 
-  const activeProjectsCount = projects.filter(p => p.status === "active").length;
-   
-  const todayTasks = localTasks.filter(t => t.due_date === todayStr && !["Done", "Cancelled"].includes(t.status));
-  const overdueTasks = localTasks.filter(t => t.due_date && t.due_date < todayStr && !["Done", "Cancelled"].includes(t.status));
-   
-  const weekAgo = new Date();
-  weekAgo.setDate(weekAgo.getDate() - 7);
-  const completedThisWeek = localTasks.filter(t => t.status === "Done" && new Date(t.updated_at) >= weekAgo);
+  const defaultView: DashboardViewMode =
+    user.role === "admin" ? "portfolio" : user.role === "project_manager" ? "managed_projects" : "my_work";
+  const allowedViews = useMemo<DashboardViewMode[]>(() => {
+    if (user.role === "admin") return ["portfolio", "managed_projects", "my_work"];
+    if (user.role === "project_manager") return ["managed_projects", "my_work"];
+    return ["my_work"];
+  }, [user.role]);
 
-  const drillDownTasks = useMemo(() => {
-    if (!drillDown) return [];
-    if (drillDown === "overdue") return overdueTasks;
-    if (drillDown === "today") return todayTasks;
-    if (drillDown === "week-done") return completedThisWeek;
-    if (drillDown === "active") return localTasks.filter(t => !["Done", "Cancelled"].includes(t.status));
-    return [];
-  }, [drillDown, overdueTasks, todayTasks, completedThisWeek, localTasks]);
+  const viewParam = searchParams.get("view") as DashboardViewMode | null;
+  const selectedView = viewParam && allowedViews.includes(viewParam) ? viewParam : defaultView;
+  const focusParam = searchParams.get("focus") as FocusType;
+  const focus: FocusType = ["today", "overdue", "critical", "budget", "tasks", "projects"].includes(focusParam ?? "")
+    ? focusParam
+    : null;
+  const statusParam = searchParams.get("status") as Task["status"] | null;
+  const statusFilter: TaskStatusFilter = statusParam && TASK_STATUSES.includes(statusParam) ? statusParam : "all";
+  const priorityParam = searchParams.get("priority") as Task["priority"] | null;
+  const priorityFilter: TaskPriorityFilter =
+    priorityParam && TASK_PRIORITIES.includes(priorityParam) ? priorityParam : "all";
+  const periodParam = searchParams.get("period") as PeriodFilter | null;
+  const periodFilter: PeriodFilter =
+    periodParam && ["all", "today", "week", "month", "overdue"].includes(periodParam) ? periodParam : "all";
+  const ownerFilter = searchParams.get("owner") ?? "all";
+  const projectParam = searchParams.get("project");
+  const projectFilter = projectParam && projects.some((project) => project.id === projectParam) ? projectParam : "all";
 
-  const drillDownTitle: Record<string, string> = {
-    overdue: "المهام المتأخرة",
-    today: "مهام اليوم",
-    "week-done": "مهام مكتملة هذا الأسبوع",
-    active: "المهام المفتوحة",
-  };
+  const setQuery = useCallback((updates: Record<string, string | null>) => {
+    const params = new URLSearchParams(searchParams.toString());
+    Object.entries(updates).forEach(([key, value]) => {
+      if (!value || value === "all") params.delete(key);
+      else params.set(key, value);
+    });
+    const query = params.toString();
+    router.replace(`/dashboard${query ? `?${query}` : ""}`, { scroll: false });
+  }, [router, searchParams]);
 
-  const statsConfig = [
-    { label: "المشاريع النشطة", value: activeProjectsCount, icon: FolderKanban, color: "text-blue-600", bg: "bg-blue-50", drill: null as DrillDownType },
-    { label: "مهام اليوم", value: todayTasks.length, icon: Clock, color: "text-amber-600", bg: "bg-amber-50", drill: "today" as DrillDownType },
-    { label: "مهام متأخرة", value: overdueTasks.length, icon: AlertTriangle, color: "text-red-600", bg: "bg-red-50", drill: "overdue" as DrillDownType },
-    { label: "إنجاز الأسبوع", value: completedThisWeek.length, icon: CheckCircle2, color: "text-emerald-600", bg: "bg-emerald-50", drill: "week-done" as DrillDownType },
+  useEffect(() => {
+    if (!viewParam) {
+      const storedView = window.localStorage.getItem(DASHBOARD_VIEW_STORAGE_KEY) as DashboardViewMode | null;
+      if (storedView && allowedViews.includes(storedView) && storedView !== defaultView) {
+        setQuery({ view: storedView });
+      }
+    }
+  }, [allowedViews, defaultView, setQuery, viewParam]);
+
+  useEffect(() => {
+    window.localStorage.setItem(DASHBOARD_VIEW_STORAGE_KEY, selectedView);
+  }, [selectedView]);
+
+  const projectMap = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
+
+  const rolesByProject = useMemo(() => {
+    const roles = new Map<string, ProjectUserRole>();
+
+    projects.forEach((project) => {
+      if (project.manager_id === user.id) roles.set(project.id, "manager");
+    });
+
+    projectMembers.forEach((member) => {
+      if (member.user_id === user.id && roles.get(member.project_id) !== "manager") {
+        roles.set(member.project_id, "member");
+      }
+    });
+
+    localTasks.forEach((task) => {
+      if (task.owner_id === user.id && roles.get(task.project_id) !== "manager") {
+        roles.set(task.project_id, "member");
+      }
+    });
+
+    return roles;
+  }, [localTasks, projectMembers, projects, user.id]);
+
+  const personalProjectIds = useMemo(() => new Set(rolesByProject.keys()), [rolesByProject]);
+
+  const scopedProjects = useMemo(() => {
+    if (selectedView === "portfolio" && user.role === "admin") return projects;
+    return projects.filter((project) => personalProjectIds.has(project.id));
+  }, [personalProjectIds, projects, selectedView, user.role]);
+
+  const scopedProjectIds = useMemo(() => new Set(scopedProjects.map((project) => project.id)), [scopedProjects]);
+
+  const baseScopedTasks = useMemo(() => {
+    return selectedView === "my_work"
+      ? localTasks.filter((task) => task.owner_id === user.id)
+      : localTasks.filter((task) => scopedProjectIds.has(task.project_id));
+  }, [localTasks, scopedProjectIds, selectedView, user.id]);
+
+  const ownerOptions = useMemo(() => {
+    const owners = new Map<string, string>();
+    baseScopedTasks.forEach((task) => {
+      const ownerId = task.owner_id ?? "unassigned";
+      owners.set(ownerId, task.owner?.full_name ?? task.owner_name ?? "غير مسند");
+    });
+    return Array.from(owners, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, "ar"));
+  }, [baseScopedTasks]);
+
+  const selectedOwner = ownerOptions.some((owner) => owner.id === ownerFilter) ? ownerFilter : "all";
+
+  const scopedTasks = useMemo(() => {
+    return baseScopedTasks.filter((task) => {
+      if (projectFilter !== "all" && task.project_id !== projectFilter) return false;
+      if (statusFilter !== "all" && task.status !== statusFilter) return false;
+      if (priorityFilter !== "all" && task.priority !== priorityFilter) return false;
+      if (selectedOwner !== "all" && (task.owner_id ?? "unassigned") !== selectedOwner) return false;
+      if (!isTaskInPeriod(task, periodFilter, todayKey)) return false;
+      return true;
+    });
+  }, [baseScopedTasks, periodFilter, priorityFilter, projectFilter, selectedOwner, statusFilter, todayKey]);
+
+  const scopedChallenges = useMemo(() => {
+    return challenges.filter((challenge) => {
+      if (!scopedProjectIds.has(challenge.project_id)) return false;
+      if (projectFilter !== "all" && challenge.project_id !== projectFilter) return false;
+      return true;
+    });
+  }, [challenges, projectFilter, scopedProjectIds]);
+
+  const projectInfos = useMemo<ProjectInfo[]>(() => {
+    return scopedProjects
+      .filter((project) => projectFilter === "all" || project.id === projectFilter)
+      .map((project) => {
+        const projectTasks = localTasks.filter((task) => task.project_id === project.id);
+        const projectChallenges = challenges.filter((challenge) => challenge.project_id === project.id);
+        const overdueTasks = projectTasks.filter((task) => isTaskOverdue(task, todayKey)).length;
+        const criticalChallenges = projectChallenges.filter(
+          (challenge) => OPEN_CHALLENGE_STATUSES.includes(challenge.status) && challenge.risk_level === "critical"
+        ).length;
+        const spent = projectTasks.reduce((sum, task) => sum + Number(task.cost ?? 0), 0);
+        const budget = Number(project.total_budget ?? 0);
+        const budgetUsedPct = budget > 0 ? Math.round((spent / budget) * 100) : null;
+        const health = getProjectHealth({ project, overdueTasks, criticalChallenges, budgetUsedPct });
+
+        return {
+          project,
+          role: rolesByProject.get(project.id) ?? null,
+          tasks: projectTasks,
+          challenges: projectChallenges,
+          overdueTasks,
+          myTasks: projectTasks.filter((task) => task.owner_id === user.id && isOpenTask(task)).length,
+          spent,
+          budgetUsedPct,
+          health: health.health,
+          healthReason: health.reason,
+        };
+      });
+  }, [challenges, localTasks, projectFilter, rolesByProject, scopedProjects, todayKey, user.id]);
+
+  const todayTasks = useMemo(
+    () => scopedTasks.filter((task) => isTaskDueToday(task, todayKey)),
+    [scopedTasks, todayKey]
+  );
+  const overdueTasks = useMemo(
+    () => scopedTasks.filter((task) => isTaskOverdue(task, todayKey)),
+    [scopedTasks, todayKey]
+  );
+  const criticalChallenges = scopedChallenges.filter(
+    (challenge) => OPEN_CHALLENGE_STATUSES.includes(challenge.status) && challenge.risk_level === "critical"
+  );
+  const activeProjects = projectInfos.filter((info) => info.project.status === "active");
+  const managedCount = projects.filter((project) => project.manager_id === user.id).length;
+  const memberCount = Array.from(personalProjectIds).filter((id) => rolesByProject.get(id) === "member").length;
+  const averageProgress =
+    projectInfos.length > 0
+      ? Math.round(projectInfos.reduce((sum, info) => sum + Number(info.project.progress ?? 0), 0) / projectInfos.length)
+      : 0;
+  const totalBudget = projectInfos.reduce((sum, info) => sum + Number(info.project.total_budget ?? 0), 0);
+  const totalSpent = projectInfos.reduce((sum, info) => sum + info.spent, 0);
+  const budgetUsage = totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0;
+
+  const statusCounts = useMemo(() => {
+    return TASK_STATUSES.map((status) => ({
+      name: getStatusLabel(status),
+      rawStatus: status,
+      value: scopedTasks.filter((task) => task.status === status).length,
+      color: TASK_STATUS_COLORS[status],
+    })).filter((item) => item.value > 0);
+  }, [scopedTasks]);
+
+  const priorityCounts = useMemo(() => {
+    return TASK_PRIORITIES.map((priority) => ({
+      name: getPriorityLabel(priority),
+      rawPriority: priority,
+      value: scopedTasks.filter((task) => task.priority === priority).length,
+      color: TASK_PRIORITY_COLORS[priority],
+    })).filter((item) => item.value > 0);
+  }, [scopedTasks]);
+
+  const projectStatusData = useMemo(() => {
+    return PROJECT_STATUSES.map((status) => ({
+      name: getProjectStatusLabel(status),
+      value: scopedProjects.filter((project) => project.status === status).length,
+    }));
+  }, [scopedProjects]);
+
+  const weeklyData = useMemo(() => {
+    return Array.from({ length: 7 }).map((_, index) => {
+      const day = new Date();
+      day.setDate(day.getDate() - (6 - index));
+      const dateKey = getDateKey(day);
+      return {
+        name: format(day, "EEEE", { locale: ar }),
+        جديدة: scopedTasks.filter((task) => task.created_at?.startsWith(dateKey)).length,
+        مكتملة: scopedTasks.filter((task) => task.status === "Done" && task.updated_at?.startsWith(dateKey)).length,
+      };
+    });
+  }, [scopedTasks]);
+
+  const workloadData = useMemo(() => {
+    const owners = new Map<string, WorkloadChartEntry>();
+    scopedTasks.forEach((task) => {
+      const ownerId = task.owner_id ?? "unassigned";
+      const owner = owners.get(ownerId) ?? {
+        id: ownerId,
+        name: task.owner?.full_name ?? task.owner_name ?? "غير مسند",
+        مفتوحة: 0,
+        منجزة: 0,
+        متأخرة: 0,
+        مخطط: 0,
+        فعلي: 0,
+      };
+      if (task.status === "Done") owner.منجزة += 1;
+      else owner.مفتوحة += 1;
+      if (isTaskOverdue(task, todayKey)) owner.متأخرة += 1;
+      owner.مخطط += Number(task.planned_hours ?? 0);
+      owner.فعلي += Number(task.actual_hours ?? 0);
+      owners.set(ownerId, owner);
+    });
+
+    return Array.from(owners.values())
+      .sort((a, b) => b.متأخرة + b.مفتوحة - (a.متأخرة + a.مفتوحة))
+      .slice(0, 8)
+      .map((owner) => ({ ...owner, name: shortName(owner.name, 14) }));
+  }, [scopedTasks, todayKey]);
+
+  const projectHealthData = useMemo(() => {
+    return projectInfos
+      .slice()
+      .sort((a, b) => {
+        const weight: Record<ProjectHealth, number> = { risk: 3, watch: 2, good: 1 };
+        return weight[b.health] - weight[a.health] || b.overdueTasks - a.overdueTasks;
+      })
+      .slice(0, 8)
+      .map((info) => ({
+        id: info.project.id,
+        name: shortName(info.project.name, 16),
+        الإنجاز: Math.round(info.project.progress ?? 0),
+        المتأخرة: info.overdueTasks,
+        health: info.health,
+      }));
+  }, [projectInfos]);
+
+  const budgetData = useMemo(() => {
+    return projectInfos
+      .filter((info) => Number(info.project.total_budget ?? 0) > 0 || info.spent > 0)
+      .sort((a, b) => Number(b.project.total_budget ?? 0) - Number(a.project.total_budget ?? 0))
+      .slice(0, 8)
+      .map((info) => ({
+        id: info.project.id,
+        name: shortName(info.project.name, 14),
+        الميزانية: Number(info.project.total_budget ?? 0),
+        التكلفة: info.spent,
+        الاستهلاك: info.budgetUsedPct ?? 0,
+      }));
+  }, [projectInfos]);
+
+  const priorityItems = useMemo(() => {
+    const challengeItems = criticalChallenges.slice(0, 4).map((challenge) => ({
+      id: `challenge-${challenge.id}`,
+      type: "critical" as const,
+      title: challenge.title,
+      meta: `${projectMap.get(challenge.project_id)?.name ?? "مشروع"} · خطر حرج`,
+      href: `/projects/${challenge.project_id}?tab=challenges`,
+      severity: 4,
+    }));
+
+    const taskItems = overdueTasks.slice(0, 5).map((task) => ({
+      id: `task-${task.id}`,
+      type: "overdue" as const,
+      title: task.title,
+      meta: `${projectMap.get(task.project_id)?.name ?? "مشروع"} · مستحقة ${formatDateShort(task.due_date)}`,
+      href: `/projects/${task.project_id}?tab=tasks`,
+      severity: task.priority === "critical" ? 4 : task.priority === "high" ? 3 : 2,
+    }));
+
+    const budgetItems = projectInfos
+      .filter((info) => info.budgetUsedPct !== null && info.budgetUsedPct >= 80)
+      .slice(0, 3)
+      .map((info) => ({
+        id: `budget-${info.project.id}`,
+        type: "budget" as const,
+        title: info.project.name,
+        meta: `استهلاك الميزانية ${info.budgetUsedPct}%`,
+        href: `/projects/${info.project.id}`,
+        severity: info.budgetUsedPct && info.budgetUsedPct > 100 ? 4 : 3,
+      }));
+
+    return [...challengeItems, ...taskItems, ...budgetItems].sort((a, b) => b.severity - a.severity).slice(0, 6);
+  }, [criticalChallenges, overdueTasks, projectInfos, projectMap]);
+
+  const filteredComments = useMemo(() => {
+    const scopedTaskIds = new Set(scopedTasks.map((task) => task.id));
+    const scopedIds = scopedProjectIds;
+    return comments.filter((comment) => {
+      if (scopedTaskIds.has(comment.task_id)) return true;
+      if (comment.task?.project_id && scopedIds.has(comment.task.project_id)) return true;
+      return false;
+    });
+  }, [comments, scopedProjectIds, scopedTasks]);
+
+  const focusTasks =
+    focus === "today" ? todayTasks : focus === "overdue" ? overdueTasks : focus === "tasks" ? scopedTasks : [];
+  const focusProjects = focus === "budget" || focus === "projects" ? projectInfos : [];
+  const workView: DashboardViewMode = allowedViews.includes("managed_projects") ? "managed_projects" : "my_work";
+
+  const statCards = [
+    {
+      label: "مشاريع العرض",
+      value: projectInfos.length,
+      hint: `${activeProjects.length} نشطة`,
+      icon: FolderKanban,
+      color: "text-indigo-600",
+      bg: "bg-indigo-50",
+      accent: "bg-indigo-500",
+      action: () => setQuery({ focus: "projects" }),
+    },
+    {
+      label: "أديرها",
+      value: managedCount,
+      hint: "كمسؤول مباشر",
+      icon: Briefcase,
+      color: "text-blue-600",
+      bg: "bg-blue-50",
+      accent: "bg-blue-500",
+      action: () => setQuery({ view: workView, focus: "projects" }),
+    },
+    {
+      label: "أشارك فيها",
+      value: memberCount,
+      hint: "كعضو فريق",
+      icon: Users,
+      color: "text-sky-600",
+      bg: "bg-sky-50",
+      accent: "bg-sky-500",
+      action: () => setQuery({ view: workView, focus: "projects" }),
+    },
+    {
+      label: "متوسط الإنجاز",
+      value: `${averageProgress}%`,
+      hint: "للمشاريع المعروضة",
+      icon: Gauge,
+      color: "text-emerald-600",
+      bg: "bg-emerald-50",
+      accent: "bg-emerald-500",
+      action: () => setQuery({ focus: "projects" }),
+    },
+    {
+      label: "مهام اليوم",
+      value: todayTasks.length,
+      hint: "مفتوحة ومستحقة اليوم",
+      icon: Clock,
+      color: "text-amber-600",
+      bg: "bg-amber-50",
+      accent: "bg-amber-500",
+      action: () => setQuery({ focus: "today", status: null }),
+    },
+    {
+      label: "مهام متأخرة",
+      value: overdueTasks.length,
+      hint: "تحتاج متابعة",
+      icon: AlertTriangle,
+      color: "text-red-600",
+      bg: "bg-red-50",
+      accent: "bg-red-500",
+      action: () => setQuery({ focus: "overdue", status: null }),
+    },
+    {
+      label: "مخاطر حرجة",
+      value: criticalChallenges.length,
+      hint: "مفتوحة الآن",
+      icon: ShieldAlert,
+      color: "text-rose-600",
+      bg: "bg-rose-50",
+      accent: "bg-rose-500",
+      action: () => setQuery({ focus: "critical" }),
+    },
+    {
+      label: "استهلاك الميزانية",
+      value: `${budgetUsage}%`,
+      hint: `${formatCurrency(totalSpent)} من ${formatCurrency(totalBudget)}`,
+      icon: Wallet,
+      color: "text-emerald-600",
+      bg: "bg-emerald-50",
+      accent: budgetUsage > 100 ? "bg-red-500" : budgetUsage >= 80 ? "bg-amber-500" : "bg-emerald-500",
+      action: () => setQuery({ focus: "budget" }),
+    },
   ];
 
-  // Chart data: tasks created vs completed last 7 days
-  const chartData = useMemo(() => {
-    const data = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().split("T")[0];
-      
-      const created = localTasks.filter(t => t.created_at.startsWith(dateStr)).length;
-      const completed = localTasks.filter(t => t.status === "Done" && t.updated_at?.startsWith(dateStr)).length;
-      
-      data.push({
-        name: format(d, 'EEEE', { locale: ar }), // Day name in Arabic
-        جديدة: created,
-        مكتملة: completed
-      });
-    }
-    return data;
-  }, [localTasks]);
+  const viewOptions: Record<DashboardViewMode, { label: string; description: string; icon: typeof BarChart3 }> = {
+    portfolio: { label: "نظرة الإدارة", description: "محفظة المشاريع كاملة", icon: BarChart3 },
+    managed_projects: { label: "مشاريعي", description: "ما أديره أو أشارك فيه", icon: FolderKanban },
+    my_work: { label: "مهامي", description: "العمل المسند لي", icon: CheckSquare },
+  };
+  const selectedViewOption = viewOptions[selectedView];
+  const SelectedViewIcon = selectedViewOption.icon;
+  const roleLabel =
+    user.role === "admin" ? "مدير منصة" : user.role === "project_manager" ? "مدير مشاريع" : "عضو فريق";
+  const riskProjectsCount = projectInfos.filter((info) => info.health === "risk").length;
+  const watchProjectsCount = projectInfos.filter((info) => info.health === "watch").length;
+  const filterChips = [
+    projectFilter !== "all" && {
+      key: "project",
+      label: projectMap.get(projectFilter)?.name ?? "مشروع محدد",
+      onRemove: () => setQuery({ project: null }),
+    },
+    statusFilter !== "all" && {
+      key: "status",
+      label: getStatusLabel(statusFilter),
+      onRemove: () => setQuery({ status: null }),
+    },
+    priorityFilter !== "all" && {
+      key: "priority",
+      label: getPriorityLabel(priorityFilter),
+      onRemove: () => setQuery({ priority: null }),
+    },
+    selectedOwner !== "all" && {
+      key: "owner",
+      label: ownerOptions.find((owner) => owner.id === selectedOwner)?.name ?? "عضو محدد",
+      onRemove: () => setQuery({ owner: null }),
+    },
+    periodFilter !== "all" && {
+      key: "period",
+      label:
+        periodFilter === "today"
+          ? "اليوم"
+          : periodFilter === "week"
+            ? "خلال أسبوع"
+            : periodFilter === "month"
+              ? "خلال شهر"
+              : "متأخرة",
+      onRemove: () => setQuery({ period: null }),
+    },
+  ].filter(Boolean) as Array<{ key: string; label: string; onRemove: () => void }>;
 
-  // Mark task as done
   const handleMarkDone = async (taskId: string, projectId?: string) => {
-    setLocalTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: "Done" } : t));
-    toast.success("خلّصت المهمة!");
+    setLocalTasks((prev) =>
+      prev.map((task) => (task.id === taskId ? { ...task, status: "Done", board_column: "Done", progress: 100 } : task))
+    );
+    toast.success("تم إغلاق المهمة");
     const supabase = createClient();
     await supabase.from("tasks").update({ status: "Done", board_column: "Done", progress: 100 }).eq("id", taskId);
     if (projectId) recalcProjectProgress(projectId);
   };
 
   return (
-    <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500 fade-in-0">
-      
-      {/* Welcome Section */}
-      <div className="flex flex-col gap-1">
-        <p className="text-sm font-medium text-slate-500 uppercase tracking-wide">
-          {format(new Date(), "EEEE، d MMMM yyyy", { locale: ar })}
-        </p>
-        <h1 className="text-3xl font-bold font-heading text-slate-900 tracking-tight">
-          {greeting}، {user.full_name?.split(" ")[0] || "هلا"}! 👋
-        </h1>
+    <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500 fade-in-0">
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-5 border-b border-slate-100 p-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-bold text-slate-600">
+                {roleLabel}
+              </span>
+              <span className="rounded-lg border border-indigo-100 bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700">
+                <SelectedViewIcon className="ml-1 inline" size={13} />
+                {selectedViewOption.label}
+              </span>
+              <span className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-500">
+                {format(new Date(), "EEEE، d MMMM yyyy", { locale: ar })}
+              </span>
+            </div>
+            <h1 className="mt-3 text-2xl font-black text-slate-950 font-heading">
+              {greeting}، {firstName}
+            </h1>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
+              الصفحة رتبت أولوياتك تلقائيا حسب دورك، علاقتك بالمشاريع، والمهام والمخاطر التي تحتاج انتباه اليوم.
+            </p>
+          </div>
+
+          <div className="grid min-w-full grid-cols-3 gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2 text-center sm:min-w-[360px]">
+            <div className="rounded-lg bg-white px-3 py-2 shadow-sm">
+              <p className="text-[11px] font-bold text-slate-400">تحتاج قرار</p>
+              <p className="mt-1 text-lg font-black text-red-600">{riskProjectsCount}</p>
+            </div>
+            <div className="rounded-lg bg-white px-3 py-2 shadow-sm">
+              <p className="text-[11px] font-bold text-slate-400">تحت المتابعة</p>
+              <p className="mt-1 text-lg font-black text-amber-600">{watchProjectsCount}</p>
+            </div>
+            <div className="rounded-lg bg-white px-3 py-2 shadow-sm">
+              <p className="text-[11px] font-bold text-slate-400">مستقرة</p>
+              <p className="mt-1 text-lg font-black text-emerald-600">
+                {Math.max(projectInfos.length - riskProjectsCount - watchProjectsCount, 0)}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+            <Sparkles size={16} className="text-primary" />
+            <span>وضع العرض لا يغير الصلاحيات، فقط يرتب الصفحة حول ما يهمك الآن.</span>
+          </div>
+          <div className="flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1">
+          {allowedViews.map((view) => {
+            const option = viewOptions[view];
+            const Icon = option.icon;
+            const active = selectedView === view;
+            return (
+              <button
+                key={view}
+                onClick={() =>
+                  setQuery({ view, focus: null, status: null, priority: null, owner: null, period: null, project: null })
+                }
+                className={cn(
+                  "flex min-w-[132px] items-center gap-2 rounded-lg px-3 py-2 text-right text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+                  active
+                    ? "bg-white text-primary shadow-sm"
+                    : "text-slate-600 hover:bg-white/70 hover:text-slate-900"
+                )}
+              >
+                <Icon size={17} />
+                <span>
+                  <span className="block font-bold">{option.label}</span>
+                  <span className="block text-[11px] opacity-75">{option.description}</span>
+                </span>
+              </button>
+            );
+          })}
+          </div>
+        </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {statsConfig.map((stat, i) => (
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {statCards.map((stat) => (
           <button
-            key={i}
-            onClick={() => stat.drill && setDrillDown(drillDown === stat.drill ? null : stat.drill)}
-            className={cn(
-              "bg-white rounded-2xl p-5 border shadow-sm transition-all text-right w-full",
-              drillDown === stat.drill
-                ? "border-primary ring-2 ring-primary/20 shadow-md"
-                : "border-slate-200 hover:shadow-md",
-              stat.drill && "cursor-pointer"
-            )}
+            key={stat.label}
+            onClick={stat.action}
+            className="group relative overflow-hidden rounded-xl border border-slate-200 bg-white p-4 text-right shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
           >
-            <div className="flex justify-between items-start">
+            <span className={cn("absolute inset-x-0 top-0 h-1", stat.accent)} />
+            <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-sm font-medium text-slate-500">{stat.label}</p>
-                <h3 className="text-3xl font-bold text-slate-800 mt-2">{stat.value}</h3>
+                <p className="text-sm font-semibold text-slate-500">{stat.label}</p>
+                <p className="mt-2 text-3xl font-black text-slate-900">{stat.value}</p>
               </div>
-              <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", stat.bg, stat.color)}>
+              <span className={cn("flex h-10 w-10 items-center justify-center rounded-lg", stat.bg, stat.color)}>
                 <stat.icon size={20} />
-              </div>
+              </span>
             </div>
-            {stat.drill && (
-              <p className="text-xs text-primary mt-2 font-medium flex items-center gap-1">
-                <ListFilter size={11} />
-                اضغط للعرض
-              </p>
-            )}
+            <p className="mt-3 flex items-center gap-1 text-xs font-semibold text-slate-500 group-hover:text-primary">
+              <MousePointerClick size={12} />
+              {stat.hint}
+            </p>
           </button>
         ))}
       </div>
 
-      {/* Drill-Down Panel */}
-      {drillDown && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm animate-in slide-in-from-top-2 duration-200">
-          <div className="flex items-center justify-between p-5 border-b border-slate-100">
-            <h2 className="text-lg font-bold text-slate-800">{drillDownTitle[drillDown]}</h2>
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-muted-foreground">{drillDownTasks.length} مهمة</span>
-              <button onClick={() => setDrillDown(null)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600">
-                <X size={18} />
-              </button>
-            </div>
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="flex h-9 items-center gap-2 rounded-lg bg-slate-100 px-3 text-sm font-bold text-slate-700">
+              <SlidersHorizontal size={15} />
+              الفلاتر
+            </span>
+          <select
+            value={projectFilter}
+            onChange={(event) => setQuery({ project: event.target.value, focus: null })}
+            className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-primary/20"
+          >
+            <option value="all">كل المشاريع</option>
+            {scopedProjects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={statusFilter}
+            onChange={(event) => setQuery({ status: event.target.value, focus: "tasks" })}
+            className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-primary/20"
+          >
+            <option value="all">كل حالات المهام</option>
+            {TASK_STATUSES.map((status) => (
+              <option key={status} value={status}>
+                {getStatusLabel(status)}
+              </option>
+            ))}
+          </select>
+          <select
+            value={priorityFilter}
+            onChange={(event) => setQuery({ priority: event.target.value, focus: "tasks" })}
+            className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-primary/20"
+          >
+            <option value="all">كل الأولويات</option>
+            {TASK_PRIORITIES.map((priority) => (
+              <option key={priority} value={priority}>
+                {getPriorityLabel(priority)}
+              </option>
+            ))}
+          </select>
+          <select
+            value={selectedOwner}
+            onChange={(event) => setQuery({ owner: event.target.value, focus: "tasks" })}
+            className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-primary/20"
+          >
+            <option value="all">كل الأعضاء</option>
+            {ownerOptions.map((owner) => (
+              <option key={owner.id} value={owner.id}>
+                {owner.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={periodFilter}
+            onChange={(event) => setQuery({ period: event.target.value, focus: "tasks" })}
+            className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-primary/20"
+          >
+            <option value="all">كل الفترات</option>
+            <option value="today">اليوم</option>
+            <option value="week">خلال أسبوع</option>
+            <option value="month">خلال شهر</option>
+            <option value="overdue">متأخرة</option>
+          </select>
           </div>
-          <div className="max-h-[400px] overflow-y-auto">
-            {drillDownTasks.length === 0 ? (
-              <div className="py-12 text-center text-muted-foreground">
-                <CheckCircle2 size={32} className="mx-auto mb-3 text-slate-300" />
-                <p className="font-medium">ما فيه مهام</p>
+
+          {(filterChips.length > 0 || focus) && (
+            <button
+              onClick={() => setQuery({ project: null, status: null, priority: null, owner: null, period: null, focus: null })}
+              className="flex h-9 items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-600 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            >
+              <X size={15} />
+              مسح الفلاتر
+            </button>
+          )}
+        </div>
+
+        {(filterChips.length > 0 || focus) && (
+          <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+            {focus && (
+              <button
+                onClick={() => setQuery({ focus: null })}
+                className="flex items-center gap-1 rounded-lg border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary"
+              >
+                تركيز نشط
+                <X size={12} />
+              </button>
+            )}
+            {filterChips.map((chip) => (
+              <button
+                key={chip.key}
+                onClick={chip.onRemove}
+                className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-bold text-slate-600 hover:bg-white"
+              >
+                {chip.label}
+                <X size={12} />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {focus && (
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-slate-100 p-5">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 font-heading">
+                {focus === "today" && "مهام اليوم"}
+                {focus === "overdue" && "المهام المتأخرة"}
+                {focus === "critical" && "المخاطر الحرجة"}
+                {focus === "budget" && "مشاريع الميزانية"}
+                {focus === "tasks" && "المهام حسب الفلتر"}
+                {focus === "projects" && "المشاريع حسب الفلتر"}
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">النتائج مرتبطة بوضع العرض والفلاتر الحالية.</p>
+            </div>
+            <button onClick={() => setQuery({ focus: null })} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100">
+              <X size={18} />
+            </button>
+          </div>
+
+          {(focus === "today" || focus === "overdue" || focus === "tasks") && (
+            <TaskDrillDown
+              tasks={focusTasks}
+              projects={projectMap}
+              onOpenTask={(task) => router.push(`/projects/${task.project_id}?tab=tasks`)}
+              onMarkDone={handleMarkDone}
+            />
+          )}
+
+          {focus === "critical" && (
+            <div className="grid gap-3 p-5 md:grid-cols-2">
+              {criticalChallenges.length === 0 ? (
+                <EmptyState label="لا توجد مخاطر حرجة ضمن هذا العرض" />
+              ) : (
+                criticalChallenges.map((challenge) => (
+                  <Link
+                    key={challenge.id}
+                    href={`/projects/${challenge.project_id}?tab=challenges`}
+                    className="rounded-xl border border-red-100 bg-red-50/60 p-4 transition-colors hover:bg-red-50"
+                  >
+                    <p className="text-sm font-bold text-red-800">{challenge.title}</p>
+                    <p className="mt-2 text-xs text-red-700">
+                      {projectMap.get(challenge.project_id)?.name ?? "مشروع"} · درجة الخطر {challenge.risk_score}
+                    </p>
+                  </Link>
+                ))
+              )}
+            </div>
+          )}
+
+          {(focus === "budget" || focus === "projects") && (
+            <ProjectDrillDown infos={focusProjects} onSelect={(projectId) => setQuery({ project: projectId, focus: "projects" })} />
+          )}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+        <section className="space-y-6 xl:col-span-2">
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-5 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900 font-heading">الأولوية الآن</h2>
+                <p className="mt-1 text-sm text-slate-500">أهم إشارات تحتاج قرار أو متابعة.</p>
+              </div>
+              <TrendingUp className="text-primary" size={20} />
+            </div>
+            {priorityItems.length === 0 ? (
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-semibold text-emerald-700">
+                لا توجد إشارات حرجة حاليا. الوضع مستقر ضمن هذا العرض.
               </div>
             ) : (
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 sticky top-0">
-                  <tr>
-                    <th className="text-right px-5 py-3 font-medium text-slate-500">المهمة</th>
-                    <th className="text-right px-5 py-3 font-medium text-slate-500 hidden md:table-cell">المشروع</th>
-                    <th className="text-right px-5 py-3 font-medium text-slate-500 hidden lg:table-cell">الحالة</th>
-                    <th className="text-right px-5 py-3 font-medium text-slate-500 hidden lg:table-cell">الاستحقاق</th>
-                    <th className="text-right px-5 py-3 font-medium text-slate-500 hidden xl:table-cell">الإنجاز</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {drillDownTasks.map((task: any) => {
-                    const proj = projects.find((p: any) => p.id === task.project_id);
-                    return (
-                       <tr key={task.id} className="hover:bg-slate-50 cursor-pointer transition-colors" onClick={() => handleMarkDone(task.id, task.project_id)}>
-                        <td className="px-5 py-3">
+              <div className="grid gap-3 md:grid-cols-2">
+                {priorityItems.map((item) => (
+                  <Link
+                    key={item.id}
+                    href={item.href}
+                    className={cn(
+                      "rounded-xl border p-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+                      item.type === "critical"
+                        ? "border-red-100 bg-red-50/60 hover:bg-red-50"
+                        : item.type === "budget"
+                          ? "border-amber-100 bg-amber-50/60 hover:bg-amber-50"
+                          : "border-slate-200 bg-slate-50 hover:bg-white"
+                    )}
+                  >
+                    <p className="line-clamp-1 text-sm font-bold text-slate-900">{item.title}</p>
+                    <p className="mt-2 text-xs font-medium text-slate-500">{item.meta}</p>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <ProjectCards infos={projectInfos} onFilterProject={(projectId) => setQuery({ project: projectId, focus: "projects" })} />
+
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <ChartCard title="صحة المشاريع" subtitle="الإنجاز والمهام المتأخرة">
+              {projectHealthData.length === 0 ? (
+                <EmptyState label="لا توجد مشاريع لعرض صحتها" />
+              ) : (
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={projectHealthData} layout="vertical" margin={{ top: 8, right: 12, left: 8, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+                    <XAxis type="number" domain={[0, 100]} tickFormatter={(value) => `${value}%`} fontSize={11} />
+                    <YAxis type="category" dataKey="name" width={86} fontSize={11} />
+                    <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(value: number | string) => [`${value}`, ""]} />
+                    <Bar
+                      dataKey="الإنجاز"
+                      radius={[0, 6, 6, 0]}
+                      onClick={(entry: ProjectHealthChartEntry) => setQuery({ project: entry.id, focus: "projects" })}
+                    >
+                      {projectHealthData.map((entry) => (
+                        <Cell
+                          key={entry.id}
+                          fill={entry.health === "risk" ? "#ef4444" : entry.health === "watch" ? "#f59e0b" : "#22c55e"}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </ChartCard>
+
+            <ChartCard title="توزيع المهام" subtitle="مرتبطة بفلاتر المهام">
+              {statusCounts.length === 0 ? (
+                <EmptyState label="لا توجد مهام ضمن هذا العرض" />
+              ) : (
+                <ResponsiveContainer width="100%" height={280}>
+                  <PieChart>
+                    <Pie
+                      data={statusCounts}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={92}
+                      label={(entry: TaskStatusChartEntry) => `${entry.name} ${Math.round((entry.percent ?? 0) * 100)}%`}
+                      labelLine={false}
+                      fontSize={11}
+                      onClick={(entry: TaskStatusChartEntry) => setQuery({ status: entry.rawStatus, focus: "tasks" })}
+                    >
+                      {statusCounts.map((entry) => (
+                        <Cell key={entry.rawStatus} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(value: number | string) => [`${value} مهمة`, ""]} />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </ChartCard>
+
+            <ChartCard title="أولوية المهام" subtitle="توزيع حسب درجة الأهمية">
+              {priorityCounts.length === 0 ? (
+                <EmptyState label="لا توجد أولويات مسجلة ضمن هذا العرض" />
+              ) : (
+                <ResponsiveContainer width="100%" height={280}>
+                  <PieChart>
+                    <Pie
+                      data={priorityCounts}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={92}
+                      label={(entry: TaskPriorityChartEntry) => `${entry.name} ${Math.round((entry.percent ?? 0) * 100)}%`}
+                      labelLine={false}
+                      fontSize={11}
+                      onClick={(entry: TaskPriorityChartEntry) => setQuery({ priority: entry.rawPriority, focus: "tasks" })}
+                    >
+                      {priorityCounts.map((entry) => (
+                        <Cell key={entry.rawPriority} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(value: number | string) => [`${value} مهمة`, ""]} />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </ChartCard>
+
+            <ChartCard title="أداء الأسبوع" subtitle="مهام جديدة مقابل مكتملة">
+              <ResponsiveContainer width="100%" height={280}>
+                <LineChart data={weeklyData} margin={{ top: 8, right: 10, left: 8, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis dataKey="name" tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
+                  <Legend />
+                  <Line type="monotone" dataKey="مكتملة" stroke="#22c55e" strokeWidth={3} activeDot={{ r: 6 }} />
+                  <Line type="monotone" dataKey="جديدة" stroke="#4f46e5" strokeWidth={3} activeDot={{ r: 6 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </ChartCard>
+
+            <ChartCard title="مؤشرات الميزانية" subtitle="الميزانية مقابل تكلفة المهام">
+              {budgetData.length === 0 ? (
+                <EmptyState label="لا توجد ميزانيات مسجلة لهذا العرض" />
+              ) : (
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={budgetData} margin={{ top: 8, right: 10, left: 8, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="name" fontSize={11} />
+                    <YAxis fontSize={11} tickFormatter={(value) => `${Math.round(Number(value) / 1000)}k`} />
+                    <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(value: number | string) => formatCurrency(Number(value))} />
+                    <Legend />
+                    <Bar
+                      dataKey="الميزانية"
+                      fill="#94a3b8"
+                      radius={[6, 6, 0, 0]}
+                      onClick={(entry: BudgetChartEntry) => setQuery({ project: entry.id, focus: "budget" })}
+                    />
+                    <Bar
+                      dataKey="التكلفة"
+                      fill="#10b981"
+                      radius={[6, 6, 0, 0]}
+                      onClick={(entry: BudgetChartEntry) => setQuery({ project: entry.id, focus: "budget" })}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </ChartCard>
+
+            <ChartCard title="عبء الفريق" subtitle="مفتوحة ومنجزة ومتأخرة حسب العضو">
+              {workloadData.length === 0 ? (
+                <EmptyState label="لا توجد مهام مسندة ضمن هذا العرض" />
+              ) : (
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={workloadData} margin={{ top: 8, right: 10, left: 8, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="name" fontSize={11} />
+                    <YAxis fontSize={11} />
+                    <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
+                    <Legend />
+                    <Bar
+                      dataKey="مفتوحة"
+                      stackId="tasks"
+                      fill="#60a5fa"
+                      radius={[6, 6, 0, 0]}
+                      onClick={(entry: WorkloadChartEntry) => setQuery({ owner: entry.id, focus: "tasks" })}
+                    />
+                    <Bar
+                      dataKey="منجزة"
+                      stackId="tasks"
+                      fill="#22c55e"
+                      radius={[6, 6, 0, 0]}
+                      onClick={(entry: WorkloadChartEntry) => setQuery({ owner: entry.id, focus: "tasks" })}
+                    />
+                    <Bar
+                      dataKey="متأخرة"
+                      stackId="tasks"
+                      fill="#ef4444"
+                      radius={[6, 6, 0, 0]}
+                      onClick={(entry: WorkloadChartEntry) => setQuery({ owner: entry.id, focus: "tasks" })}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </ChartCard>
+
+            <ChartCard title="حالات المشاريع" subtitle="توزيع المشاريع حسب الحالة">
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={projectStatusData} margin={{ top: 8, right: 10, left: 8, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis dataKey="name" fontSize={11} />
+                  <YAxis allowDecimals={false} fontSize={11} />
+                  <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(value: number | string) => [`${value} مشروع`, ""]} />
+                  <Bar dataKey="value" fill="#4f46e5" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartCard>
+          </div>
+        </section>
+
+        <aside className="space-y-6">
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-slate-900 font-heading">مهامي القريبة</h2>
+              <Link href="/my-tasks" className="flex items-center gap-1 text-sm font-semibold text-primary hover:text-primary/80">
+                عرض الكل <ArrowUpRight size={14} />
+              </Link>
+            </div>
+            <div className="space-y-2">
+              {todayTasks.concat(overdueTasks).slice(0, 7).length === 0 ? (
+                <EmptyState label="لا توجد مهام مستعجلة" />
+              ) : (
+                todayTasks
+                  .concat(overdueTasks)
+                  .slice(0, 7)
+                  .map((task) => (
+                    <div key={`${task.id}-${task.due_date}`} className="rounded-xl border border-slate-100 bg-slate-50 p-3 transition-colors hover:bg-white">
+                      <div className="flex items-start gap-2">
+                        <button
+                          onClick={() => handleMarkDone(task.id, task.project_id)}
+                          className="mt-1 text-slate-300 transition-colors hover:text-emerald-500"
+                        >
+                          <CheckCircle2 size={17} />
+                        </button>
+                        <div className="min-w-0 flex-1">
                           <TaskTitleStack
                             title={task.title}
                             subTask={task.sub_task}
                             category={task.category}
-                            done={task.status === "Done"}
-                            primaryClassName="text-slate-800 line-clamp-1"
+                            primaryClassName="line-clamp-1 text-sm font-bold text-slate-800"
                           />
-                          {task.alert_level && task.alert_level !== "Low" && (
-                            <span className={cn("text-xs px-1.5 py-0.5 rounded-full mt-1 inline-block", getAlertLevelColor(task.alert_level))}>
-                              {task.alert_level}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-5 py-3 text-slate-600 hidden md:table-cell">{proj?.name ?? "—"}</td>
-                        <td className="px-5 py-3 hidden lg:table-cell">
-                          <span className={cn("text-xs px-2 py-1 rounded-full font-medium", getStatusColor(task.status))}>
-                            {getStatusLabel(task.status)}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3 text-slate-600 hidden lg:table-cell">{formatDateShort(task.due_date)}</td>
-                        <td className="px-5 py-3 hidden xl:table-cell">
-                          <div className="flex items-center gap-2">
-                            <div className="w-16 h-1.5 bg-slate-100 rounded-full">
-                              <div className="h-full bg-primary rounded-full" style={{ width: `${task.progress ?? 0}%` }} />
-                            </div>
-                            <span className="text-xs text-muted-foreground">{task.progress ?? 0}%</span>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Left Column: Chart & Project Progress */}
-        <div className="lg:col-span-2 space-y-6">
-          
-          {/* Chart */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-bold font-heading text-slate-800">أداء الأسبوع</h2>
-            </div>
-            <div className="h-72 w-full" dir="ltr">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData} margin={{ top: 5, right: 0, left: 0, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} dx={-10} />
-                  <Tooltip 
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                    itemStyle={{ fontSize: '13px', fontWeight: 500 }}
-                  />
-                  <Line type="monotone" dataKey="مكتملة" stroke="#10b981" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} />
-                  <Line type="monotone" dataKey="جديدة" stroke="#6366f1" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Project Progress */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-bold font-heading text-slate-800">نشاط المشاريع</h2>
-              <Link href="/projects" className="text-sm text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1">
-                عرض الكل <ArrowUpRight size={14} />
-              </Link>
-            </div>
-            <div className="space-y-5">
-              {projects.filter(p => p.status === 'active').slice(0, 4).map((project) => (
-                <div key={project.id} className="group">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm font-semibold text-slate-700 group-hover:text-indigo-600 transition-colors">{project.name}</span>
-                    <span className="text-xs font-bold text-slate-500">{project.progress}%</span>
-                  </div>
-                  <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-indigo-500 rounded-full transition-all duration-1000 ease-out" 
-                      style={{ width: `${project.progress}%` }} 
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column: Tasks & Timeline */}
-        <div className="space-y-6">
-          
-          {/* Today's Tasks */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[400px]">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold font-heading text-slate-800 flex items-center gap-2">
-                <CheckSquare size={18} className="text-indigo-600" />
-                مهام اليوم
-              </h2>
-            </div>
-            <div className="flex-1 overflow-y-auto pr-2 -mr-2 space-y-2 scrollbar-thin scrollbar-thumb-slate-200">
-              {todayTasks.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center px-4">
-                  <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mb-3">
-                    <CheckCircle2 size={24} className="text-slate-300" />
-                  </div>
-                  <p className="text-sm text-slate-500 font-medium">ما فيه مهام مستحقة اليوم</p>
-                </div>
-              ) : (
-                todayTasks.map((task) => (
-                  <div key={task.id} className="group flex items-start gap-3 p-3 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-100 transition-colors cursor-pointer">
-                    <button onClick={() => handleMarkDone(task.id)} className="mt-0.5 text-slate-300 hover:text-emerald-500 transition-colors">
-                      <CheckCircle2 size={18} />
-                    </button>
-                    <div className="min-w-0">
-                      <TaskTitleStack
-                        title={task.title}
-                        subTask={task.sub_task}
-                        category={task.category}
-                        primaryClassName="text-sm text-slate-700 group-hover:text-slate-900 leading-tight"
-                      />
-                      <p className="text-xs text-slate-400 mt-1">{projects.find(p => p.id === task.project_id)?.name}</p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {projectMap.get(task.project_id)?.name ?? "مشروع"} · {formatDateShort(task.due_date)}
+                          </p>
+                        </div>
+                      </div>
                     </div>
+                  ))
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-slate-900 font-heading">آخر التحديثات</h2>
+              <Activity className="text-primary" size={18} />
+            </div>
+            <div className="space-y-4">
+              {filteredComments.length === 0 ? (
+                <EmptyState label="لا توجد تحديثات حديثة" />
+              ) : (
+                filteredComments.slice(0, 8).map((comment) => (
+                  <div key={comment.id} className="border-r-2 border-primary/20 pr-3">
+                    <p className="text-xs font-bold text-slate-700">{comment.user?.full_name ?? "عضو الفريق"}</p>
+                    <p className="mt-1 line-clamp-2 text-sm text-slate-600">{comment.body}</p>
+                    <p className="mt-1 text-[11px] text-slate-400">{formatDateShort(comment.created_at)}</p>
                   </div>
                 ))
               )}
             </div>
           </div>
+        </aside>
+      </div>
+    </div>
+  );
+}
 
-          {/* Activity Timeline */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[350px]">
-            <div className="mb-4">
-              <h2 className="text-lg font-bold font-heading text-slate-800">آخر التحديثات</h2>
-            </div>
-            <div className="flex-1 overflow-y-auto pr-2 -mr-2 scrollbar-thin scrollbar-thumb-slate-200">
-              <div className="relative border-r-2 border-slate-100 right-3 mr-1 space-y-6 pb-4">
-                {comments.map((comment, i) => (
-                  <div key={comment.id} className="relative pr-6">
-                    <div className="absolute right-[-5px] top-1 w-2.5 h-2.5 rounded-full bg-indigo-500 border-2 border-white shadow-sm" />
-                    <div className="flex items-start gap-2">
-                      <div className="bg-slate-50 rounded-lg p-3 border border-slate-100 text-sm flex-1">
-                        <p className="font-semibold text-slate-800 text-xs mb-1">{comment.user?.full_name}</p>
-                        <p className="text-slate-600 line-clamp-2">{comment.body}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {comments.length === 0 && (
-                  <p className="text-sm text-slate-400 pr-6">ما فيه نشاطات جديدة</p>
-                )}
-              </div>
-            </div>
-          </div>
-
+function ChartCard({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-bold text-slate-900 font-heading">{title}</h3>
+          <p className="mt-1 text-xs font-medium text-slate-500">{subtitle}</p>
+        </div>
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+          <MousePointerClick size={15} />
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+        <div className="h-[280px] min-w-[460px]" dir="ltr">
+          {children}
         </div>
       </div>
+    </div>
+  );
+}
+
+function EmptyState({ label }: { label: string }) {
+  return (
+    <div className="flex min-h-[120px] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 text-center text-sm font-medium text-slate-400">
+      {label}
+    </div>
+  );
+}
+
+function ProjectCards({ infos, onFilterProject }: { infos: ProjectInfo[]; onFilterProject: (projectId: string) => void }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-5 flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-slate-900 font-heading">مشاريعي والمشاريع المعروضة</h2>
+          <p className="mt-1 text-sm text-slate-500">الحالة، الدور، الإنجاز، والمهام المتأخرة في مكان واحد.</p>
+        </div>
+        <Layers3 className="text-primary" size={20} />
+      </div>
+
+      {infos.length === 0 ? (
+        <EmptyState label="لا توجد مشاريع مرتبطة بهذا العرض" />
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          {infos.slice(0, 8).map((info) => (
+            <div key={info.project.id} className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 transition-colors hover:bg-white">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <Link href={`/projects/${info.project.id}`} className="line-clamp-1 text-sm font-black text-slate-900 hover:text-primary">
+                    {info.project.name}
+                  </Link>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    <span className="rounded-md bg-white px-2 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200">
+                      {info.role === "manager" ? "مدير المشروع" : info.role === "member" ? "عضو" : "ضمن المحفظة"}
+                    </span>
+                    <span className="rounded-md bg-white px-2 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200">
+                      {getProjectStatusLabel(info.project.status)}
+                    </span>
+                    <span className={cn("rounded-md border px-2 py-1 text-[11px] font-bold", HEALTH_COLORS[info.health])}>
+                      {HEALTH_LABELS[info.health]}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => onFilterProject(info.project.id)}
+                  className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:text-primary"
+                >
+                  <ListFilter size={16} />
+                </button>
+              </div>
+
+              <div className="mt-4">
+                <div className="mb-2 flex items-center justify-between text-xs font-bold text-slate-500">
+                  <span>الإنجاز</span>
+                  <span>{Math.round(info.project.progress ?? 0)}%</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-white">
+                  <div className="h-full rounded-full bg-primary" style={{ width: `${Math.round(info.project.progress ?? 0)}%` }} />
+                </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
+                <div className="rounded-xl bg-white p-2">
+                  <p className="text-slate-400">مهامي</p>
+                  <p className="mt-1 text-base font-black text-slate-800">{info.myTasks}</p>
+                </div>
+                <div className="rounded-xl bg-white p-2">
+                  <p className="text-slate-400">متأخر</p>
+                  <p className="mt-1 text-base font-black text-red-600">{info.overdueTasks}</p>
+                </div>
+                <div className="rounded-xl bg-white p-2">
+                  <p className="text-slate-400">النهاية</p>
+                  <p className="mt-1 text-xs font-black text-slate-800">{formatDateShort(info.project.end_date)}</p>
+                </div>
+              </div>
+
+              <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-500">
+                <span className="line-clamp-1">{info.healthReason}</span>
+                <Link href={`/projects/${info.project.id}?tab=tasks`} className="shrink-0 font-bold text-primary hover:text-primary/80">
+                  المهام
+                </Link>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TaskDrillDown({
+  tasks,
+  projects,
+  onOpenTask,
+  onMarkDone,
+}: {
+  tasks: DashboardTask[];
+  projects: Map<string, DashboardProject>;
+  onOpenTask: (task: DashboardTask) => void;
+  onMarkDone: (taskId: string, projectId?: string) => void;
+}) {
+  if (tasks.length === 0) return <EmptyState label="لا توجد مهام مطابقة لهذا العرض" />;
+
+  return (
+    <div className="max-h-[420px] overflow-auto">
+      <table className="w-full text-sm">
+        <thead className="sticky top-0 bg-slate-50">
+          <tr>
+            <th className="px-5 py-3 text-right font-semibold text-slate-500">المهمة</th>
+            <th className="hidden px-5 py-3 text-right font-semibold text-slate-500 md:table-cell">المشروع</th>
+            <th className="hidden px-5 py-3 text-right font-semibold text-slate-500 lg:table-cell">الحالة</th>
+            <th className="hidden px-5 py-3 text-right font-semibold text-slate-500 lg:table-cell">الأولوية</th>
+            <th className="px-5 py-3 text-right font-semibold text-slate-500">الاستحقاق</th>
+            <th className="px-5 py-3 text-right font-semibold text-slate-500">إجراء</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {tasks.slice(0, 40).map((task) => (
+            <tr key={task.id} className="cursor-pointer transition-colors hover:bg-slate-50" onClick={() => onOpenTask(task)}>
+              <td className="px-5 py-3">
+                <TaskTitleStack
+                  title={task.title}
+                  subTask={task.sub_task}
+                  category={task.category}
+                  done={task.status === "Done"}
+                  primaryClassName="line-clamp-1 text-slate-800"
+                />
+                {task.alert_level && task.alert_level !== "Low" && (
+                  <span className={cn("mt-1 inline-block rounded-full px-1.5 py-0.5 text-xs", getAlertLevelColor(task.alert_level))}>
+                    {task.alert_level}
+                  </span>
+                )}
+              </td>
+              <td className="hidden px-5 py-3 text-slate-600 md:table-cell">{projects.get(task.project_id)?.name ?? "—"}</td>
+              <td className="hidden px-5 py-3 lg:table-cell">
+                <span className={cn("rounded-full px-2 py-1 text-xs font-bold", getStatusColor(task.status))}>{getStatusLabel(task.status)}</span>
+              </td>
+              <td className="hidden px-5 py-3 lg:table-cell">
+                <span className={cn("rounded-full px-2 py-1 text-xs font-bold", getPriorityColor(task.priority))}>
+                  {getPriorityLabel(task.priority)}
+                </span>
+              </td>
+              <td className="px-5 py-3 text-slate-600">{formatDateShort(task.due_date)}</td>
+              <td className="px-5 py-3">
+                <button
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onMarkDone(task.id, task.project_id);
+                  }}
+                  disabled={task.status === "Done"}
+                  className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  إغلاق
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ProjectDrillDown({ infos, onSelect }: { infos: ProjectInfo[]; onSelect: (projectId: string) => void }) {
+  if (infos.length === 0) return <EmptyState label="لا توجد مشاريع مطابقة لهذا العرض" />;
+
+  return (
+    <div className="grid gap-3 p-5 md:grid-cols-2 xl:grid-cols-3">
+      {infos.map((info) => (
+        <button
+          key={info.project.id}
+          onClick={() => onSelect(info.project.id)}
+          className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-right transition-colors hover:bg-white"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="line-clamp-1 text-sm font-black text-slate-900">{info.project.name}</p>
+              <p className="mt-1 text-xs text-slate-500">{info.healthReason}</p>
+            </div>
+            <span className={cn("rounded-md border px-2 py-1 text-[11px] font-bold", HEALTH_COLORS[info.health])}>
+              {HEALTH_LABELS[info.health]}
+            </span>
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
+            <span className="rounded-lg bg-white p-2">إنجاز {Math.round(info.project.progress ?? 0)}%</span>
+            <span className="rounded-lg bg-white p-2">متأخر {info.overdueTasks}</span>
+            <span className="rounded-lg bg-white p-2">ميزانية {info.budgetUsedPct ?? 0}%</span>
+          </div>
+        </button>
+      ))}
     </div>
   );
 }

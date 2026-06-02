@@ -486,6 +486,38 @@ CREATE TABLE IF NOT EXISTS comments (
 );
 
 -- ============================================================
+-- 7.1. جدول اللقطات اليومية لتحليلات المشاريع (project_daily_snapshots)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS project_daily_snapshots (
+  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id           UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  snapshot_date        DATE NOT NULL DEFAULT CURRENT_DATE,
+  total_tasks          INTEGER NOT NULL DEFAULT 0 CHECK (total_tasks >= 0),
+  completed_tasks      INTEGER NOT NULL DEFAULT 0 CHECK (completed_tasks >= 0),
+  open_tasks           INTEGER NOT NULL DEFAULT 0 CHECK (open_tasks >= 0),
+  overdue_tasks        INTEGER NOT NULL DEFAULT 0 CHECK (overdue_tasks >= 0),
+  backlog_tasks        INTEGER NOT NULL DEFAULT 0 CHECK (backlog_tasks >= 0),
+  todo_tasks           INTEGER NOT NULL DEFAULT 0 CHECK (todo_tasks >= 0),
+  in_progress_tasks    INTEGER NOT NULL DEFAULT 0 CHECK (in_progress_tasks >= 0),
+  review_tasks         INTEGER NOT NULL DEFAULT 0 CHECK (review_tasks >= 0),
+  cancelled_tasks      INTEGER NOT NULL DEFAULT 0 CHECK (cancelled_tasks >= 0),
+  planned_progress     NUMERIC NOT NULL DEFAULT 0 CHECK (planned_progress >= 0 AND planned_progress <= 100),
+  actual_progress      NUMERIC NOT NULL DEFAULT 0 CHECK (actual_progress >= 0 AND actual_progress <= 100),
+  total_budget         NUMERIC NOT NULL DEFAULT 0 CHECK (total_budget >= 0),
+  planned_cost         NUMERIC NOT NULL DEFAULT 0 CHECK (planned_cost >= 0),
+  estimated_cost       NUMERIC NOT NULL DEFAULT 0 CHECK (estimated_cost >= 0),
+  open_risks           INTEGER NOT NULL DEFAULT 0 CHECK (open_risks >= 0),
+  critical_risks       INTEGER NOT NULL DEFAULT 0 CHECK (critical_risks >= 0),
+  high_risks           INTEGER NOT NULL DEFAULT 0 CHECK (high_risks >= 0),
+  medium_risks         INTEGER NOT NULL DEFAULT 0 CHECK (medium_risks >= 0),
+  low_risks            INTEGER NOT NULL DEFAULT 0 CHECK (low_risks >= 0),
+  source               TEXT NOT NULL DEFAULT 'daily_cron' CHECK (source IN ('daily_cron', 'manual', 'system')),
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(project_id, snapshot_date)
+);
+
+-- ============================================================
 -- 8. جدول الإشعارات (notifications)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS notifications (
@@ -645,6 +677,11 @@ CREATE TRIGGER update_indicator_products_updated_at
 DROP TRIGGER IF EXISTS update_project_performance_updates_updated_at ON project_performance_updates;
 CREATE TRIGGER update_project_performance_updates_updated_at
   BEFORE UPDATE ON project_performance_updates
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_project_daily_snapshots_updated_at ON project_daily_snapshots;
+CREATE TRIGGER update_project_daily_snapshots_updated_at
+  BEFORE UPDATE ON project_daily_snapshots
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 DROP TRIGGER IF EXISTS update_revenue_entries_updated_at ON revenue_entries;
@@ -891,6 +928,9 @@ CREATE INDEX IF NOT EXISTS idx_challenges_kpi ON challenges(kpi_id);
 CREATE INDEX IF NOT EXISTS idx_documents_project ON documents(project_id);
 CREATE INDEX IF NOT EXISTS idx_documents_stage ON documents(stage);
 CREATE INDEX IF NOT EXISTS idx_comments_task ON comments(task_id);
+CREATE INDEX IF NOT EXISTS idx_project_daily_snapshots_project ON project_daily_snapshots(project_id);
+CREATE INDEX IF NOT EXISTS idx_project_daily_snapshots_date ON project_daily_snapshots(snapshot_date);
+CREATE INDEX IF NOT EXISTS idx_project_daily_snapshots_project_date ON project_daily_snapshots(project_id, snapshot_date DESC);
 
 -- ============================================================
 -- Data API grants for authenticated users
@@ -912,3 +952,5 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON partnership_activities TO authenticated;
 GRANT SELECT, UPDATE ON notifications TO authenticated;
 GRANT SELECT, INSERT, UPDATE ON notification_preferences TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON task_time_entries TO authenticated;
+GRANT SELECT ON project_daily_snapshots TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON project_daily_snapshots TO service_role;
