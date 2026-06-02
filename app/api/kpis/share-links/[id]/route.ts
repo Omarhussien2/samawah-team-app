@@ -1,24 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
+import { canAccessKpiCenter } from "@/lib/auth/kpi-access";
 import { createClient } from "@/lib/supabase/server";
 
 const SAFE_SHARE_LINK_SELECT = "id,name,active,expires_at,created_by,last_viewed_at,views_count,created_at,updated_at";
+const UNAUTHORIZED_ERROR = "غير مصرح";
+const KPI_ACCESS_ERROR = "ليس لديك صلاحية لمركز المؤشرات حاليا";
 
-async function getAdminContext() {
+async function getKpiAccessContext() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) return { supabase, error: "غير مصرح", status: 401 };
+  if (!user) return { supabase, error: UNAUTHORIZED_ERROR, status: 401 };
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("id,email,full_name,role")
     .eq("id", user.id)
     .single();
 
-  if (profile?.role !== "admin") {
-    return { supabase, error: "هذه العملية متاحة لمدير النظام فقط", status: 403 };
+  if (!canAccessKpiCenter(profile)) {
+    return { supabase, error: KPI_ACCESS_ERROR, status: 403 };
   }
   return { supabase, error: null, status: 200 };
 }
@@ -28,7 +31,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const { supabase, error, status } = await getAdminContext();
+  const { supabase, error, status } = await getKpiAccessContext();
   if (error) return NextResponse.json({ error }, { status });
 
   let body: { name?: string; active?: boolean; expires_at?: string | null };
@@ -59,7 +62,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const { supabase, error, status } = await getAdminContext();
+  const { supabase, error, status } = await getKpiAccessContext();
   if (error) return NextResponse.json({ error }, { status });
 
   const { error: deleteError } = await supabase

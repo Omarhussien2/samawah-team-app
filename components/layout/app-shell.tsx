@@ -8,17 +8,18 @@ import { cn } from "@/lib/utils";
 
 interface AppShellProps {
   user: Profile;
+  canAccessKpis: boolean;
   children: React.ReactNode;
 }
 
-export function AppShell({ user, children }: AppShellProps) {
+export function AppShell({ user, canAccessKpis, children }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex w-64 flex-shrink-0 flex-col">
-        <Sidebar />
+        <Sidebar canAccessKpis={canAccessKpis} />
       </aside>
 
       {/* Mobile Sidebar Overlay */}
@@ -34,7 +35,7 @@ export function AppShell({ user, children }: AppShellProps) {
           sidebarOpen ? "translate-x-0" : "translate-x-full"
         )}
       >
-        <Sidebar onClose={() => setSidebarOpen(false)} />
+        <Sidebar canAccessKpis={canAccessKpis} onClose={() => setSidebarOpen(false)} />
       </aside>
 
       {/* Main Content */}

@@ -7,8 +7,9 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, FolderKanban, CheckSquare, KanbanSquare,
-  AlertTriangle, FileText, Users, Zap, Settings, Upload, X, Bell,
-  ChevronDown, ChevronLeft, Star, Folder, Hash, ListTodo, BarChart3
+  FileText, Users, Zap, Settings, Upload, X, Bell,
+  ChevronDown, ChevronLeft, ListTodo, BarChart3,
+  type LucideIcon,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { Project } from "@/lib/supabase/types";
@@ -28,15 +29,24 @@ const teamNavItems = [
   { href: "/settings",      label: "الإعدادات",  icon: Settings },
 ];
 
+interface NavItemProps {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  isSub?: boolean;
+}
+
 interface SidebarProps {
+  canAccessKpis: boolean;
   onClose?: () => void;
 }
 
-export function Sidebar({ onClose }: SidebarProps) {
+export function Sidebar({ canAccessKpis, onClose }: SidebarProps) {
   const pathname = usePathname();
   const [projects, setProjects] = useState<Project[]>([]);
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
   const [workspacesExpanded, setWorkspacesExpanded] = useState(true);
+  const visibleGlobalNavItems = globalNavItems.filter((item) => item.href !== "/kpis" || canAccessKpis);
 
   useEffect(() => {
     const fetchProjects = async () => {
@@ -53,7 +63,7 @@ export function Sidebar({ onClose }: SidebarProps) {
     setExpandedProjects((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const NavItem = ({ href, label, icon: Icon, isSub = false }: any) => {
+  const NavItem = ({ href, label, icon: Icon, isSub = false }: NavItemProps) => {
     const isActive = pathname === href;
     return (
       <Link
@@ -94,7 +104,7 @@ export function Sidebar({ onClose }: SidebarProps) {
         
         {/* Global Nav */}
         <div className="space-y-0.5">
-          {globalNavItems.map((item) => (
+          {visibleGlobalNavItems.map((item) => (
             <NavItem key={item.href} {...item} />
           ))}
         </div>

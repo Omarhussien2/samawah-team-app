@@ -1,30 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { canAccessKpiCenter } from "@/lib/auth/kpi-access";
 import { generateKpiShareToken, hashKpiShareToken } from "@/lib/kpis/share";
+import { createClient } from "@/lib/supabase/server";
 
 const SAFE_SHARE_LINK_SELECT = "id,name,active,expires_at,created_by,last_viewed_at,views_count,created_at,updated_at";
+const UNAUTHORIZED_ERROR = "غير مصرح";
+const KPI_ACCESS_ERROR = "ليس لديك صلاحية لمركز المؤشرات حاليا";
 
-async function getAdminContext() {
+async function getKpiAccessContext() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) return { supabase, profile: null, error: "غير مصرح" };
+  if (!user) return { supabase, profile: null, error: UNAUTHORIZED_ERROR };
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id,role")
+    .select("id,email,full_name,role")
     .eq("id", user.id)
     .single();
 
-  if (profile?.role !== "admin") return { supabase, profile: null, error: "هذه العملية متاحة لمدير النظام فقط" };
+  if (!canAccessKpiCenter(profile)) return { supabase, profile: null, error: KPI_ACCESS_ERROR };
   return { supabase, profile, error: null };
 }
 
 export async function GET() {
-  const { supabase, error } = await getAdminContext();
-  if (error) return NextResponse.json({ error }, { status: error === "غير مصرح" ? 401 : 403 });
+  const { supabase, error } = await getKpiAccessContext();
+  if (error) return NextResponse.json({ error }, { status: error === UNAUTHORIZED_ERROR ? 401 : 403 });
 
   const { data, error: queryError } = await supabase
     .from("kpi_share_links")
@@ -36,8 +39,8 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const { supabase, profile, error } = await getAdminContext();
-  if (error || !profile) return NextResponse.json({ error }, { status: error === "غير مصرح" ? 401 : 403 });
+  const { supabase, profile, error } = await getKpiAccessContext();
+  if (error || !profile) return NextResponse.json({ error }, { status: error === UNAUTHORIZED_ERROR ? 401 : 403 });
 
   let body: { name?: string; expires_at?: string | null };
   try {

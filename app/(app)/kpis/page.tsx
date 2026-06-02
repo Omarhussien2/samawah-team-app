@@ -1,12 +1,16 @@
 import { KpiCenterClient } from "@/components/kpis/kpi-center-client";
+import { canAccessKpiCenter } from "@/lib/auth/kpi-access";
 import { getCurrentKpiPeriod } from "@/lib/kpis/periods";
 import { getUser } from "@/lib/auth/get-user";
 import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
 
 const SAFE_SHARE_LINK_SELECT = "id,name,active,expires_at,created_by,last_viewed_at,views_count,created_at,updated_at";
 
 export default async function KpisPage() {
   const { user } = await getUser();
+  if (!canAccessKpiCenter(user)) redirect("/dashboard");
+
   const supabase = await createClient();
   const initialPeriod = getCurrentKpiPeriod("monthly");
   const initialYear = Number(initialPeriod.periodStart.slice(0, 4));
