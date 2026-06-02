@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import { getTaskExpense, normalizeMoney } from "@/lib/projects/budget";
 import type { Database, Json, Project, Task, Challenge } from "@/lib/supabase/types";
 
 type SnapshotInsert = Database["public"]["Tables"]["project_daily_snapshots"]["Insert"];
@@ -50,11 +51,11 @@ function buildSnapshot(
   const totalTasks = projectTasks.length;
   const completedTasks = projectTasks.filter((task) => task.status === "Done").length;
   const openTasks = projectTasks.filter((task) => OPEN_TASK_STATUSES.includes(task.status)).length;
-  const totalBudget = Number(project.total_budget ?? 0);
+  const totalBudget = normalizeMoney(project.total_budget);
   const planned = plannedProgress(project, snapshotDate);
   const estimatedCost = projectTasks
     .filter((task) => task.status === "Done" || Boolean(task.due_date && task.due_date <= snapshotDate))
-    .reduce((sum, task) => sum + Number(task.cost ?? 0), 0);
+    .reduce((sum, task) => sum + getTaskExpense(task), 0);
   const openRisks = projectChallenges.filter((challenge) =>
     OPEN_CHALLENGE_STATUSES.includes(challenge.status)
   );

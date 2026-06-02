@@ -6,6 +6,7 @@ import Papa from "papaparse";
 import { toast } from "sonner";
 import { Upload, CheckCircle, AlertCircle, Loader2, X } from "lucide-react";
 import { mapArabicStatus } from "@/lib/utils";
+import { normalizeMoney } from "@/lib/projects/budget";
 import type { Profile } from "@/lib/supabase/types";
 
 interface ParsedProject {
@@ -70,7 +71,7 @@ export function ImportClient({ currentUser: _currentUser }: Props) {
         current_stage: row["Current_Stage"] ?? row["current_stage"] ?? "",
         start_date: row["Start_Date"] ?? row["start_date"] ?? "",
         end_date: row["End_Date"] ?? row["end_date"] ?? "",
-        total_budget: parseFloat(row["Total_Budget"] ?? row["total_budget"] ?? "0") || 0,
+        total_budget: normalizeMoney(row["Total_Budget"] ?? row["total_budget"]),
         description: row["Description"] ?? row["description"] ?? "",
         _errors: errors,
       };
@@ -94,7 +95,7 @@ export function ImportClient({ currentUser: _currentUser }: Props) {
         status: mapArabicStatus(arabicStatus),
         start_date: row["Start_Date"] ?? row["start_date"] ?? "",
         due_date: row["End_Date"] ?? row["due_date"] ?? "",
-        cost: parseFloat(row["Cost"] ?? row["cost"] ?? "0") || 0,
+        cost: normalizeMoney(row["Cost"] ?? row["cost"]),
         quantity_total: parseFloat(row["Quantity_Total"] ?? row["quantity_total"] ?? "0") || 0,
         quantity_done: parseFloat(row["Quantity_Done"] ?? row["quantity_done"] ?? "0") || 0,
         progress: progress > 1 ? progress : progress * 100,

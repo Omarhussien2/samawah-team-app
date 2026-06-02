@@ -14,6 +14,7 @@ import {
 import { createSearchMatcher } from "@/lib/utils/search";
 import { formatHours, getTaskHourSummary } from "@/lib/tasks/hours";
 import { getTaskDateDuration } from "@/lib/tasks/duration";
+import { getTaskExpense } from "@/lib/projects/budget";
 import { TaskModal } from "./task-modal";
 import { TaskTitleStack } from "./task-title-stack";
 import { fetchTasks, taskKeys, type TaskWithRelations } from "@/lib/queries/tasks";
@@ -27,6 +28,10 @@ import {
   ChevronDown,
 } from "lucide-react";
 import type { Profile } from "@/lib/supabase/types";
+
+function formatCurrency(value: number) {
+  return `${value.toLocaleString("ar", { maximumFractionDigits: 2 })} ر.س`;
+}
 
 interface Props {
   tasks: TaskWithRelations[];
@@ -326,6 +331,9 @@ export function TasksTable({
                 <th className="text-right px-4 py-3 font-medium text-muted-foreground hidden xl:table-cell">
                   الساعات
                 </th>
+                <th className="text-right px-4 py-3 font-medium text-muted-foreground hidden xl:table-cell">
+                  المصروف
+                </th>
                 <th className="text-right px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">
                   الاستحقاق
                 </th>
@@ -338,7 +346,7 @@ export function TasksTable({
               {filtered.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="text-center py-10 text-muted-foreground"
                   >
                     ما فيه مهام مطابقة للفلاتر
@@ -363,6 +371,11 @@ export function TasksTable({
                   >
                     <td className="px-4 py-3">
                       <TaskTitleStack title={task.title} subTask={task.sub_task} category={task.category} />
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-slate-500">
+                        <span className="rounded-full border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-emerald-700">
+                          مصروف {formatCurrency(getTaskExpense(task))}
+                        </span>
+                      </div>
                       {task.alert_level && task.alert_level !== "Low" && (
                         <span
                           className={cn(
@@ -419,6 +432,11 @@ export function TasksTable({
                           />
                         </div>
                       </div>
+                    </td>
+                    <td className="px-4 py-3 hidden xl:table-cell">
+                      <span className="text-xs font-bold text-slate-600">
+                        {formatCurrency(getTaskExpense(task))}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
                       <div>{formatDateShort(task.due_date)}</div>

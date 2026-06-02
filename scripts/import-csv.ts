@@ -9,6 +9,7 @@ import { createClient } from "@supabase/supabase-js";
 import * as fs from "fs";
 import * as path from "path";
 import Papa from "papaparse";
+import { normalizeMoney } from "../lib/projects/budget";
 
 // تحقق من المتغيرات
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -57,7 +58,7 @@ async function importProjects(filePath: string) {
       current_stage: row["Current_Stage"] ?? null,
       start_date: row["Start_Date"] || null,
       end_date: row["End_Date"] || null,
-      total_budget: parseFloat(row["Total_Budget"] ?? "0") || 0,
+      total_budget: normalizeMoney(row["Total_Budget"]),
       description: row["Description"] ?? null,
       logo_url: row["Logo_URL"] ?? null,
       status: "active",
@@ -118,7 +119,7 @@ async function importTasks(filePath: string) {
       priority: "medium",
       start_date: row["Start_Date"] || null,
       due_date: row["End_Date"] ?? (row["Due_Date"] || null),
-      cost: parseFloat(row["Cost"] ?? "0") || null,
+      cost: normalizeMoney(row["Cost"]),
       quantity_total: parseFloat(row["Quantity_Total"] ?? "0") || null,
       quantity_done: parseFloat(row["Quantity_Done"] ?? "0") || null,
       progress: progress > 1 ? progress : progress * 100,

@@ -11,6 +11,7 @@ import { createClient } from "@supabase/supabase-js";
 import * as path from "path";
 import * as crypto from "crypto";
 import * as fs from "fs";
+import { normalizeMoney } from "../lib/projects/budget";
 
 // ─── Load .env manually ───────────────────────────────────────────────
 const envPath = path.resolve(__dirname, "../.env");
@@ -190,7 +191,7 @@ async function main() {
         status,
         start_date: parseDate(row.Start_Date),
         end_date: parseDate(row.End_Date),
-        total_budget: parseNum(row.Total_Budget) || 0,
+        total_budget: normalizeMoney(parseNum(row.Total_Budget)),
         description: row.Description?.trim() || null,
         logo_url: row.Logo_URL?.trim() || null,
         progress: 0,
@@ -263,7 +264,7 @@ async function main() {
           priority: "medium",
           start_date: parseDate(row.Start_Date),
           due_date: parseDate(row.End_Date || row["Auto_End_Date"]),
-          cost: parseNum(row.Cost),
+          cost: normalizeMoney(parseNum(row.Cost)),
           quantity_total: parseNum(row.Quantity_Total),
           quantity_done: parseNum(row.Quantity_Done),
           progress,

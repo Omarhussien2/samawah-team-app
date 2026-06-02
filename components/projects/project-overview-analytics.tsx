@@ -40,6 +40,7 @@ import {
   getStatusColor,
   getStatusLabel,
 } from "@/lib/utils";
+import { getProjectBudgetSummary, getTaskExpense, normalizeMoney } from "@/lib/projects/budget";
 import type { Challenge, Profile, Project, ProjectDailySnapshot, Task } from "@/lib/supabase/types";
 
 type BurnMode = "burndown" | "burnup";
@@ -381,7 +382,7 @@ export function ProjectOverviewAnalytics({ project, tasks, challenges, snapshots
 
     const points = makePoints(start, end);
     const totalTasks = filteredTasks.length;
-    const totalBudget = Number(project.total_budget ?? 0);
+    const totalBudget = normalizeMoney(project.total_budget);
     const duration = Math.max(end.getTime() - start.getTime(), 1);
 
     return points.map((point) => {
@@ -391,7 +392,7 @@ export function ProjectOverviewAnalytics({ project, tasks, challenges, snapshots
       const actualDone = filteredTasks.filter((task) => taskCompletedBy(task, pointMs)).length;
       const costByDate = filteredTasks
         .filter((task) => taskCompletedBy(task, pointMs) || taskRelevantDate(task) <= pointMs)
-        .reduce((sum, task) => sum + Number(task.cost ?? 0), 0);
+        .reduce((sum, task) => sum + getTaskExpense(task), 0);
 
       const statusCounts = TASK_STATUSES.reduce<Record<Task["status"], number>>((acc, status) => {
         acc[status] = filteredTasks.filter((task) => task.status === status && taskRelevantDate(task) <= pointMs).length;
@@ -444,9 +445,9 @@ export function ProjectOverviewAnalytics({ project, tasks, challenges, snapshots
     : filteredTasks;
   const doneCount = filteredTasks.filter((task) => task.status === "Done").length;
   const overdueCount = filteredTasks.filter((task) => isTaskOverdue(task, todayKey)).length;
-  const totalCost = filteredTasks.reduce((sum, task) => sum + Number(task.cost ?? 0), 0);
-  const budget = Number(project.total_budget ?? 0);
-  const budgetUsage = budget > 0 ? Math.round((totalCost / budget) * 100) : 0;
+  const budgetSummary = getProjectBudgetSummary(project, filteredTasks);
+  const totalCost = budgetSummary.spent;
+  const budgetUsage = budgetSummary.usagePct ?? 0;
   const hasFilters =
     statusFilter !== "all" ||
     priorityFilter !== "all" ||
@@ -853,7 +854,7 @@ function TaskDetails({ tasks, projectId }: { tasks: AnalyticsTask[]; projectId: 
               {formatDateShort(task.due_date)}
             </span>
             <span className="rounded-full bg-white px-2 py-1 font-bold text-slate-500 ring-1 ring-slate-200">
-              تكلفة {formatCurrency(Number(task.cost ?? 0))}
+              تكلفة {formatCurrency(getTaskExpense(task))}
             </span>
           </div>
         </Link>

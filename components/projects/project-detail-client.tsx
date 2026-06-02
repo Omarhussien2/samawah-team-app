@@ -23,6 +23,7 @@ import { Loader2, X } from "lucide-react";
 import { fetchTasks, taskKeys, type TaskWithRelations } from "@/lib/queries/tasks";
 import { summarizeChallenges } from "@/lib/challenges/risk";
 import { formatHours } from "@/lib/tasks/hours";
+import { normalizeMoney } from "@/lib/projects/budget";
 import type { Profile, Project, Challenge, Document, KpiDefinition, ProjectDailySnapshot } from "@/lib/supabase/types";
 
 const TABS = [
@@ -36,13 +37,21 @@ const TABS = [
   { key: "members", label: "الأعضاء" },
 ];
 
+const budgetFieldSchema = z.preprocess(
+  (value) => {
+    const numericValue = Number(value);
+    return value === "" || value === undefined || Number.isNaN(numericValue) ? 0 : numericValue;
+  },
+  z.number().min(0, "الميزانية يجب أن تكون صفرا أو أكثر").default(0)
+);
+
 const editSchema = z.object({
   name: z.string().min(1, "اسم المشروع مطلوب"),
   status: z.enum(["active", "paused", "completed", "cancelled"]),
   current_stage: z.string().optional(),
   start_date: z.string().optional(),
   end_date: z.string().optional(),
-  total_budget: z.number().optional(),
+  total_budget: budgetFieldSchema,
   description: z.string().optional(),
   manager_id: z.string().optional(),
 });
@@ -116,7 +125,7 @@ export function ProjectDetailClient({
   const handleEdit = async (data: EditFormData) => {
     setSaving(true);
     const supabase = createClient();
-    const budget = typeof data.total_budget === "number" && !isNaN(data.total_budget) ? data.total_budget : 0;
+    const budget = normalizeMoney(data.total_budget);
     const manager = profiles.find((p) => p.id === data.manager_id);
 
     const { error } = await supabase.from("projects").update({
@@ -564,7 +573,8 @@ export function ProjectDetailClient({
 
               <div>
                 <label className="block text-sm font-medium mb-1.5">الميزانية الإجمالية</label>
-                <input type="number" {...register("total_budget", { valueAsNumber: true })} className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" placeholder="0" />
+                <input type="number" min={0} step={0.01} {...register("total_budget", { valueAsNumber: true })} className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" placeholder="0" />
+                {errors.total_budget && <p className="text-xs text-red-500 mt-1">{errors.total_budget.message}</p>}
               </div>
 
               <div>

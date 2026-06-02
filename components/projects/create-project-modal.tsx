@@ -8,7 +8,16 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { X, Loader2 } from "lucide-react";
+import { normalizeMoney } from "@/lib/projects/budget";
 import type { Profile, ProjectTemplate } from "@/lib/supabase/types";
+
+const budgetFieldSchema = z.preprocess(
+  (value) => {
+    const numericValue = Number(value);
+    return value === "" || value === undefined || Number.isNaN(numericValue) ? 0 : numericValue;
+  },
+  z.number().min(0, "الميزانية يجب أن تكون صفرا أو أكثر").default(0)
+);
 
 const schema = z.object({
   name: z.string().min(1, "اسم المشروع مطلوب"),
@@ -16,7 +25,7 @@ const schema = z.object({
   current_stage: z.string().optional(),
   start_date: z.string().optional(),
   end_date: z.string().optional(),
-  total_budget: z.number().optional(),
+  total_budget: budgetFieldSchema,
   description: z.string().optional(),
   template_id: z.string().optional(),
 });
@@ -45,9 +54,7 @@ export function CreateProjectModal({ open, onClose, profiles, templates }: Props
     const supabase = createClient();
     const manager = profiles.find((p) => p.id === data.manager_id);
 
-    const budget = typeof data.total_budget === "number" && !isNaN(data.total_budget)
-      ? data.total_budget
-      : 0;
+    const budget = normalizeMoney(data.total_budget);
 
     const { data: project, error } = await supabase
       .from("projects")
@@ -137,7 +144,8 @@ export function CreateProjectModal({ open, onClose, profiles, templates }: Props
 
           <div>
             <label className="block text-sm font-medium mb-1.5">الميزانية الإجمالية</label>
-            <input type="number" {...register("total_budget", { valueAsNumber: true })} className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" placeholder="0" />
+            <input type="number" min={0} step={0.01} {...register("total_budget", { valueAsNumber: true })} className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" placeholder="0" />
+            {errors.total_budget && <p className="text-xs text-red-500 mt-1">{errors.total_budget.message}</p>}
           </div>
 
           <div>

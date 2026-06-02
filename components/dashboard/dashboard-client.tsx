@@ -53,6 +53,7 @@ import {
   getStatusLabel,
 } from "@/lib/utils";
 import { recalcProjectProgress } from "@/lib/utils/recalc-progress";
+import { getProjectBudgetSummary, normalizeMoney } from "@/lib/projects/budget";
 import { TaskTitleStack } from "@/components/tasks/task-title-stack";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Challenge, Profile, Project, Task } from "@/lib/supabase/types";
@@ -426,9 +427,9 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
         const criticalChallenges = projectChallenges.filter(
           (challenge) => OPEN_CHALLENGE_STATUSES.includes(challenge.status) && challenge.risk_level === "critical"
         ).length;
-        const spent = projectTasks.reduce((sum, task) => sum + Number(task.cost ?? 0), 0);
-        const budget = Number(project.total_budget ?? 0);
-        const budgetUsedPct = budget > 0 ? Math.round((spent / budget) * 100) : null;
+        const budgetSummary = getProjectBudgetSummary(project, projectTasks);
+        const spent = budgetSummary.spent;
+        const budgetUsedPct = budgetSummary.usagePct;
         const health = getProjectHealth({ project, overdueTasks, criticalChallenges, budgetUsedPct });
 
         return {
@@ -464,9 +465,9 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
     projectInfos.length > 0
       ? Math.round(projectInfos.reduce((sum, info) => sum + Number(info.project.progress ?? 0), 0) / projectInfos.length)
       : 0;
-  const totalBudget = projectInfos.reduce((sum, info) => sum + Number(info.project.total_budget ?? 0), 0);
+  const totalBudget = projectInfos.reduce((sum, info) => sum + normalizeMoney(info.project.total_budget), 0);
   const totalSpent = projectInfos.reduce((sum, info) => sum + info.spent, 0);
-  const budgetUsage = totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0;
+  const budgetUsage = getProjectBudgetSummary({ total_budget: totalBudget }, [{ cost: totalSpent }]).usagePct ?? 0;
 
   const statusCounts = useMemo(() => {
     return TASK_STATUSES.map((status) => ({
@@ -553,13 +554,13 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
 
   const budgetData = useMemo(() => {
     return projectInfos
-      .filter((info) => Number(info.project.total_budget ?? 0) > 0 || info.spent > 0)
-      .sort((a, b) => Number(b.project.total_budget ?? 0) - Number(a.project.total_budget ?? 0))
+      .filter((info) => normalizeMoney(info.project.total_budget) > 0 || info.spent > 0)
+      .sort((a, b) => normalizeMoney(b.project.total_budget) - normalizeMoney(a.project.total_budget))
       .slice(0, 8)
       .map((info) => ({
         id: info.project.id,
         name: shortName(info.project.name, 14),
-        الميزانية: Number(info.project.total_budget ?? 0),
+        الميزانية: normalizeMoney(info.project.total_budget),
         التكلفة: info.spent,
         الاستهلاك: info.budgetUsedPct ?? 0,
       }));

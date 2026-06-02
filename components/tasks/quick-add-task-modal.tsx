@@ -17,6 +17,7 @@ import {
   type TaskWithRelations,
 } from "@/lib/queries/tasks";
 import { getTaskDateDuration } from "@/lib/tasks/duration";
+import { normalizeMoney } from "@/lib/projects/budget";
 
 const schema = z.object({
   title: z.string().min(1, "اسم المهمة مطلوب"),
@@ -31,6 +32,13 @@ const schema = z.object({
       return value === "" || value === undefined || Number.isNaN(numericValue) ? 0 : numericValue;
     },
     z.number().min(0).default(0)
+  ),
+  cost: z.preprocess(
+    (value) => {
+      const numericValue = Number(value);
+      return value === "" || value === undefined || Number.isNaN(numericValue) ? 0 : numericValue;
+    },
+    z.number().min(0, "مصروف المهمة يجب أن يكون صفرا أو أكثر").default(0)
   ),
 });
 
@@ -51,7 +59,7 @@ export function QuickAddTaskModal({ open, onClose, defaultProjectId, onTaskCreat
 
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { priority: "medium", project_id: defaultProjectId ?? "", start_date: "", due_date: "", planned_hours: 0 },
+    defaultValues: { priority: "medium", project_id: defaultProjectId ?? "", start_date: "", due_date: "", planned_hours: 0, cost: 0 },
   });
   const watchedStartDate = watch("start_date");
   const watchedDueDate = watch("due_date");
@@ -68,7 +76,7 @@ export function QuickAddTaskModal({ open, onClose, defaultProjectId, onTaskCreat
       queryClient.invalidateQueries({ queryKey: taskKeys.all });
       toast.success("تمت إضافة المهمة");
       recalcProjectProgress(task.project_id);
-      reset({ priority: "medium", project_id: defaultProjectId ?? "", start_date: "", due_date: "", planned_hours: 0 });
+      reset({ priority: "medium", project_id: defaultProjectId ?? "", start_date: "", due_date: "", planned_hours: 0, cost: 0 });
       onClose();
       router.refresh();
     },
@@ -114,6 +122,7 @@ export function QuickAddTaskModal({ open, onClose, defaultProjectId, onTaskCreat
       due_date: data.due_date || null,
       priority: data.priority,
       planned_hours: data.planned_hours,
+      cost: normalizeMoney(data.cost),
       status: "To Do",
       board_column: "To Do",
     });
@@ -187,16 +196,36 @@ export function QuickAddTaskModal({ open, onClose, defaultProjectId, onTaskCreat
             </select>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1.5">الساعات المخططة</label>
-            <input
-              type="number"
-              min={0}
-              step={0.25}
-              {...register("planned_hours", { valueAsNumber: true })}
-              className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
-              placeholder="0"
-            />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="block text-sm font-medium mb-1.5">الساعات المخططة</label>
+              <input
+                type="number"
+                min={0}
+                step={0.25}
+                {...register("planned_hours", { valueAsNumber: true })}
+                className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1.5">مصروفات المهمة</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  {...register("cost", { valueAsNumber: true })}
+                  className="w-full pl-12 pr-3 py-2 text-sm border border-emerald-100 bg-emerald-50/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                  placeholder="0"
+                />
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-emerald-700">
+                  ر.س
+                </span>
+              </div>
+              <p className="mt-1 text-[11px] font-medium text-muted-foreground">تدخل هنا التكلفة الفعلية للمهمة.</p>
+              {errors.cost && <p className="text-xs text-red-500 mt-1">{errors.cost.message}</p>}
+            </div>
           </div>
 
           <div className="flex gap-3 pt-2">

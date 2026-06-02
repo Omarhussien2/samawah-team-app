@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { X, Loader2, AlertTriangle, Send, MessageSquare, CalendarDays, AlignLeft, CheckSquare, Paperclip, MoreHorizontal, Clock, Plus, Pencil, Trash2 } from "lucide-react";
+import { X, Loader2, AlertTriangle, Send, MessageSquare, CalendarDays, AlignLeft, CheckSquare, Paperclip, MoreHorizontal, Clock, Plus, Pencil, Trash2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { getStatusLabel, getAlertLevelColor, formatRelativeAr, formatDateShort, cn, getAvatarUrl, getPriorityColor } from "@/lib/utils";
 import { useCommentsSubscription } from "@/lib/supabase/realtime";
@@ -23,6 +23,7 @@ import {
 } from "@/lib/queries/tasks";
 import { formatHours, getTaskHourSummary } from "@/lib/tasks/hours";
 import { getTaskDateDuration } from "@/lib/tasks/duration";
+import { normalizeMoney } from "@/lib/projects/budget";
 import Image from "next/image";
 import type { Database, Profile, Task, TaskProgressMode } from "@/lib/supabase/types";
 
@@ -61,6 +62,7 @@ export function TaskModal({ task, profiles, onClose, onTaskSaved, myTasksOwnerId
   const [startDate, setStartDate] = useState(task.start_date ?? "");
   const [dueDate, setDueDate] = useState(task.due_date ?? "");
   const [plannedHours, setPlannedHours] = useState((task.planned_hours ?? 0).toString());
+  const [cost, setCost] = useState((task.cost ?? 0).toString());
   const [currentUserId, setCurrentUserId] = useState("");
   const [timeUserId, setTimeUserId] = useState(task.owner_id ?? "");
   const [timeDate, setTimeDate] = useState(() => new Date().toISOString().split("T")[0]);
@@ -96,6 +98,10 @@ export function TaskModal({ task, profiles, onClose, onTaskSaved, myTasksOwnerId
   useEffect(() => {
     setPlannedHours((task.planned_hours ?? 0).toString());
   }, [task.planned_hours]);
+
+  useEffect(() => {
+    setCost((task.cost ?? 0).toString());
+  }, [task.cost]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -201,12 +207,19 @@ export function TaskModal({ task, profiles, onClose, onTaskSaved, myTasksOwnerId
     const quantityDoneVal = quantityDone === "" ? null : Number(quantityDone);
     const quantityTotalVal = quantityTotal === "" ? null : Number(quantityTotal);
     const plannedHoursVal = plannedHours === "" ? 0 : Math.max(0, Number(plannedHours) || 0);
+    const costVal = cost === "" ? 0 : Number(cost);
+    if (!Number.isFinite(costVal) || costVal < 0) {
+      toast.error("مصروف المهمة يجب أن يكون صفرا أو أكثر");
+      return;
+    }
+
     const updatePayload: TaskUpdate = {
       title,
       status,
       priority,
       board_column: status,
       planned_hours: plannedHoursVal,
+      cost: normalizeMoney(costVal),
       progress_mode: progressMode,
       progress: progressVal,
       quantity_done: progressMode === "quantity" ? quantityDoneVal : task.quantity_done,
@@ -596,6 +609,36 @@ export function TaskModal({ task, profiles, onClose, onTaskSaved, myTasksOwnerId
                   )}
                 >
                   {dateDuration.hasBothDates ? `استمرت: ${dateDuration.label}` : dateDuration.label}
+                </div>
+              </div>
+
+              {/* Task Expense */}
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-3">
+                <div className="mb-3 flex items-start gap-2">
+                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-emerald-600 shadow-sm">
+                    <Wallet size={16} />
+                  </span>
+                  <div>
+                    <h4 className="text-sm font-black text-slate-900">المصروفات</h4>
+                    <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
+                      سجل المصروف الفعلي لهذه المهمة ليظهر في مؤشرات الميزانية والصفحة الرئيسية.
+                    </p>
+                  </div>
+                </div>
+                <label className="block text-xs font-semibold text-slate-600 mb-2">مصروف المهمة بالريال</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={cost}
+                    onChange={(e) => setCost(e.target.value)}
+                    className="w-full pl-12 pr-3 py-2.5 text-sm font-bold border border-emerald-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/30 bg-white shadow-sm"
+                    placeholder="0"
+                  />
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                    ر.س
+                  </span>
                 </div>
               </div>
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import { normalizeMoney } from "@/lib/projects/budget";
 import type { Database } from "@/lib/supabase/types";
 
 type ProjectInsert = Database["public"]["Tables"]["projects"]["Insert"];
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
           current_stage: clean(project.current_stage),
           start_date: clean(project.start_date),
           end_date: clean(project.end_date),
-          total_budget: cleanNum(project.total_budget) ?? 0,
+          total_budget: normalizeMoney(project.total_budget),
           description: clean(project.description),
           status: "active",
         };
@@ -79,7 +80,7 @@ export async function POST(request: NextRequest) {
           priority: "medium",
           start_date: clean(task.start_date),
           due_date: clean(task.due_date),
-          cost: cleanNum(task.cost),
+          cost: normalizeMoney(task.cost),
           quantity_total: cleanNum(task.quantity_total),
           quantity_done: cleanNum(task.quantity_done),
           progress: cleanNum(task.progress) ?? 0,
