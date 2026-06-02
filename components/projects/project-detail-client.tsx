@@ -12,6 +12,7 @@ import { TasksTimelineChart } from "@/components/tasks/tasks-timeline-chart";
 import { ChallengesList } from "@/components/challenges/challenges-list";
 import { DocumentsList } from "@/components/documents/documents-list";
 import { ProjectFormsTab } from "@/components/project-forms/project-forms-tab";
+import { ProjectOverviewAnalytics } from "@/components/projects/project-overview-analytics";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
@@ -22,7 +23,7 @@ import { Loader2, X } from "lucide-react";
 import { fetchTasks, taskKeys, type TaskWithRelations } from "@/lib/queries/tasks";
 import { summarizeChallenges } from "@/lib/challenges/risk";
 import { formatHours } from "@/lib/tasks/hours";
-import type { Profile, Project, Challenge, Document, KpiDefinition } from "@/lib/supabase/types";
+import type { Profile, Project, Challenge, Document, KpiDefinition, ProjectDailySnapshot } from "@/lib/supabase/types";
 
 const TABS = [
   { key: "overview", label: "نظرة عامة" },
@@ -58,10 +59,20 @@ interface Props {
   documents: (Document & { creator?: Pick<Profile, "id" | "full_name"> | null })[];
   profiles: Pick<Profile, "id" | "full_name" | "avatar_url">[];
   kpiDefinitions: KpiDefinition[];
+  projectSnapshots: ProjectDailySnapshot[];
   currentUser: Profile;
 }
 
-export function ProjectDetailClient({ project, tasks: initialTasks, challenges, documents, profiles, kpiDefinitions, currentUser }: Props) {
+export function ProjectDetailClient({
+  project,
+  tasks: initialTasks,
+  challenges,
+  documents,
+  profiles,
+  kpiDefinitions,
+  projectSnapshots,
+  currentUser,
+}: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -418,6 +429,8 @@ export function ProjectDetailClient({ project, tasks: initialTasks, challenges, 
                 </div>
               </div>
             </div>
+
+            <ProjectOverviewAnalytics project={project} tasks={tasks} challenges={challenges} snapshots={projectSnapshots} />
           </div>
         )}
 

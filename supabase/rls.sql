@@ -25,6 +25,7 @@ ALTER TABLE audience_metrics ENABLE ROW LEVEL SECURITY;
 ALTER TABLE service_outputs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE partnership_activities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE comments         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE project_daily_snapshots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notification_preferences ENABLE ROW LEVEL SECURITY;
 ALTER TABLE automation_logs  ENABLE ROW LEVEL SECURITY;
@@ -748,6 +749,36 @@ CREATE POLICY "comments_delete" ON comments
     get_my_role() = 'admin'
     OR user_id = auth.uid()
   );
+
+-- ============================================================
+-- Project Daily Snapshots Policies
+-- ============================================================
+DROP POLICY IF EXISTS "project_daily_snapshots_select" ON project_daily_snapshots;
+CREATE POLICY "project_daily_snapshots_select" ON project_daily_snapshots
+  FOR SELECT USING (
+    get_my_role() = 'admin'
+    OR is_project_manager(project_id)
+    OR is_project_member(project_id)
+    OR EXISTS (
+      SELECT 1
+      FROM tasks
+      WHERE tasks.project_id = project_daily_snapshots.project_id
+        AND tasks.owner_id = auth.uid()
+    )
+  );
+
+DROP POLICY IF EXISTS "project_daily_snapshots_insert" ON project_daily_snapshots;
+CREATE POLICY "project_daily_snapshots_insert" ON project_daily_snapshots
+  FOR INSERT WITH CHECK (get_my_role() = 'admin');
+
+DROP POLICY IF EXISTS "project_daily_snapshots_update" ON project_daily_snapshots;
+CREATE POLICY "project_daily_snapshots_update" ON project_daily_snapshots
+  FOR UPDATE USING (get_my_role() = 'admin')
+  WITH CHECK (get_my_role() = 'admin');
+
+DROP POLICY IF EXISTS "project_daily_snapshots_delete" ON project_daily_snapshots;
+CREATE POLICY "project_daily_snapshots_delete" ON project_daily_snapshots
+  FOR DELETE USING (get_my_role() = 'admin');
 
 -- ============================================================
 -- Notifications Policies

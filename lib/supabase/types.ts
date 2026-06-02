@@ -108,6 +108,90 @@ export interface Database {
         };
         Relationships: [];
       };
+      project_daily_snapshots: {
+        Row: {
+          id: string;
+          project_id: string;
+          snapshot_date: string;
+          total_tasks: number;
+          completed_tasks: number;
+          open_tasks: number;
+          overdue_tasks: number;
+          backlog_tasks: number;
+          todo_tasks: number;
+          in_progress_tasks: number;
+          review_tasks: number;
+          cancelled_tasks: number;
+          planned_progress: number;
+          actual_progress: number;
+          total_budget: number;
+          planned_cost: number;
+          estimated_cost: number;
+          open_risks: number;
+          critical_risks: number;
+          high_risks: number;
+          medium_risks: number;
+          low_risks: number;
+          source: "daily_cron" | "manual" | "system";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          snapshot_date?: string;
+          total_tasks?: number;
+          completed_tasks?: number;
+          open_tasks?: number;
+          overdue_tasks?: number;
+          backlog_tasks?: number;
+          todo_tasks?: number;
+          in_progress_tasks?: number;
+          review_tasks?: number;
+          cancelled_tasks?: number;
+          planned_progress?: number;
+          actual_progress?: number;
+          total_budget?: number;
+          planned_cost?: number;
+          estimated_cost?: number;
+          open_risks?: number;
+          critical_risks?: number;
+          high_risks?: number;
+          medium_risks?: number;
+          low_risks?: number;
+          source?: "daily_cron" | "manual" | "system";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          project_id?: string;
+          snapshot_date?: string;
+          total_tasks?: number;
+          completed_tasks?: number;
+          open_tasks?: number;
+          overdue_tasks?: number;
+          backlog_tasks?: number;
+          todo_tasks?: number;
+          in_progress_tasks?: number;
+          review_tasks?: number;
+          cancelled_tasks?: number;
+          planned_progress?: number;
+          actual_progress?: number;
+          total_budget?: number;
+          planned_cost?: number;
+          estimated_cost?: number;
+          open_risks?: number;
+          critical_risks?: number;
+          high_risks?: number;
+          medium_risks?: number;
+          low_risks?: number;
+          source?: "daily_cron" | "manual" | "system";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       project_members: {
         Row: {
           id: string;
@@ -1227,6 +1311,7 @@ export interface Database {
 
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 export type Project = Database["public"]["Tables"]["projects"]["Row"];
+export type ProjectDailySnapshot = Database["public"]["Tables"]["project_daily_snapshots"]["Row"];
 export type ProjectMember = Database["public"]["Tables"]["project_members"]["Row"];
 export type Task = Database["public"]["Tables"]["tasks"]["Row"];
 export type TaskTimeEntry = Database["public"]["Tables"]["task_time_entries"]["Row"];
