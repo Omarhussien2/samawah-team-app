@@ -329,6 +329,7 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
           : focus === "tasks" || focus === "today" || focus === "overdue"
             ? "tasks"
             : "progress";
+  const showAnalytics = searchParams.get("insights") === "open" || Boolean(analyticsParam);
   const ownerFilter = searchParams.get("owner") ?? "all";
   const projectParam = searchParams.get("project");
   const projectFilter = projectParam && projects.some((project) => project.id === projectParam) ? projectParam : "all";
@@ -583,7 +584,7 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
       type: "critical" as const,
       title: challenge.title,
       meta: `${projectMap.get(challenge.project_id)?.name ?? "مشروع"} · خطر حرج`,
-      filters: { project: challenge.project_id, focus: "critical", analytics: "risks" },
+      filters: { project: challenge.project_id, focus: "critical" },
       severity: 4,
     }));
 
@@ -592,7 +593,7 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
       type: "overdue" as const,
       title: task.title,
       meta: `${projectMap.get(task.project_id)?.name ?? "مشروع"} · مستحقة ${formatDateShort(task.due_date)}`,
-      filters: { project: task.project_id, focus: "overdue", period: "overdue", analytics: "tasks" },
+      filters: { project: task.project_id, focus: "overdue", period: "overdue" },
       severity: task.priority === "critical" ? 4 : task.priority === "high" ? 3 : 2,
     }));
 
@@ -604,7 +605,7 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
         type: "budget" as const,
         title: info.project.name,
         meta: `استهلاك الميزانية ${info.budgetUsedPct}%`,
-        filters: { project: info.project.id, focus: "budget", analytics: "budget" },
+        filters: { project: info.project.id, focus: "budget" },
         severity: info.budgetUsedPct && info.budgetUsedPct > 100 ? 4 : 3,
       }));
 
@@ -634,7 +635,7 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
       color: "text-indigo-600",
       bg: "bg-indigo-50",
       accent: "bg-indigo-500",
-      action: () => setQuery({ projectStatus: "active", focus: "projects", analytics: "progress" }),
+      action: () => setQuery({ projectStatus: "active", focus: "projects" }),
     },
     {
       label: "مهام اليوم",
@@ -644,7 +645,7 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
       color: "text-amber-600",
       bg: "bg-amber-50",
       accent: "bg-amber-500",
-      action: () => setQuery({ focus: "today", period: "today", status: null, analytics: "tasks" }),
+      action: () => setQuery({ focus: "today", period: "today", status: null }),
     },
     {
       label: "مهام متأخرة",
@@ -654,7 +655,7 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
       color: "text-red-600",
       bg: "bg-red-50",
       accent: "bg-red-500",
-      action: () => setQuery({ focus: "overdue", period: "overdue", status: null, analytics: "tasks" }),
+      action: () => setQuery({ focus: "overdue", period: "overdue", status: null }),
     },
     {
       label: "مخاطر حرجة",
@@ -664,7 +665,7 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
       color: "text-rose-600",
       bg: "bg-rose-50",
       accent: "bg-rose-500",
-      action: () => setQuery({ focus: "critical", analytics: "risks" }),
+      action: () => setQuery({ focus: "critical" }),
     },
   ];
 
@@ -819,6 +820,7 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
                     period: null,
                     project: null,
                     projectStatus: null,
+                    insights: null,
                     analytics: null,
                   })
                 }
@@ -868,82 +870,92 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-1 flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2">
             <span className="flex h-9 items-center gap-2 rounded-lg bg-slate-100 px-3 text-sm font-bold text-slate-700">
               <SlidersHorizontal size={15} />
               الفلاتر
             </span>
-          <select
-            value={projectFilter}
-            onChange={(event) => setQuery({ project: event.target.value, focus: null })}
-            className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-primary/20"
-          >
-            <option value="all">كل المشاريع</option>
-            {scopedProjects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
-          <select
-            value={projectStatusFilter}
-            onChange={(event) => setQuery({ projectStatus: event.target.value, focus: "projects", analytics: "progress" })}
-            className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-primary/20"
-          >
-            <option value="all">كل حالات المشاريع</option>
-            {PROJECT_STATUSES.map((status) => (
-              <option key={status} value={status}>
-                {getProjectStatusLabel(status)}
-              </option>
-            ))}
-          </select>
-          <select
-            value={statusFilter}
-            onChange={(event) => setQuery({ status: event.target.value, focus: "tasks" })}
-            className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-primary/20"
-          >
-            <option value="all">كل حالات المهام</option>
-            {TASK_STATUSES.map((status) => (
-              <option key={status} value={status}>
-                {getStatusLabel(status)}
-              </option>
-            ))}
-          </select>
-          <select
-            value={priorityFilter}
-            onChange={(event) => setQuery({ priority: event.target.value, focus: "tasks" })}
-            className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-primary/20"
-          >
-            <option value="all">كل الأولويات</option>
-            {TASK_PRIORITIES.map((priority) => (
-              <option key={priority} value={priority}>
-                {getPriorityLabel(priority)}
-              </option>
-            ))}
-          </select>
-          <select
-            value={selectedOwner}
-            onChange={(event) => setQuery({ owner: event.target.value, focus: "tasks" })}
-            className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-primary/20"
-          >
-            <option value="all">كل الأعضاء</option>
-            {ownerOptions.map((owner) => (
-              <option key={owner.id} value={owner.id}>
-                {owner.name}
-              </option>
-            ))}
-          </select>
-          <select
-            value={periodFilter}
-            onChange={(event) => setQuery({ period: event.target.value, focus: "tasks" })}
-            className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-primary/20"
-          >
-            <option value="all">كل الفترات</option>
-            <option value="today">اليوم</option>
-            <option value="week">خلال أسبوع</option>
-            <option value="month">خلال شهر</option>
-            <option value="overdue">متأخرة</option>
-          </select>
+            <select
+              value={projectFilter}
+              onChange={(event) => setQuery({ project: event.target.value, focus: null })}
+              className="h-9 min-w-[180px] rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-primary/20"
+            >
+              <option value="all">كل المشاريع</option>
+              {scopedProjects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={statusFilter}
+              onChange={(event) => setQuery({ status: event.target.value, focus: "tasks" })}
+              className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-primary/20"
+            >
+              <option value="all">كل حالات المهام</option>
+              {TASK_STATUSES.map((status) => (
+                <option key={status} value={status}>
+                  {getStatusLabel(status)}
+                </option>
+              ))}
+            </select>
+            <select
+              value={priorityFilter}
+              onChange={(event) => setQuery({ priority: event.target.value, focus: "tasks" })}
+              className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-primary/20"
+            >
+              <option value="all">كل الأولويات</option>
+              {TASK_PRIORITIES.map((priority) => (
+                <option key={priority} value={priority}>
+                  {getPriorityLabel(priority)}
+                </option>
+              ))}
+            </select>
+            <details className="group">
+              <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 hover:bg-slate-50">
+                <ListFilter size={15} />
+                فلاتر متقدمة
+              </summary>
+              <div className="mt-2 flex flex-wrap gap-2 rounded-lg border border-slate-100 bg-slate-50 p-2">
+                <select
+                  value={projectStatusFilter}
+                  onChange={(event) => setQuery({ projectStatus: event.target.value, focus: "projects" })}
+                  className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-primary/20"
+                >
+                  <option value="all">كل حالات المشاريع</option>
+                  {PROJECT_STATUSES.map((status) => (
+                    <option key={status} value={status}>
+                      {getProjectStatusLabel(status)}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={selectedOwner}
+                  onChange={(event) => setQuery({ owner: event.target.value, focus: "tasks" })}
+                  className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-primary/20"
+                >
+                  <option value="all">كل الأعضاء</option>
+                  {ownerOptions.map((owner) => (
+                    <option key={owner.id} value={owner.id}>
+                      {owner.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={periodFilter}
+                  onChange={(event) => setQuery({ period: event.target.value, focus: "tasks" })}
+                  className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-primary/20"
+                >
+                  <option value="all">كل الفترات</option>
+                  <option value="today">اليوم</option>
+                  <option value="week">خلال أسبوع</option>
+                  <option value="month">خلال شهر</option>
+                  <option value="overdue">متأخرة</option>
+                </select>
+              </div>
+            </details>
+            </div>
           </div>
 
           {(filterChips.length > 0 || focus) && (
@@ -957,6 +969,7 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
                   owner: null,
                   period: null,
                   focus: null,
+                  insights: null,
                   analytics: null,
                 })
               }
@@ -1048,9 +1061,9 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-        <section className="space-y-6 xl:col-span-2">
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="space-y-4">
+        <section className="space-y-4">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-5 flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-bold text-slate-900 font-heading">الأولوية الآن</h2>
@@ -1091,39 +1104,49 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
 
           <ProjectCards
             infos={projectInfos}
-            onFilterProject={(projectId) => setQuery({ project: projectId, focus: "projects", analytics: "progress" })}
-            onFilterTasks={(projectId) => setQuery({ project: projectId, owner: user.id, focus: "tasks", analytics: "tasks" })}
-            onFilterOverdue={(projectId) => setQuery({ project: projectId, focus: "overdue", period: "overdue", analytics: "tasks" })}
+            onFilterProject={(projectId) => setQuery({ project: projectId, focus: "projects" })}
+            onFilterTasks={(projectId) => setQuery({ project: projectId, owner: user.id, focus: "tasks" })}
+            onFilterOverdue={(projectId) => setQuery({ project: projectId, focus: "overdue", period: "overdue" })}
           />
 
-          <Tabs
-            value={analyticsTab}
-            onValueChange={(value) => setQuery({ analytics: value })}
-            dir="rtl"
-            className="space-y-4"
-          >
+          {showAnalytics ? (
+            <Tabs
+              value={analyticsTab}
+              onValueChange={(value) => setQuery({ insights: "open", analytics: value })}
+              dir="rtl"
+              className="space-y-4"
+            >
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <h2 className="text-lg font-bold text-slate-900 font-heading">التحليلات</h2>
                 <p className="mt-1 text-sm text-slate-500">اختر زاوية واحدة للقراءة، واضغط على أي رسم لتصفية النتائج.</p>
               </div>
-              <TabsList className="h-auto w-full justify-start overflow-x-auto rounded-lg bg-slate-100 p-1 lg:w-auto">
-                <TabsTrigger value="progress" className="rounded-md px-3 py-2 text-xs font-bold">
-                  التقدم
-                </TabsTrigger>
-                <TabsTrigger value="tasks" className="rounded-md px-3 py-2 text-xs font-bold">
-                  المهام
-                </TabsTrigger>
-                <TabsTrigger value="team" className="rounded-md px-3 py-2 text-xs font-bold">
-                  الفريق
-                </TabsTrigger>
-                <TabsTrigger value="budget" className="rounded-md px-3 py-2 text-xs font-bold">
-                  الميزانية
-                </TabsTrigger>
-                <TabsTrigger value="risks" className="rounded-md px-3 py-2 text-xs font-bold">
-                  المخاطر
-                </TabsTrigger>
-              </TabsList>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <TabsList className="h-auto w-full justify-start overflow-x-auto rounded-lg bg-slate-100 p-1 lg:w-auto">
+                  <TabsTrigger value="progress" className="rounded-md px-3 py-2 text-xs font-bold">
+                    التقدم
+                  </TabsTrigger>
+                  <TabsTrigger value="tasks" className="rounded-md px-3 py-2 text-xs font-bold">
+                    المهام
+                  </TabsTrigger>
+                  <TabsTrigger value="team" className="rounded-md px-3 py-2 text-xs font-bold">
+                    الفريق
+                  </TabsTrigger>
+                  <TabsTrigger value="budget" className="rounded-md px-3 py-2 text-xs font-bold">
+                    الميزانية
+                  </TabsTrigger>
+                  <TabsTrigger value="risks" className="rounded-md px-3 py-2 text-xs font-bold">
+                    المخاطر
+                  </TabsTrigger>
+                </TabsList>
+                <button
+                  type="button"
+                  onClick={() => setQuery({ insights: null, analytics: null })}
+                  className="h-9 shrink-0 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-500 hover:bg-slate-50"
+                >
+                  إخفاء التحليلات
+                </button>
+              </div>
             </div>
 
             <TabsContent value="progress" className="mt-4">
@@ -1357,11 +1380,28 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
                 </button>
               </div>
             </TabsContent>
-          </Tabs>
+            </Tabs>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setQuery({ insights: "open", analytics: "progress" })}
+              className="flex w-full items-center justify-between rounded-xl border border-dashed border-slate-300 bg-white px-5 py-4 text-right shadow-sm transition-colors hover:border-primary/40 hover:bg-indigo-50/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            >
+              <span>
+                <span className="block text-sm font-black text-slate-900 font-heading">التحليلات عند الحاجة</span>
+                <span className="mt-1 block text-xs font-semibold text-slate-500">
+                  التشارتس مخفية افتراضيا لتقليل الزحمة. افتحها فقط عندما تحتاج قراءة أعمق.
+                </span>
+              </span>
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                <BarChart3 size={18} />
+              </span>
+            </button>
+          )}
         </section>
 
-        <aside className="space-y-6">
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <aside className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-bold text-slate-900 font-heading">مهامي القريبة</h2>
               <Link href="/my-tasks" className="flex items-center gap-1 text-sm font-semibold text-primary hover:text-primary/80">
@@ -1374,7 +1414,7 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
               ) : (
                 todayTasks
                   .concat(overdueTasks)
-                  .slice(0, 7)
+                  .slice(0, 5)
                   .map((task) => (
                     <div key={`${task.id}-${task.due_date}`} className="rounded-xl border border-slate-100 bg-slate-50 p-3 transition-colors hover:bg-white">
                       <div className="flex items-start gap-2">
@@ -1402,7 +1442,7 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-bold text-slate-900 font-heading">آخر التحديثات</h2>
               <Activity className="text-primary" size={18} />
@@ -1411,7 +1451,7 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
               {filteredComments.length === 0 ? (
                 <EmptyState label="لا توجد تحديثات حديثة" />
               ) : (
-                filteredComments.slice(0, 8).map((comment) => (
+                filteredComments.slice(0, 5).map((comment) => (
                   <div key={comment.id} className="border-r-2 border-primary/20 pr-3">
                     <p className="text-xs font-bold text-slate-700">{comment.user?.full_name ?? "عضو الفريق"}</p>
                     <p className="mt-1 line-clamp-2 text-sm text-slate-600">{comment.body}</p>
@@ -1468,19 +1508,21 @@ function ProjectCards({
   onFilterOverdue: (projectId: string) => void;
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="mb-5 flex items-center justify-between">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
         <div>
           <h2 className="text-lg font-bold text-slate-900 font-heading">مشاريعي والمشاريع المعروضة</h2>
-          <p className="mt-1 text-sm text-slate-500">الحالة، الدور، الإنجاز، والمهام المتأخرة في مكان واحد.</p>
+          <p className="mt-1 text-sm text-slate-500">قائمة مختصرة قابلة للتصفية، وليست كروت مزدحمة.</p>
         </div>
         <Layers3 className="text-primary" size={20} />
       </div>
 
       {infos.length === 0 ? (
-        <EmptyState label="لا توجد مشاريع مرتبطة بهذا العرض" />
+        <div className="p-5">
+          <EmptyState label="لا توجد مشاريع مرتبطة بهذا العرض" />
+        </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="divide-y divide-slate-100">
           {infos.slice(0, 8).map((info) => (
             <div
               key={info.project.id}
@@ -1490,10 +1532,10 @@ function ProjectCards({
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") onFilterProject(info.project.id);
               }}
-              className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 text-right transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+              className="grid gap-3 px-5 py-4 text-right transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 lg:grid-cols-[minmax(0,1.6fr)_minmax(180px,0.8fr)_auto]"
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
                   <Link
                     href={`/projects/${info.project.id}`}
                     onClick={(event) => event.stopPropagation()}
@@ -1501,51 +1543,39 @@ function ProjectCards({
                   >
                     {info.project.name}
                   </Link>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    <span className="rounded-md bg-white px-2 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200">
-                      {info.role === "manager" ? "مدير المشروع" : info.role === "member" ? "عضو" : "ضمن المحفظة"}
-                    </span>
-                    <span className="rounded-md bg-white px-2 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200">
-                      {getProjectStatusLabel(info.project.status)}
-                    </span>
-                    <span className={cn("rounded-md border px-2 py-1 text-[11px] font-bold", HEALTH_COLORS[info.health])}>
-                      {HEALTH_LABELS[info.health]}
-                    </span>
-                  </div>
+                  <span className={cn("rounded-md border px-2 py-1 text-[11px] font-bold", HEALTH_COLORS[info.health])}>
+                    {HEALTH_LABELS[info.health]}
+                  </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onFilterProject(info.project.id);
-                  }}
-                  className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:text-primary"
-                >
-                  <ListFilter size={16} />
-                </button>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-bold text-slate-500">
+                  <span>{info.role === "manager" ? "مدير المشروع" : info.role === "member" ? "عضو" : "ضمن المحفظة"}</span>
+                  <span className="h-1 w-1 rounded-full bg-slate-300" />
+                  <span>{getProjectStatusLabel(info.project.status)}</span>
+                  <span className="h-1 w-1 rounded-full bg-slate-300" />
+                  <span className="line-clamp-1">{info.healthReason}</span>
+                </div>
               </div>
 
-              <div className="mt-4">
+              <div className="self-center">
                 <div className="mb-2 flex items-center justify-between text-xs font-bold text-slate-500">
                   <span>الإنجاز</span>
                   <span>{Math.round(info.project.progress ?? 0)}%</span>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-white">
+                <div className="h-2 overflow-hidden rounded-full bg-slate-100">
                   <div className="h-full rounded-full bg-primary" style={{ width: `${Math.round(info.project.progress ?? 0)}%` }} />
                 </div>
               </div>
 
-              <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
+              <div className="flex flex-wrap items-center gap-2 self-center text-xs">
                 <button
                   type="button"
                   onClick={(event) => {
                     event.stopPropagation();
                     onFilterTasks(info.project.id);
                   }}
-                  className="rounded-xl bg-white p-2 transition-colors hover:bg-indigo-50"
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 font-bold text-slate-600 transition-colors hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
                 >
-                  <p className="text-slate-400">مهامي</p>
-                  <p className="mt-1 text-base font-black text-slate-800">{info.myTasks}</p>
+                  مهامي {info.myTasks}
                 </button>
                 <button
                   type="button"
@@ -1553,26 +1583,31 @@ function ProjectCards({
                     event.stopPropagation();
                     onFilterOverdue(info.project.id);
                   }}
-                  className="rounded-xl bg-white p-2 transition-colors hover:bg-red-50"
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 font-bold text-red-600 transition-colors hover:border-red-200 hover:bg-red-50"
                 >
-                  <p className="text-slate-400">متأخر</p>
-                  <p className="mt-1 text-base font-black text-red-600">{info.overdueTasks}</p>
+                  متأخر {info.overdueTasks}
                 </button>
-                <div className="rounded-xl bg-white p-2">
-                  <p className="text-slate-400">النهاية</p>
-                  <p className="mt-1 text-xs font-black text-slate-800">{formatDateShort(info.project.end_date)}</p>
-                </div>
-              </div>
-
-              <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-500">
-                <span className="line-clamp-1">{info.healthReason}</span>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onFilterProject(info.project.id);
+                  }}
+                  className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:text-primary"
+                  aria-label="تصفية المشروع"
+                >
+                  <ListFilter size={16} />
+                </button>
                 <Link
                   href={`/projects/${info.project.id}?tab=tasks`}
                   onClick={(event) => event.stopPropagation()}
-                  className="shrink-0 font-bold text-primary hover:text-primary/80"
+                  className="rounded-lg border border-primary/20 bg-primary/10 px-3 py-2 font-bold text-primary hover:bg-primary/15"
                 >
-                  المهام
+                  فتح
                 </Link>
+                <span className="w-full text-[11px] font-bold text-slate-400 sm:w-auto">
+                  النهاية {formatDateShort(info.project.end_date)}
+                </span>
               </div>
             </div>
           ))}
