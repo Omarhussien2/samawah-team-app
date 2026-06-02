@@ -35,8 +35,6 @@ import {
   Legend,
   Line,
   LineChart,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -137,14 +135,6 @@ interface TaskStatusChartEntry {
   percent?: number;
 }
 
-interface TaskPriorityChartEntry {
-  name: string;
-  rawPriority: Task["priority"];
-  value: number;
-  color: string;
-  percent?: number;
-}
-
 interface BudgetChartEntry {
   id: string;
   name: string;
@@ -161,12 +151,6 @@ interface WorkloadChartEntry {
   متأخرة: number;
   مخطط: number;
   فعلي: number;
-}
-
-interface ProjectStatusChartEntry {
-  name: string;
-  rawStatus: Project["status"];
-  value: number;
 }
 
 const TASK_STATUSES: Task["status"][] = ["Backlog", "To Do", "In Progress", "Review", "Done", "Cancelled"];
@@ -628,6 +612,39 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
   const focusTasks =
     focus === "today" ? todayTasks : focus === "overdue" ? overdueTasks : focus === "tasks" ? scopedTasks : [];
   const focusProjects = focus === "budget" || focus === "projects" ? projectInfos : [];
+  const highlightedProjects = useMemo(() => {
+    const weight: Record<ProjectHealth, number> = { risk: 3, watch: 2, good: 1 };
+    return projectInfos
+      .slice()
+      .sort((a, b) => {
+        return (
+          weight[b.health] - weight[a.health] ||
+          b.overdueTasks - a.overdueTasks ||
+          Number(b.project.progress ?? 0) - Number(a.project.progress ?? 0)
+        );
+      });
+  }, [projectInfos]);
+  const urgentTasks = useMemo(() => {
+    const seen = new Set<string>();
+    return todayTasks
+      .concat(overdueTasks)
+      .filter((task) => {
+        if (seen.has(task.id)) return false;
+        seen.add(task.id);
+        return true;
+      })
+      .slice(0, 6);
+  }, [overdueTasks, todayTasks]);
+  const analyticsProjectResults = focusProjects.length > 0 ? focusProjects : highlightedProjects;
+  const analyticsTaskResults = focusTasks.length > 0 ? focusTasks : scopedTasks;
+  const focusResultCount =
+    focus === "critical"
+      ? criticalChallenges.length
+      : focus === "budget" || focus === "projects"
+        ? focusProjects.length
+        : focus
+          ? focusTasks.length
+          : 0;
 
   const statCards = [
     {
@@ -771,37 +788,46 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
             </p>
           </div>
 
-          <div className="grid min-w-full grid-cols-2 gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2 text-center sm:min-w-[460px] lg:grid-cols-4">
-            <div className="rounded-lg bg-white px-3 py-2 shadow-sm">
-              <p className="flex items-center justify-center gap-1 text-[11px] font-bold text-slate-400">
-                <Briefcase size={12} />
-                أديرها
-              </p>
-              <p className="mt-1 text-lg font-black text-blue-600">{managedCount}</p>
+          <div className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 lg:max-w-[430px]">
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-lg bg-white px-3 py-2 shadow-sm">
+                <p className="flex items-center justify-center gap-1 text-[11px] font-bold text-slate-400">
+                  <Briefcase size={12} />
+                  أديرها
+                </p>
+                <p className="mt-1 text-lg font-black text-blue-600">{managedCount}</p>
+              </div>
+              <div className="rounded-lg bg-white px-3 py-2 shadow-sm">
+                <p className="flex items-center justify-center gap-1 text-[11px] font-bold text-slate-400">
+                  <Users size={12} />
+                  أشارك
+                </p>
+                <p className="mt-1 text-lg font-black text-sky-600">{memberCount}</p>
+              </div>
+              <div className="rounded-lg bg-white px-3 py-2 shadow-sm">
+                <p className="flex items-center justify-center gap-1 text-[11px] font-bold text-slate-400">
+                  <Gauge size={12} />
+                  الإنجاز
+                </p>
+                <p className="mt-1 text-lg font-black text-emerald-600">{averageProgress}%</p>
+              </div>
             </div>
-            <div className="rounded-lg bg-white px-3 py-2 shadow-sm">
-              <p className="flex items-center justify-center gap-1 text-[11px] font-bold text-slate-400">
-                <Users size={12} />
-                أشارك فيها
-              </p>
-              <p className="mt-1 text-lg font-black text-sky-600">{memberCount}</p>
-            </div>
-            <div className="rounded-lg bg-white px-3 py-2 shadow-sm">
-              <p className="flex items-center justify-center gap-1 text-[11px] font-bold text-slate-400">
-                <Gauge size={12} />
-                متوسط الإنجاز
-              </p>
-              <p className="mt-1 text-lg font-black text-emerald-600">{averageProgress}%</p>
-            </div>
-            <div className="rounded-lg bg-white px-3 py-2 shadow-sm">
-              <p className="flex items-center justify-center gap-1 text-[11px] font-bold text-slate-400">
-                <Wallet size={12} />
-                الميزانية
-              </p>
-              <p className={cn("mt-1 text-lg font-black", budgetUsage > 100 ? "text-red-600" : budgetUsage >= 80 ? "text-amber-600" : "text-slate-700")}>
-                {budgetUsage}%
-              </p>
-            </div>
+            {isAnalyticsPage && (
+              <div className="mt-2 rounded-lg bg-white px-3 py-2 text-center shadow-sm">
+                <p className="flex items-center justify-center gap-1 text-[11px] font-bold text-slate-400">
+                  <Wallet size={12} />
+                  استهلاك الميزانية
+                </p>
+                <p
+                  className={cn(
+                    "mt-1 text-lg font-black",
+                    budgetUsage > 100 ? "text-red-600" : budgetUsage >= 80 ? "text-amber-600" : "text-slate-700"
+                  )}
+                >
+                  {budgetUsage}%
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -887,6 +913,113 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
         </div>
       )}
 
+      {!isAnalyticsPage ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="flex h-9 items-center gap-2 rounded-lg bg-slate-100 px-3 text-sm font-bold text-slate-700">
+                <SlidersHorizontal size={15} />
+                فلاتر سريعة
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  setQuery({
+                    project: null,
+                    projectStatus: null,
+                    status: null,
+                    priority: null,
+                    owner: null,
+                    period: null,
+                    focus: null,
+                    analytics: null,
+                  })
+                }
+                className={cn(
+                  "h-9 rounded-lg border px-3 text-sm font-bold transition-colors",
+                  !focus && filterChips.length === 0
+                    ? "border-primary/20 bg-primary/10 text-primary"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                )}
+              >
+                كل العمل
+              </button>
+              <button
+                type="button"
+                onClick={() => setQuery({ focus: "today", period: "today", status: null })}
+                className={cn(
+                  "h-9 rounded-lg border px-3 text-sm font-bold transition-colors",
+                  focus === "today" ? "border-amber-200 bg-amber-50 text-amber-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                )}
+              >
+                اليوم {todayTasks.length}
+              </button>
+              <button
+                type="button"
+                onClick={() => setQuery({ focus: "overdue", period: "overdue", status: null })}
+                className={cn(
+                  "h-9 rounded-lg border px-3 text-sm font-bold transition-colors",
+                  focus === "overdue" ? "border-red-200 bg-red-50 text-red-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                )}
+              >
+                متأخر {overdueTasks.length}
+              </button>
+              <button
+                type="button"
+                onClick={() => setQuery({ focus: "critical" })}
+                className={cn(
+                  "h-9 rounded-lg border px-3 text-sm font-bold transition-colors",
+                  focus === "critical" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                )}
+              >
+                مخاطر {criticalChallenges.length}
+              </button>
+              <button
+                type="button"
+                onClick={() => setQuery({ focus: "projects", projectStatus: "active" })}
+                className={cn(
+                  "h-9 rounded-lg border px-3 text-sm font-bold transition-colors",
+                  focus === "projects" ? "border-indigo-200 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                )}
+              >
+                مشاريعي {projectInfos.length}
+              </button>
+            </div>
+
+            <Link
+              href={analyticsHref}
+              className="flex h-9 items-center justify-center gap-2 rounded-lg border border-primary/20 bg-primary/10 px-3 text-sm font-bold text-primary hover:bg-primary/15"
+            >
+              <BarChart3 size={15} />
+              التحليلات المتقدمة
+            </Link>
+          </div>
+
+          {(filterChips.length > 0 || focus) && (
+            <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+              {focus && (
+                <button
+                  onClick={() => setQuery({ focus: null })}
+                  className="flex items-center gap-1 rounded-lg border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary"
+                >
+                  {focusLabels[focus]}
+                  <X size={12} />
+                </button>
+              )}
+              {filterChips.map((chip) => (
+                <button
+                  key={chip.key}
+                  onClick={chip.onRemove}
+                  className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-bold text-slate-600 hover:bg-white"
+                >
+                  {chip.label}
+                  <X size={12} />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-1 flex-col gap-2">
@@ -1024,12 +1157,14 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
           </div>
         )}
       </div>
+      )}
 
       {focus && (
-        <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-100 p-5">
+        <div className="rounded-xl border border-primary/15 bg-white shadow-sm ring-1 ring-primary/5">
+          <div className="flex flex-col gap-3 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-lg font-bold text-slate-900 font-heading">
+              <p className="text-xs font-black uppercase tracking-wide text-primary">نتائج التفاعل</p>
+              <h2 className="mt-1 text-lg font-bold text-slate-900 font-heading">
                 {focus === "today" && "مهام اليوم"}
                 {focus === "overdue" && "المهام المتأخرة"}
                 {focus === "critical" && "المخاطر الحرجة"}
@@ -1037,11 +1172,23 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
                 {focus === "tasks" && "المهام حسب الفلتر"}
                 {focus === "projects" && "المشاريع حسب الفلتر"}
               </h2>
-              <p className="mt-1 text-sm text-slate-500">النتائج مرتبطة بوضع العرض والفلاتر الحالية.</p>
+              <p className="mt-1 text-sm text-slate-500">
+                {focusResultCount.toLocaleString("ar")} نتيجة مرتبطة بوضع العرض والفلاتر الحالية.
+              </p>
             </div>
-            <button onClick={() => setQuery({ focus: null })} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100">
-              <X size={18} />
-            </button>
+            <div className="flex items-center gap-2">
+              {!isAnalyticsPage && (
+                <Link
+                  href={analyticsHref}
+                  className="rounded-lg border border-primary/20 bg-primary/10 px-3 py-2 text-xs font-bold text-primary hover:bg-primary/15"
+                >
+                  تحليل أعمق
+                </Link>
+              )}
+              <button onClick={() => setQuery({ focus: null })} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100">
+                <X size={18} />
+              </button>
+            </div>
           </div>
 
           {(focus === "today" || focus === "overdue" || focus === "tasks") && (
@@ -1084,47 +1231,54 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
         <section className="space-y-4">
           {!isAnalyticsPage && (
             <>
-              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="mb-5 flex items-center justify-between">
-                  <div>
-                    <h2 className="text-lg font-bold text-slate-900 font-heading">الأولوية الآن</h2>
-                    <p className="mt-1 text-sm text-slate-500">أهم إشارات تحتاج قرار أو متابعة.</p>
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1.12fr)_minmax(320px,0.88fr)]">
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="mb-5 flex items-center justify-between">
+                    <div>
+                      <h2 className="text-lg font-bold text-slate-900 font-heading">الأولوية الآن</h2>
+                      <p className="mt-1 text-sm text-slate-500">أهم إشارات تحتاج قرار أو متابعة، مرتبة حسب الأثر.</p>
+                    </div>
+                    <TrendingUp className="text-primary" size={20} />
                   </div>
-                  <TrendingUp className="text-primary" size={20} />
+                  {priorityItems.length === 0 ? (
+                    <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-semibold text-emerald-700">
+                      لا توجد إشارات حرجة حاليا. الوضع مستقر ضمن هذا العرض.
+                    </div>
+                  ) : (
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {priorityItems.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setQuery(item.filters)}
+                          className={cn(
+                            "rounded-xl border p-4 text-right transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+                            item.type === "critical"
+                              ? "border-red-100 bg-red-50/60 hover:bg-red-50"
+                              : item.type === "budget"
+                                ? "border-amber-100 bg-amber-50/60 hover:bg-amber-50"
+                                : "border-slate-200 bg-slate-50 hover:bg-white"
+                          )}
+                        >
+                          <p className="line-clamp-1 text-sm font-bold text-slate-900">{item.title}</p>
+                          <p className="mt-2 flex items-center gap-1 text-xs font-medium text-slate-500">
+                            <MousePointerClick size={12} />
+                            {item.meta}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                {priorityItems.length === 0 ? (
-                  <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-semibold text-emerald-700">
-                    لا توجد إشارات حرجة حاليا. الوضع مستقر ضمن هذا العرض.
-                  </div>
-                ) : (
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {priorityItems.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => setQuery(item.filters)}
-                        className={cn(
-                          "rounded-xl border p-4 text-right transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-                          item.type === "critical"
-                            ? "border-red-100 bg-red-50/60 hover:bg-red-50"
-                            : item.type === "budget"
-                              ? "border-amber-100 bg-amber-50/60 hover:bg-amber-50"
-                              : "border-slate-200 bg-slate-50 hover:bg-white"
-                        )}
-                      >
-                        <p className="line-clamp-1 text-sm font-bold text-slate-900">{item.title}</p>
-                        <p className="mt-2 flex items-center gap-1 text-xs font-medium text-slate-500">
-                          <MousePointerClick size={12} />
-                          {item.meta}
-                        </p>
-                      </button>
-                    ))}
-                  </div>
-                )}
+
+                <div className="space-y-4">
+                  <HomeTaskPanel tasks={urgentTasks} projects={projectMap} onMarkDone={handleMarkDone} />
+                  <RecentUpdatesPanel comments={filteredComments} />
+                </div>
               </div>
 
               <ProjectCards
-                infos={projectInfos}
+                infos={highlightedProjects}
                 onFilterProject={(projectId) => setQuery({ project: projectId, focus: "projects" })}
                 onFilterTasks={(projectId) => setQuery({ project: projectId, owner: user.id, focus: "tasks" })}
                 onFilterOverdue={(projectId) => setQuery({ project: projectId, focus: "overdue", period: "overdue" })}
@@ -1132,7 +1286,7 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
             </>
           )}
 
-          {showAnalytics ? (
+          {showAnalytics && (
             <Tabs
               value={analyticsTab}
               onValueChange={(value) => setQuery({ analytics: value })}
@@ -1172,12 +1326,12 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
             </div>
 
             <TabsContent value="progress" className="mt-4">
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                <ChartCard title="صحة المشاريع" subtitle="الإنجاز والمهام المتأخرة">
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+                <ChartCard title="صحة المشاريع" subtitle="اضغط على أي مشروع لعرض تفاصيله في النتائج" height={340}>
                   {projectHealthData.length === 0 ? (
                     <EmptyState label="لا توجد مشاريع لعرض صحتها" />
                   ) : (
-                    <ResponsiveContainer width="100%" height={280}>
+                    <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={projectHealthData} layout="vertical" margin={{ top: 8, right: 12, left: 8, bottom: 8 }}>
                         <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
                         <XAxis type="number" domain={[0, 100]} tickFormatter={(value) => `${value}%`} fontSize={11} />
@@ -1202,45 +1356,48 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
                   )}
                 </ChartCard>
 
-                <ChartCard title="حالات المشاريع" subtitle="اضغط على الحالة لتصفية المشاريع والمهام">
-                  <ResponsiveContainer width="100%" height={280}>
-                    <BarChart data={projectStatusData} margin={{ top: 8, right: 10, left: 8, bottom: 8 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                      <XAxis dataKey="name" fontSize={11} />
-                      <YAxis allowDecimals={false} fontSize={11} />
-                      <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(value: number | string) => [`${value} مشروع`, ""]} />
-                      <Bar
-                        dataKey="value"
-                        fill="#4f46e5"
-                        radius={[6, 6, 0, 0]}
-                        onClick={(entry: ProjectStatusChartEntry) =>
-                          setQuery({ projectStatus: entry.rawStatus, focus: "projects", analytics: "progress" })
-                        }
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </ChartCard>
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="mb-4">
+                    <h3 className="font-bold text-slate-900 font-heading">نتائج المشاريع</h3>
+                    <p className="mt-1 text-xs font-semibold text-slate-500">الأولوية للمشاريع ذات الخطر أو التأخر.</p>
+                  </div>
+                  <ProjectResultList
+                    infos={analyticsProjectResults}
+                    onSelect={(projectId) => setQuery({ project: projectId, focus: "projects", analytics: "progress" })}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {projectStatusData.map((entry) => (
+                  <button
+                    key={entry.rawStatus}
+                    type="button"
+                    onClick={() => setQuery({ projectStatus: entry.rawStatus, focus: "projects", analytics: "progress" })}
+                    className="rounded-xl border border-slate-200 bg-white p-4 text-right shadow-sm transition-colors hover:border-primary/20 hover:bg-indigo-50/30"
+                  >
+                    <p className="text-xs font-bold text-slate-500">{entry.name}</p>
+                    <p className="mt-2 text-2xl font-black text-slate-900">{entry.value}</p>
+                  </button>
+                ))}
               </div>
             </TabsContent>
 
             <TabsContent value="tasks" className="mt-4">
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                <ChartCard title="توزيع المهام" subtitle="اضغط على الحالة لعرض المهام المطابقة">
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+                <ChartCard title="توزيع المهام" subtitle="اضغط على الحالة لعرض المهام المطابقة" height={340}>
                   {statusCounts.length === 0 ? (
                     <EmptyState label="لا توجد مهام ضمن هذا العرض" />
                   ) : (
-                    <ResponsiveContainer width="100%" height={280}>
-                      <PieChart>
-                        <Pie
-                          data={statusCounts}
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={statusCounts} layout="vertical" margin={{ top: 8, right: 12, left: 8, bottom: 8 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+                        <XAxis type="number" allowDecimals={false} fontSize={11} />
+                        <YAxis type="category" dataKey="name" width={90} fontSize={11} />
+                        <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(value: number | string) => [`${value} مهمة`, ""]} />
+                        <Bar
                           dataKey="value"
-                          nameKey="name"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={92}
-                          label={(entry: TaskStatusChartEntry) => `${entry.name} ${Math.round((entry.percent ?? 0) * 100)}%`}
-                          labelLine={false}
-                          fontSize={11}
+                          radius={[0, 6, 6, 0]}
                           onClick={(entry: TaskStatusChartEntry) =>
                             setQuery({ status: entry.rawStatus, focus: "tasks", analytics: "tasks" })
                           }
@@ -1248,249 +1405,231 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
                           {statusCounts.map((entry) => (
                             <Cell key={entry.rawStatus} fill={entry.color} />
                           ))}
-                        </Pie>
-                        <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(value: number | string) => [`${value} مهمة`, ""]} />
-                      </PieChart>
+                        </Bar>
+                      </BarChart>
                     </ResponsiveContainer>
                   )}
                 </ChartCard>
 
-                <ChartCard title="أولوية المهام" subtitle="اضغط على الأولوية لتصفية قائمة المهام">
-                  {priorityCounts.length === 0 ? (
-                    <EmptyState label="لا توجد أولويات مسجلة ضمن هذا العرض" />
-                  ) : (
-                    <ResponsiveContainer width="100%" height={280}>
-                      <PieChart>
-                        <Pie
-                          data={priorityCounts}
-                          dataKey="value"
-                          nameKey="name"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={92}
-                          label={(entry: TaskPriorityChartEntry) => `${entry.name} ${Math.round((entry.percent ?? 0) * 100)}%`}
-                          labelLine={false}
-                          fontSize={11}
-                          onClick={(entry: TaskPriorityChartEntry) =>
-                            setQuery({ priority: entry.rawPriority, focus: "tasks", analytics: "tasks" })
-                          }
-                        >
-                          {priorityCounts.map((entry) => (
-                            <Cell key={entry.rawPriority} fill={entry.color} />
-                          ))}
-                        </Pie>
-                        <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(value: number | string) => [`${value} مهمة`, ""]} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  )}
-                </ChartCard>
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="mb-4">
+                      <h3 className="font-bold text-slate-900 font-heading">الأولوية</h3>
+                      <p className="mt-1 text-xs font-semibold text-slate-500">اضغط على الأولوية لتصفية النتائج.</p>
+                    </div>
+                    <div className="grid gap-2">
+                      {priorityCounts.length === 0 ? (
+                        <EmptyState label="لا توجد أولويات مسجلة" />
+                      ) : (
+                        priorityCounts.map((entry) => (
+                          <button
+                            key={entry.rawPriority}
+                            type="button"
+                            onClick={() => setQuery({ priority: entry.rawPriority, focus: "tasks", analytics: "tasks" })}
+                            className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-right transition-colors hover:bg-white"
+                          >
+                            <span className="flex items-center gap-2 text-sm font-bold text-slate-700">
+                              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
+                              {entry.name}
+                            </span>
+                            <span className="text-sm font-black text-slate-900">{entry.value}</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
 
-                <div className="lg:col-span-2">
-                  <ChartCard title="أداء الأسبوع" subtitle="مهام جديدة مقابل مكتملة">
-                    <ResponsiveContainer width="100%" height={280}>
-                      <LineChart data={weeklyData} margin={{ top: 8, right: 10, left: 8, bottom: 8 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                        <XAxis dataKey="name" tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
-                        <YAxis tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
-                        <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
-                        <Legend />
-                        <Line type="monotone" dataKey="مكتملة" stroke="#22c55e" strokeWidth={3} activeDot={{ r: 6 }} />
-                        <Line type="monotone" dataKey="جديدة" stroke="#4f46e5" strokeWidth={3} activeDot={{ r: 6 }} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </ChartCard>
+                  <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="mb-4">
+                      <h3 className="font-bold text-slate-900 font-heading">نتائج المهام</h3>
+                      <p className="mt-1 text-xs font-semibold text-slate-500">أقرب عناصر مطابقة للفلتر الحالي.</p>
+                    </div>
+                    <TaskResultList
+                      tasks={analyticsTaskResults}
+                      projects={projectMap}
+                      onOpenTask={(task) => router.push(`/projects/${task.project_id}?tab=tasks`)}
+                      onMarkDone={handleMarkDone}
+                    />
+                  </div>
                 </div>
+              </div>
+
+              <div className="mt-4">
+                <ChartCard title="أداء الأسبوع" subtitle="اتجاه سريع: مهام جديدة مقابل مكتملة" height={260}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={weeklyData} margin={{ top: 8, right: 10, left: 8, bottom: 8 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <XAxis dataKey="name" tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
+                      <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
+                      <Legend />
+                      <Line type="monotone" dataKey="مكتملة" stroke="#22c55e" strokeWidth={3} activeDot={{ r: 6 }} />
+                      <Line type="monotone" dataKey="جديدة" stroke="#4f46e5" strokeWidth={3} activeDot={{ r: 6 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </ChartCard>
               </div>
             </TabsContent>
 
             <TabsContent value="team" className="mt-4">
-              <ChartCard title="عبء الفريق" subtitle="اضغط على اسم العضو لعرض المهام المتعلقة به">
-                {workloadData.length === 0 ? (
-                  <EmptyState label="لا توجد مهام مسندة ضمن هذا العرض" />
-                ) : (
-                  <ResponsiveContainer width="100%" height={280}>
-                    <BarChart data={workloadData} margin={{ top: 8, right: 10, left: 8, bottom: 8 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                      <XAxis dataKey="name" fontSize={11} />
-                      <YAxis fontSize={11} />
-                      <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
-                      <Legend />
-                      <Bar
-                        dataKey="مفتوحة"
-                        stackId="tasks"
-                        fill="#60a5fa"
-                        radius={[6, 6, 0, 0]}
-                        onClick={(entry: WorkloadChartEntry) => setQuery({ owner: entry.id, focus: "tasks", analytics: "team" })}
-                      />
-                      <Bar
-                        dataKey="منجزة"
-                        stackId="tasks"
-                        fill="#22c55e"
-                        radius={[6, 6, 0, 0]}
-                        onClick={(entry: WorkloadChartEntry) => setQuery({ owner: entry.id, focus: "tasks", analytics: "team" })}
-                      />
-                      <Bar
-                        dataKey="متأخرة"
-                        stackId="tasks"
-                        fill="#ef4444"
-                        radius={[6, 6, 0, 0]}
-                        onClick={(entry: WorkloadChartEntry) => setQuery({ owner: entry.id, focus: "tasks", analytics: "team" })}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </ChartCard>
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+                <ChartCard title="عبء الفريق" subtitle="اضغط على عمود العضو لعرض مهامه" height={340}>
+                  {workloadData.length === 0 ? (
+                    <EmptyState label="لا توجد مهام مسندة ضمن هذا العرض" />
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={workloadData} margin={{ top: 8, right: 10, left: 8, bottom: 8 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                        <XAxis dataKey="name" fontSize={11} />
+                        <YAxis fontSize={11} />
+                        <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
+                        <Legend />
+                        <Bar
+                          dataKey="مفتوحة"
+                          stackId="tasks"
+                          fill="#60a5fa"
+                          radius={[6, 6, 0, 0]}
+                          onClick={(entry: WorkloadChartEntry) => setQuery({ owner: entry.id, focus: "tasks", analytics: "team" })}
+                        />
+                        <Bar
+                          dataKey="منجزة"
+                          stackId="tasks"
+                          fill="#22c55e"
+                          radius={[6, 6, 0, 0]}
+                          onClick={(entry: WorkloadChartEntry) => setQuery({ owner: entry.id, focus: "tasks", analytics: "team" })}
+                        />
+                        <Bar
+                          dataKey="متأخرة"
+                          stackId="tasks"
+                          fill="#ef4444"
+                          radius={[6, 6, 0, 0]}
+                          onClick={(entry: WorkloadChartEntry) => setQuery({ owner: entry.id, focus: "tasks", analytics: "team" })}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </ChartCard>
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="mb-4">
+                    <h3 className="font-bold text-slate-900 font-heading">مهام الفريق</h3>
+                    <p className="mt-1 text-xs font-semibold text-slate-500">تتغير عند اختيار عضو من الرسم.</p>
+                  </div>
+                  <TaskResultList
+                    tasks={analyticsTaskResults}
+                    projects={projectMap}
+                    onOpenTask={(task) => router.push(`/projects/${task.project_id}?tab=tasks`)}
+                    onMarkDone={handleMarkDone}
+                  />
+                </div>
+              </div>
             </TabsContent>
 
             <TabsContent value="budget" className="mt-4">
-              <ChartCard title="مؤشرات الميزانية" subtitle="اضغط على المشروع لعرض تفاصيل الميزانية المتعلقة به">
-                {budgetData.length === 0 ? (
-                  <EmptyState label="لا توجد ميزانيات مسجلة لهذا العرض" />
-                ) : (
-                  <ResponsiveContainer width="100%" height={280}>
-                    <BarChart data={budgetData} margin={{ top: 8, right: 10, left: 8, bottom: 8 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                      <XAxis dataKey="name" fontSize={11} />
-                      <YAxis fontSize={11} tickFormatter={(value) => `${Math.round(Number(value) / 1000)}k`} />
-                      <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(value: number | string) => formatCurrency(Number(value))} />
-                      <Legend />
-                      <Bar
-                        dataKey="الميزانية"
-                        fill="#94a3b8"
-                        radius={[6, 6, 0, 0]}
-                        onClick={(entry: BudgetChartEntry) => setQuery({ project: entry.id, focus: "budget", analytics: "budget" })}
-                      />
-                      <Bar
-                        dataKey="التكلفة"
-                        fill="#10b981"
-                        radius={[6, 6, 0, 0]}
-                        onClick={(entry: BudgetChartEntry) => setQuery({ project: entry.id, focus: "budget", analytics: "budget" })}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </ChartCard>
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+                <ChartCard title="مؤشرات الميزانية" subtitle="اضغط على المشروع لعرض تفاصيل الميزانية المتعلقة به" height={340}>
+                  {budgetData.length === 0 ? (
+                    <EmptyState label="لا توجد ميزانيات مسجلة لهذا العرض" />
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={budgetData} margin={{ top: 8, right: 10, left: 8, bottom: 8 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                        <XAxis dataKey="name" fontSize={11} />
+                        <YAxis fontSize={11} tickFormatter={(value) => `${Math.round(Number(value) / 1000)}k`} />
+                        <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(value: number | string) => formatCurrency(Number(value))} />
+                        <Legend />
+                        <Bar
+                          dataKey="الميزانية"
+                          fill="#94a3b8"
+                          radius={[6, 6, 0, 0]}
+                          onClick={(entry: BudgetChartEntry) => setQuery({ project: entry.id, focus: "budget", analytics: "budget" })}
+                        />
+                        <Bar
+                          dataKey="التكلفة"
+                          fill="#10b981"
+                          radius={[6, 6, 0, 0]}
+                          onClick={(entry: BudgetChartEntry) => setQuery({ project: entry.id, focus: "budget", analytics: "budget" })}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </ChartCard>
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="mb-4">
+                    <h3 className="font-bold text-slate-900 font-heading">مشاريع الميزانية</h3>
+                    <p className="mt-1 text-xs font-semibold text-slate-500">الأعلى استهلاكا يظهر أولا.</p>
+                  </div>
+                  <ProjectResultList
+                    infos={analyticsProjectResults}
+                    onSelect={(projectId) => setQuery({ project: projectId, focus: "budget", analytics: "budget" })}
+                  />
+                </div>
+              </div>
             </TabsContent>
 
             <TabsContent value="risks" className="mt-4">
-              <div className="grid gap-3 md:grid-cols-3">
-                <button
-                  type="button"
-                  onClick={() => setQuery({ focus: "critical", analytics: "risks" })}
-                  className="rounded-lg border border-red-100 bg-red-50 p-4 text-right"
-                >
-                  <p className="text-xs font-bold text-red-600">تحتاج قرار</p>
-                  <p className="mt-2 text-2xl font-black text-red-700">{riskProjectsCount}</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setQuery({ focus: "projects", analytics: "risks" })}
-                  className="rounded-lg border border-amber-100 bg-amber-50 p-4 text-right"
-                >
-                  <p className="text-xs font-bold text-amber-600">تحت المتابعة</p>
-                  <p className="mt-2 text-2xl font-black text-amber-700">{watchProjectsCount}</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setQuery({ projectStatus: "active", focus: "projects", analytics: "risks" })}
-                  className="rounded-lg border border-emerald-100 bg-emerald-50 p-4 text-right"
-                >
-                  <p className="text-xs font-bold text-emerald-600">مستقرة</p>
-                  <p className="mt-2 text-2xl font-black text-emerald-700">
-                    {Math.max(projectInfos.length - riskProjectsCount - watchProjectsCount, 0)}
-                  </p>
-                </button>
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+                <div className="grid content-start gap-3 md:grid-cols-3 xl:grid-cols-1">
+                  <button
+                    type="button"
+                    onClick={() => setQuery({ focus: "critical", analytics: "risks" })}
+                    className="rounded-xl border border-red-100 bg-red-50 p-5 text-right shadow-sm transition-colors hover:bg-red-100/50"
+                  >
+                    <p className="text-xs font-bold text-red-600">تحتاج قرار</p>
+                    <p className="mt-2 text-3xl font-black text-red-700">{riskProjectsCount}</p>
+                    <p className="mt-2 text-xs font-semibold text-red-700/80">مشاريع أو مخاطر حرجة مفتوحة.</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setQuery({ focus: "projects", analytics: "risks" })}
+                    className="rounded-xl border border-amber-100 bg-amber-50 p-5 text-right shadow-sm transition-colors hover:bg-amber-100/50"
+                  >
+                    <p className="text-xs font-bold text-amber-600">تحت المتابعة</p>
+                    <p className="mt-2 text-3xl font-black text-amber-700">{watchProjectsCount}</p>
+                    <p className="mt-2 text-xs font-semibold text-amber-700/80">تأخر أو ميزانية أو موعد قريب.</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setQuery({ projectStatus: "active", focus: "projects", analytics: "risks" })}
+                    className="rounded-xl border border-emerald-100 bg-emerald-50 p-5 text-right shadow-sm transition-colors hover:bg-emerald-100/50"
+                  >
+                    <p className="text-xs font-bold text-emerald-600">مستقرة</p>
+                    <p className="mt-2 text-3xl font-black text-emerald-700">
+                      {Math.max(projectInfos.length - riskProjectsCount - watchProjectsCount, 0)}
+                    </p>
+                    <p className="mt-2 text-xs font-semibold text-emerald-700/80">لا تظهر عليها إشارات خطر حاليا.</p>
+                  </button>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="mb-4">
+                    <h3 className="font-bold text-slate-900 font-heading">مشاريع تحتاج انتباه</h3>
+                    <p className="mt-1 text-xs font-semibold text-slate-500">مرتبة حسب الخطر ثم التأخر.</p>
+                  </div>
+                  <ProjectResultList
+                    infos={analyticsProjectResults.filter((info) => info.health !== "good")}
+                    onSelect={(projectId) => setQuery({ project: projectId, focus: "projects", analytics: "risks" })}
+                  />
+                </div>
               </div>
             </TabsContent>
             </Tabs>
-          ) : (
-            <Link
-              href={analyticsHref}
-              className="flex w-full items-center justify-between rounded-xl border border-dashed border-slate-300 bg-white px-5 py-4 text-right shadow-sm transition-colors hover:border-primary/40 hover:bg-indigo-50/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-            >
-              <span>
-                <span className="block text-sm font-black text-slate-900 font-heading">التحليلات عند الحاجة</span>
-                <span className="mt-1 block text-xs font-semibold text-slate-500">
-                  التشارتس مخفية افتراضيا لتقليل الزحمة. افتحها فقط عندما تحتاج قراءة أعمق.
-                </span>
-              </span>
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                <BarChart3 size={18} />
-              </span>
-            </Link>
           )}
         </section>
-
-        {!isAnalyticsPage && (
-        <aside className="grid gap-4 lg:grid-cols-2">
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-900 font-heading">مهامي القريبة</h2>
-              <Link href="/my-tasks" className="flex items-center gap-1 text-sm font-semibold text-primary hover:text-primary/80">
-                عرض الكل <ArrowUpRight size={14} />
-              </Link>
-            </div>
-            <div className="space-y-2">
-              {todayTasks.concat(overdueTasks).slice(0, 7).length === 0 ? (
-                <EmptyState label="لا توجد مهام مستعجلة" />
-              ) : (
-                todayTasks
-                  .concat(overdueTasks)
-                  .slice(0, 5)
-                  .map((task) => (
-                    <div key={`${task.id}-${task.due_date}`} className="rounded-xl border border-slate-100 bg-slate-50 p-3 transition-colors hover:bg-white">
-                      <div className="flex items-start gap-2">
-                        <button
-                          onClick={() => handleMarkDone(task.id, task.project_id)}
-                          className="mt-1 text-slate-300 transition-colors hover:text-emerald-500"
-                        >
-                          <CheckCircle2 size={17} />
-                        </button>
-                        <div className="min-w-0 flex-1">
-                          <TaskTitleStack
-                            title={task.title}
-                            subTask={task.sub_task}
-                            category={task.category}
-                            primaryClassName="line-clamp-1 text-sm font-bold text-slate-800"
-                          />
-                          <p className="mt-1 text-xs text-slate-500">
-                            {projectMap.get(task.project_id)?.name ?? "مشروع"} · {formatDateShort(task.due_date)}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-              )}
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-900 font-heading">آخر التحديثات</h2>
-              <Activity className="text-primary" size={18} />
-            </div>
-            <div className="space-y-4">
-              {filteredComments.length === 0 ? (
-                <EmptyState label="لا توجد تحديثات حديثة" />
-              ) : (
-                filteredComments.slice(0, 5).map((comment) => (
-                  <div key={comment.id} className="border-r-2 border-primary/20 pr-3">
-                    <p className="text-xs font-bold text-slate-700">{comment.user?.full_name ?? "عضو الفريق"}</p>
-                    <p className="mt-1 line-clamp-2 text-sm text-slate-600">{comment.body}</p>
-                    <p className="mt-1 text-[11px] text-slate-400">{formatDateShort(comment.created_at)}</p>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </aside>
-        )}
       </div>
     </div>
   );
 }
 
-function ChartCard({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
+function ChartCard({
+  title,
+  subtitle,
+  children,
+  height = 280,
+}: {
+  title: string;
+  subtitle: string;
+  children: ReactNode;
+  height?: number;
+}) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex items-start justify-between gap-3">
@@ -1503,7 +1642,7 @@ function ChartCard({ title, subtitle, children }: { title: string; subtitle: str
         </span>
       </div>
       <div className="overflow-x-auto">
-        <div className="h-[280px] min-w-[460px]" dir="ltr">
+        <div className="min-w-[460px]" dir="ltr" style={{ height }}>
           {children}
         </div>
       </div>
@@ -1515,6 +1654,177 @@ function EmptyState({ label }: { label: string }) {
   return (
     <div className="flex min-h-[120px] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 text-center text-sm font-medium text-slate-400">
       {label}
+    </div>
+  );
+}
+
+function HomeTaskPanel({
+  tasks,
+  projects,
+  onMarkDone,
+}: {
+  tasks: DashboardTask[];
+  projects: Map<string, DashboardProject>;
+  onMarkDone: (taskId: string, projectId?: string) => void;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-slate-900 font-heading">عملي القريب</h2>
+          <p className="mt-1 text-xs font-semibold text-slate-500">مهام اليوم والمتأخر فقط.</p>
+        </div>
+        <Link href="/my-tasks" className="flex items-center gap-1 text-sm font-semibold text-primary hover:text-primary/80">
+          عرض الكل <ArrowUpRight size={14} />
+        </Link>
+      </div>
+      <div className="space-y-2">
+        {tasks.length === 0 ? (
+          <EmptyState label="لا توجد مهام مستعجلة" />
+        ) : (
+          tasks.map((task) => (
+            <div
+              key={`${task.id}-${task.due_date}`}
+              className="flex items-start gap-2 rounded-xl border border-slate-100 bg-slate-50 p-3 transition-colors hover:bg-white"
+            >
+              <button
+                type="button"
+                onClick={() => onMarkDone(task.id, task.project_id)}
+                className="mt-1 text-slate-300 transition-colors hover:text-emerald-500"
+                aria-label="إغلاق المهمة"
+              >
+                <CheckCircle2 size={17} />
+              </button>
+              <Link href={`/projects/${task.project_id}?tab=tasks`} className="min-w-0 flex-1">
+                <TaskTitleStack
+                  title={task.title}
+                  subTask={task.sub_task}
+                  category={task.category}
+                  primaryClassName="line-clamp-1 text-sm font-bold text-slate-800"
+                />
+                <p className="mt-1 text-xs text-slate-500">
+                  {projects.get(task.project_id)?.name ?? "مشروع"} · {formatDateShort(task.due_date)}
+                </p>
+              </Link>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RecentUpdatesPanel({ comments }: { comments: DashboardComment[] }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-slate-900 font-heading">آخر تحديث</h2>
+          <p className="mt-1 text-xs font-semibold text-slate-500">مختصر بدون إطالة.</p>
+        </div>
+        <Activity className="text-primary" size={18} />
+      </div>
+      <div className="space-y-3">
+        {comments.length === 0 ? (
+          <EmptyState label="لا توجد تحديثات حديثة" />
+        ) : (
+          comments.slice(0, 3).map((comment) => (
+            <div key={comment.id} className="border-r-2 border-primary/20 pr-3">
+              <p className="text-xs font-bold text-slate-700">{comment.user?.full_name ?? "عضو الفريق"}</p>
+              <p className="mt-1 line-clamp-2 text-sm text-slate-600">{comment.body}</p>
+              <p className="mt-1 text-[11px] text-slate-400">{formatDateShort(comment.created_at)}</p>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ProjectResultList({
+  infos,
+  onSelect,
+  limit = 6,
+}: {
+  infos: ProjectInfo[];
+  onSelect: (projectId: string) => void;
+  limit?: number;
+}) {
+  if (infos.length === 0) return <EmptyState label="لا توجد مشاريع مطابقة" />;
+
+  return (
+    <div className="space-y-2">
+      {infos.slice(0, limit).map((info) => (
+        <button
+          key={info.project.id}
+          type="button"
+          onClick={() => onSelect(info.project.id)}
+          className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-right transition-colors hover:border-primary/20 hover:bg-white"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="line-clamp-1 text-sm font-black text-slate-900">{info.project.name}</p>
+              <p className="mt-1 line-clamp-1 text-xs font-semibold text-slate-500">{info.healthReason}</p>
+            </div>
+            <span className={cn("shrink-0 rounded-md border px-2 py-1 text-[11px] font-bold", HEALTH_COLORS[info.health])}>
+              {HEALTH_LABELS[info.health]}
+            </span>
+          </div>
+          <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[11px] font-bold text-slate-500">
+            <span className="rounded-lg bg-white p-2">إنجاز {Math.round(info.project.progress ?? 0)}%</span>
+            <span className="rounded-lg bg-white p-2 text-red-600">متأخر {info.overdueTasks}</span>
+            <span className="rounded-lg bg-white p-2">ميزانية {info.budgetUsedPct ?? 0}%</span>
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function TaskResultList({
+  tasks,
+  projects,
+  onOpenTask,
+  onMarkDone,
+  limit = 7,
+}: {
+  tasks: DashboardTask[];
+  projects: Map<string, DashboardProject>;
+  onOpenTask: (task: DashboardTask) => void;
+  onMarkDone: (taskId: string, projectId?: string) => void;
+  limit?: number;
+}) {
+  if (tasks.length === 0) return <EmptyState label="لا توجد مهام مطابقة" />;
+
+  return (
+    <div className="space-y-2">
+      {tasks.slice(0, limit).map((task) => (
+        <div
+          key={task.id}
+          className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-right transition-colors hover:border-primary/20 hover:bg-white"
+        >
+          <button
+            type="button"
+            onClick={() => onMarkDone(task.id, task.project_id)}
+            className="mt-1 text-slate-300 transition-colors hover:text-emerald-500"
+            aria-label="إغلاق المهمة"
+          >
+            <CheckCircle2 size={17} />
+          </button>
+          <button type="button" onClick={() => onOpenTask(task)} className="min-w-0 flex-1 text-right">
+            <TaskTitleStack
+              title={task.title}
+              subTask={task.sub_task}
+              category={task.category}
+              done={task.status === "Done"}
+              primaryClassName="line-clamp-1 text-sm font-bold text-slate-800"
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              {projects.get(task.project_id)?.name ?? "مشروع"} · {formatDateShort(task.due_date)}
+            </p>
+          </button>
+        </div>
+      ))}
     </div>
   );
 }
@@ -1535,7 +1845,7 @@ function ProjectCards({
       <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
         <div>
           <h2 className="text-lg font-bold text-slate-900 font-heading">مشاريعي والمشاريع المعروضة</h2>
-          <p className="mt-1 text-sm text-slate-500">قائمة مختصرة قابلة للتصفية، وليست كروت مزدحمة.</p>
+          <p className="mt-1 text-sm text-slate-500">أهم المشاريع أولا حسب الصحة والتأخر، والضغط يفتح النتائج المتعلقة.</p>
         </div>
         <Layers3 className="text-primary" size={20} />
       </div>
@@ -1546,7 +1856,7 @@ function ProjectCards({
         </div>
       ) : (
         <div className="divide-y divide-slate-100">
-          {infos.slice(0, 8).map((info) => (
+          {infos.slice(0, 6).map((info) => (
             <div
               key={info.project.id}
               role="button"
