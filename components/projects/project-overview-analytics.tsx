@@ -45,6 +45,7 @@ import type { Challenge, Profile, Project, ProjectDailySnapshot, Task } from "@/
 
 type BurnMode = "burndown" | "burnup";
 type AnalyticsFocus = "tasks" | "risks" | null;
+type AnalyticsChart = "burn" | "progress" | "budget" | "flow" | "risks";
 type TaskStatusFilter = Task["status"] | "all";
 type TaskPriorityFilter = Task["priority"] | "all";
 type PeriodFilter = "all" | "today" | "week" | "month" | "overdue";
@@ -76,10 +77,20 @@ interface TimelineEntry {
   "التكلفة المقدرة": number;
 }
 
+interface ChartOption {
+  id: AnalyticsChart;
+  title: string;
+  description: string;
+  insight: string;
+  icon: LucideIcon;
+  tone: "neutral" | "good" | "warning" | "risk";
+}
+
 const TASK_STATUSES: Task["status"][] = ["Backlog", "To Do", "In Progress", "Review", "Done", "Cancelled"];
 const TASK_PRIORITIES: Task["priority"][] = ["critical", "high", "medium", "low"];
 const OPEN_TASK_STATUSES: Task["status"][] = ["Backlog", "To Do", "In Progress", "Review"];
 const OPEN_CHALLENGE_STATUSES = ["open", "in_progress"];
+const ANALYTICS_CHARTS: AnalyticsChart[] = ["burn", "progress", "budget", "flow", "risks"];
 
 const STATUS_COLORS: Record<Task["status"], string> = {
   Backlog: "#a78bfa",
@@ -246,6 +257,13 @@ export function ProjectOverviewAnalytics({ project, tasks, challenges, snapshots
   const focus: AnalyticsFocus = focusParam === "tasks" || focusParam === "risks" ? focusParam : null;
   const selectedDate = searchParams.get("analyticsDate");
   const selectedRiskCell = parseRiskCell(searchParams.get("analyticsRisk"));
+  const chartParam = searchParams.get("analyticsChart") as AnalyticsChart | null;
+  const activeChart: AnalyticsChart =
+    chartParam && ANALYTICS_CHARTS.includes(chartParam)
+      ? chartParam
+      : focus === "risks" || selectedRiskCell
+        ? "risks"
+        : "burn";
 
   const setQuery = useCallback((updates: Record<string, string | null>) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -454,6 +472,48 @@ export function ProjectOverviewAnalytics({ project, tasks, challenges, snapshots
     selectedOwner !== "all" ||
     periodFilter !== "all" ||
     Boolean(focus || selectedDate || selectedRiskCell);
+  const chartOptions: ChartOption[] = [
+    {
+      id: "burn",
+      title: burnMode === "burndown" ? "منحنى المتبقي" : "منحنى المنجز",
+      description: "يعرض هل العمل يسير أسرع أو أبطأ من المخطط.",
+      insight: `${filteredTasks.length} مهمة`,
+      icon: TrendingUp,
+      tone: overdueCount > 0 ? "warning" : "neutral",
+    },
+    {
+      id: "progress",
+      title: "S-Curve للإنجاز",
+      description: "يقارن الإنجاز المخطط بالإنجاز الفعلي عبر الزمن.",
+      insight: `${pct(doneCount, filteredTasks.length)}% إنجاز`,
+      icon: Activity,
+      tone: "good",
+    },
+    {
+      id: "budget",
+      title: "منحنى الميزانية",
+      description: "يتابع الميزانية المخططة مقابل المصروفات المسجلة.",
+      insight: `${budgetUsage}% استهلاك`,
+      icon: Wallet,
+      tone: budgetUsage > 100 ? "risk" : budgetUsage >= 80 ? "warning" : "good",
+    },
+    {
+      id: "flow",
+      title: "تدفق الحالات",
+      description: "يوضح تراكم المهام حسب الحالة لاكتشاف الاختناقات.",
+      insight: `${filteredTasks.length - doneCount} مفتوحة`,
+      icon: Layers3,
+      tone: "neutral",
+    },
+    {
+      id: "risks",
+      title: "خريطة المخاطر",
+      description: "تعرض المخاطر حسب الأثر والاحتمال وتفتح تفاصيلها بالضغط.",
+      insight: `${riskSource.length} مفتوحة`,
+      icon: ShieldAlert,
+      tone: riskSource.length > 0 ? "risk" : "good",
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -602,7 +662,20 @@ export function ProjectOverviewAnalytics({ project, tasks, challenges, snapshots
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+      <ChartSelector
+        options={chartOptions}
+        activeChart={activeChart}
+        onSelect={(chart) =>
+          setQuery({
+            analyticsChart: chart,
+            analyticsFocus: null,
+            analyticsDate: null,
+            analyticsRisk: null,
+          })
+        }
+      />
+
+      {activeChart === "burn" && (
         <AnalyticsCard
           title={burnMode === "burndown" ? "منحنى المتبقي" : "منحنى المنجز"}
           subtitle={timelineSourceLabel}
@@ -624,13 +697,13 @@ export function ProjectOverviewAnalytics({ project, tasks, challenges, snapshots
             </div>
           }
         >
-          <ResponsiveContainer width="100%" height={280}>
+          <ResponsiveContainer width="100%" height={320}>
             <LineChart
               data={timeline}
               margin={{ top: 8, right: 10, left: 8, bottom: 8 }}
               onClick={(event) => {
                 const entry = timelinePayload(event);
-                if (entry) setQuery({ analyticsFocus: "tasks", analyticsDate: entry.date, analyticsRisk: null });
+                if (entry) setQuery({ analyticsChart: "burn", analyticsFocus: "tasks", analyticsDate: entry.date, analyticsRisk: null });
               }}
             >
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
@@ -643,15 +716,17 @@ export function ProjectOverviewAnalytics({ project, tasks, challenges, snapshots
             </LineChart>
           </ResponsiveContainer>
         </AnalyticsCard>
+      )}
 
+      {activeChart === "progress" && (
         <AnalyticsCard title="S-Curve للإنجاز" subtitle={timelineSourceLabel} icon={Activity}>
-          <ResponsiveContainer width="100%" height={280}>
+          <ResponsiveContainer width="100%" height={320}>
             <LineChart
               data={timeline}
               margin={{ top: 8, right: 10, left: 8, bottom: 8 }}
               onClick={(event) => {
                 const entry = timelinePayload(event);
-                if (entry) setQuery({ analyticsFocus: "tasks", analyticsDate: entry.date, analyticsRisk: null });
+                if (entry) setQuery({ analyticsChart: "progress", analyticsFocus: "tasks", analyticsDate: entry.date, analyticsRisk: null });
               }}
             >
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
@@ -664,19 +739,21 @@ export function ProjectOverviewAnalytics({ project, tasks, challenges, snapshots
             </LineChart>
           </ResponsiveContainer>
         </AnalyticsCard>
+      )}
 
+      {activeChart === "budget" && (
         <AnalyticsCard
           title="منحنى الميزانية"
           subtitle={`استهلاك تقديري ${budgetUsage}% من الميزانية`}
           icon={Wallet}
         >
-          <ResponsiveContainer width="100%" height={280}>
+          <ResponsiveContainer width="100%" height={320}>
             <LineChart
               data={timeline}
               margin={{ top: 8, right: 10, left: 8, bottom: 8 }}
               onClick={(event) => {
                 const entry = timelinePayload(event);
-                if (entry) setQuery({ analyticsFocus: "tasks", analyticsDate: entry.date, analyticsRisk: null });
+                if (entry) setQuery({ analyticsChart: "budget", analyticsFocus: "tasks", analyticsDate: entry.date, analyticsRisk: null });
               }}
             >
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
@@ -689,9 +766,11 @@ export function ProjectOverviewAnalytics({ project, tasks, challenges, snapshots
             </LineChart>
           </ResponsiveContainer>
         </AnalyticsCard>
+      )}
 
+      {activeChart === "flow" && (
         <AnalyticsCard title="Cumulative Flow" subtitle={timelineSourceLabel} icon={Layers3}>
-          <ResponsiveContainer width="100%" height={280}>
+          <ResponsiveContainer width="100%" height={320}>
             <AreaChart data={timeline} margin={{ top: 8, right: 10, left: 8, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
               <XAxis dataKey="label" fontSize={11} />
@@ -707,73 +786,143 @@ export function ProjectOverviewAnalytics({ project, tasks, challenges, snapshots
                   stroke={STATUS_COLORS[status]}
                   fill={STATUS_COLORS[status]}
                   fillOpacity={0.7}
-                  onClick={() => setQuery({ analyticsStatus: status, analyticsFocus: "tasks", analyticsDate: null })}
+                  onClick={() => setQuery({ analyticsChart: "flow", analyticsStatus: status, analyticsFocus: "tasks", analyticsDate: null })}
                 />
               ))}
             </AreaChart>
           </ResponsiveContainer>
         </AnalyticsCard>
+      )}
+
+      {activeChart === "risks" && (
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-red-50 p-2 text-red-600">
+                <ShieldAlert size={18} />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 font-heading">خريطة المخاطر</h3>
+                <p className="mt-1 text-xs font-medium text-slate-500">{riskSource.length} مخاطر وتحديات مفتوحة ضمن الفلاتر الحالية</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
+              <span>الأثر</span>
+              <span className="h-px w-8 bg-slate-200" />
+              <span>الاحتمال</span>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <div className="grid min-w-[560px] gap-2">
+              {riskMatrix.map((row) => (
+                <div key={row[0].impact} className="grid grid-cols-5 gap-2">
+                  {row.map((cell) => {
+                    const score = cell.impact * cell.probability;
+                    const active =
+                      selectedRiskCell?.impact === cell.impact &&
+                      selectedRiskCell.probability === cell.probability;
+                    const color =
+                      score >= 16
+                        ? "bg-red-100 text-red-800 border-red-200"
+                        : score >= 9
+                          ? "bg-amber-100 text-amber-800 border-amber-200"
+                          : "bg-emerald-50 text-emerald-700 border-emerald-100";
+
+                    return (
+                      <button
+                        key={`${cell.impact}-${cell.probability}`}
+                        onClick={() =>
+                          setQuery({
+                            analyticsChart: "risks",
+                            analyticsFocus: "risks",
+                            analyticsRisk: `${cell.impact}-${cell.probability}`,
+                            analyticsDate: null,
+                          })
+                        }
+                        className={cn(
+                          "flex min-h-16 flex-col items-center justify-center rounded-xl border text-center transition-all hover:shadow-sm",
+                          color,
+                          active && "ring-2 ring-primary ring-offset-2"
+                        )}
+                      >
+                        <span className="text-lg font-black">{cell.count}</span>
+                        <span className="text-[11px] font-bold">أثر {cell.impact} / احتمال {cell.probability}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChartSelector({
+  options,
+  activeChart,
+  onSelect,
+}: {
+  options: ChartOption[];
+  activeChart: AnalyticsChart;
+  onSelect: (chart: AnalyticsChart) => void;
+}) {
+  const toneClass = {
+    neutral: "bg-slate-50 text-slate-600 border-slate-200",
+    good: "bg-emerald-50 text-emerald-700 border-emerald-100",
+    warning: "bg-amber-50 text-amber-700 border-amber-100",
+    risk: "bg-red-50 text-red-700 border-red-100",
+  };
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="font-bold text-slate-900 font-heading">اختر التشارت الذي تحتاجه</h3>
+          <p className="mt-1 text-xs font-semibold text-slate-500">
+            التشارتس لا تظهر كلها دفعة واحدة لتوفير المساحة والتركيز على القرار الحالي.
+          </p>
+        </div>
+        <span className="flex w-fit items-center gap-1 rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-500">
+          <MousePointerClick size={14} />
+          اضغط للعرض
+        </span>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-red-50 p-2 text-red-600">
-              <ShieldAlert size={18} />
-            </div>
-            <div>
-              <h3 className="font-bold text-slate-900 font-heading">خريطة المخاطر</h3>
-              <p className="mt-1 text-xs font-medium text-slate-500">{riskSource.length} مخاطر وتحديات مفتوحة ضمن الفلاتر الحالية</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
-            <span>الأثر</span>
-            <span className="h-px w-8 bg-slate-200" />
-            <span>الاحتمال</span>
-          </div>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        {options.map((option) => {
+          const Icon = option.icon;
+          const active = activeChart === option.id;
 
-        <div className="overflow-x-auto">
-          <div className="grid min-w-[560px] gap-2">
-            {riskMatrix.map((row) => (
-              <div key={row[0].impact} className="grid grid-cols-5 gap-2">
-                {row.map((cell) => {
-                  const score = cell.impact * cell.probability;
-                  const active =
-                    selectedRiskCell?.impact === cell.impact &&
-                    selectedRiskCell.probability === cell.probability;
-                  const color =
-                    score >= 16
-                      ? "bg-red-100 text-red-800 border-red-200"
-                      : score >= 9
-                        ? "bg-amber-100 text-amber-800 border-amber-200"
-                        : "bg-emerald-50 text-emerald-700 border-emerald-100";
-
-                  return (
-                    <button
-                      key={`${cell.impact}-${cell.probability}`}
-                      onClick={() =>
-                        setQuery({
-                          analyticsFocus: "risks",
-                          analyticsRisk: `${cell.impact}-${cell.probability}`,
-                          analyticsDate: null,
-                        })
-                      }
-                      className={cn(
-                        "flex min-h-16 flex-col items-center justify-center rounded-xl border text-center transition-all hover:shadow-sm",
-                        color,
-                        active && "ring-2 ring-primary ring-offset-2"
-                      )}
-                    >
-                      <span className="text-lg font-black">{cell.count}</span>
-                      <span className="text-[11px] font-bold">أثر {cell.impact} / احتمال {cell.probability}</span>
-                    </button>
-                  );
-                })}
+          return (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => onSelect(option.id)}
+              className={cn(
+                "rounded-xl border p-3 text-right transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+                active
+                  ? "border-primary/30 bg-indigo-50/70 shadow-sm ring-1 ring-primary/10"
+                  : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white"
+              )}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border", toneClass[option.tone])}>
+                  <Icon size={17} />
+                </span>
+                <span className={cn("rounded-lg px-2 py-1 text-[11px] font-black", active ? "bg-primary text-white" : "bg-white text-slate-500")}>
+                  {active ? "معروض" : "عرض"}
+                </span>
               </div>
-            ))}
-          </div>
-        </div>
+              <p className="mt-3 text-sm font-black text-slate-900">{option.title}</p>
+              <p className="mt-1 line-clamp-2 min-h-10 text-xs font-medium leading-5 text-slate-500">{option.description}</p>
+              <p className="mt-3 text-xs font-bold text-primary">{option.insight}</p>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -939,7 +1088,7 @@ function AnalyticsCard({
         </div>
       </div>
       <div className="overflow-x-auto">
-        <div className="h-[280px] min-w-[520px]" dir="ltr">
+        <div className="h-[320px] min-w-[520px]" dir="ltr">
           {children}
         </div>
       </div>
