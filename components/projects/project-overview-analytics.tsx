@@ -472,48 +472,52 @@ export function ProjectOverviewAnalytics({ project, tasks, challenges, snapshots
     selectedOwner !== "all" ||
     periodFilter !== "all" ||
     Boolean(focus || selectedDate || selectedRiskCell);
-  const chartOptions: ChartOption[] = [
-    {
-      id: "burn",
-      title: burnMode === "burndown" ? "منحنى المتبقي" : "منحنى المنجز",
-      description: "يعرض هل العمل يسير أسرع أو أبطأ من المخطط.",
-      insight: `${filteredTasks.length} مهمة`,
-      icon: TrendingUp,
-      tone: overdueCount > 0 ? "warning" : "neutral",
-    },
-    {
-      id: "progress",
-      title: "S-Curve للإنجاز",
-      description: "يقارن الإنجاز المخطط بالإنجاز الفعلي عبر الزمن.",
-      insight: `${pct(doneCount, filteredTasks.length)}% إنجاز`,
-      icon: Activity,
-      tone: "good",
-    },
-    {
-      id: "budget",
-      title: "منحنى الميزانية",
-      description: "يتابع الميزانية المخططة مقابل المصروفات المسجلة.",
-      insight: `${budgetUsage}% استهلاك`,
-      icon: Wallet,
-      tone: budgetUsage > 100 ? "risk" : budgetUsage >= 80 ? "warning" : "good",
-    },
-    {
-      id: "flow",
-      title: "تدفق الحالات",
-      description: "يوضح تراكم المهام حسب الحالة لاكتشاف الاختناقات.",
-      insight: `${filteredTasks.length - doneCount} مفتوحة`,
-      icon: Layers3,
-      tone: "neutral",
-    },
-    {
-      id: "risks",
-      title: "خريطة المخاطر",
-      description: "تعرض المخاطر حسب الأثر والاحتمال وتفتح تفاصيلها بالضغط.",
-      insight: `${riskSource.length} مفتوحة`,
-      icon: ShieldAlert,
-      tone: riskSource.length > 0 ? "risk" : "good",
-    },
-  ];
+  const analyticsFocusForFilters: Exclude<AnalyticsFocus, null> = activeChart === "risks" ? "risks" : "tasks";
+  const chartOptions = useMemo<ChartOption[]>(
+    () => [
+      {
+        id: "burn",
+        title: burnMode === "burndown" ? "منحنى المتبقي" : "منحنى المنجز",
+        description: "هل العمل يسير أسرع أو أبطأ من المخطط.",
+        insight: `${filteredTasks.length} مهمة`,
+        icon: TrendingUp,
+        tone: overdueCount > 0 ? "warning" : "neutral",
+      },
+      {
+        id: "progress",
+        title: "S-Curve للإنجاز",
+        description: "المخطط مقابل الفعلي عبر الزمن.",
+        insight: `${pct(doneCount, filteredTasks.length)}% إنجاز`,
+        icon: Activity,
+        tone: "good",
+      },
+      {
+        id: "budget",
+        title: "منحنى الميزانية",
+        description: "المخطط مقابل المصروفات المسجلة.",
+        insight: `${budgetUsage}% استهلاك`,
+        icon: Wallet,
+        tone: budgetUsage > 100 ? "risk" : budgetUsage >= 80 ? "warning" : "good",
+      },
+      {
+        id: "flow",
+        title: "تدفق الحالات",
+        description: "تراكم المهام لاكتشاف الاختناقات.",
+        insight: `${filteredTasks.length - doneCount} مفتوحة`,
+        icon: Layers3,
+        tone: "neutral",
+      },
+      {
+        id: "risks",
+        title: "خريطة المخاطر",
+        description: "الأثر والاحتمال وتفاصيل الخلايا.",
+        insight: `${riskSource.length} مفتوحة`,
+        icon: ShieldAlert,
+        tone: riskSource.length > 0 ? "risk" : "good",
+      },
+    ],
+    [budgetUsage, burnMode, doneCount, filteredTasks.length, overdueCount, riskSource.length]
+  );
 
   return (
     <div className="space-y-6">
@@ -542,7 +546,7 @@ export function ProjectOverviewAnalytics({ project, tasks, challenges, snapshots
             </span>
             <select
               value={statusFilter}
-              onChange={(event) => setQuery({ analyticsStatus: event.target.value, analyticsFocus: "tasks", analyticsDate: null })}
+              onChange={(event) => setQuery({ analyticsStatus: event.target.value, analyticsFocus: "tasks", analyticsDate: null, analyticsRisk: null })}
               className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-primary/20"
             >
               <option value="all">كل حالات المهام</option>
@@ -554,7 +558,7 @@ export function ProjectOverviewAnalytics({ project, tasks, challenges, snapshots
             </select>
             <select
               value={priorityFilter}
-              onChange={(event) => setQuery({ analyticsPriority: event.target.value, analyticsFocus: "tasks", analyticsDate: null })}
+              onChange={(event) => setQuery({ analyticsPriority: event.target.value, analyticsFocus: "tasks", analyticsDate: null, analyticsRisk: null })}
               className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-primary/20"
             >
               <option value="all">كل الأولويات</option>
@@ -566,7 +570,7 @@ export function ProjectOverviewAnalytics({ project, tasks, challenges, snapshots
             </select>
             <select
               value={selectedOwner}
-              onChange={(event) => setQuery({ analyticsOwner: event.target.value, analyticsFocus: "tasks", analyticsDate: null })}
+              onChange={(event) => setQuery({ analyticsOwner: event.target.value, analyticsFocus: analyticsFocusForFilters, analyticsDate: null })}
               className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-primary/20"
             >
               <option value="all">كل الأعضاء</option>
@@ -579,7 +583,7 @@ export function ProjectOverviewAnalytics({ project, tasks, challenges, snapshots
             <select
               value={periodFilter}
               onChange={(event) =>
-                setQuery({ analyticsPeriod: event.target.value, analyticsFocus: "tasks", analyticsDate: null, analyticsRisk: null })
+                setQuery({ analyticsPeriod: event.target.value, analyticsFocus: analyticsFocusForFilters, analyticsDate: null })
               }
               className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-primary/20"
             >
@@ -878,51 +882,51 @@ function ChartSelector({
   };
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+      <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <h3 className="font-bold text-slate-900 font-heading">اختر التشارت الذي تحتاجه</h3>
-          <p className="mt-1 text-xs font-semibold text-slate-500">
-            التشارتس لا تظهر كلها دفعة واحدة لتوفير المساحة والتركيز على القرار الحالي.
-          </p>
+          <h3 className="font-bold text-slate-900 font-heading">التشارت المعروض</h3>
+          <p className="mt-1 text-xs font-semibold text-slate-500">اختر زاوية التحليل حسب الفلاتر الحالية</p>
         </div>
-        <span className="flex w-fit items-center gap-1 rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-500">
+        <span className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500 sm:flex">
           <MousePointerClick size={14} />
-          اضغط للعرض
         </span>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        {options.map((option) => {
-          const Icon = option.icon;
-          const active = activeChart === option.id;
+      <div className="overflow-x-auto pb-1">
+        <div className="grid min-w-max grid-flow-col auto-cols-[170px] gap-2 xl:min-w-0 xl:grid-flow-row xl:grid-cols-5 xl:auto-cols-auto">
+          {options.map((option) => {
+            const Icon = option.icon;
+            const active = activeChart === option.id;
 
-          return (
-            <button
-              key={option.id}
-              type="button"
-              onClick={() => onSelect(option.id)}
-              className={cn(
-                "rounded-xl border p-3 text-right transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-                active
-                  ? "border-primary/30 bg-indigo-50/70 shadow-sm ring-1 ring-primary/10"
-                  : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white"
-              )}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border", toneClass[option.tone])}>
-                  <Icon size={17} />
-                </span>
-                <span className={cn("rounded-lg px-2 py-1 text-[11px] font-black", active ? "bg-primary text-white" : "bg-white text-slate-500")}>
-                  {active ? "معروض" : "عرض"}
-                </span>
-              </div>
-              <p className="mt-3 text-sm font-black text-slate-900">{option.title}</p>
-              <p className="mt-1 line-clamp-2 min-h-10 text-xs font-medium leading-5 text-slate-500">{option.description}</p>
-              <p className="mt-3 text-xs font-bold text-primary">{option.insight}</p>
-            </button>
-          );
-        })}
+            return (
+              <button
+                key={option.id}
+                type="button"
+                aria-pressed={active}
+                onClick={() => onSelect(option.id)}
+                className={cn(
+                  "rounded-xl border p-3 text-right transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+                  active
+                    ? "border-primary/40 bg-indigo-50/80 shadow-sm ring-1 ring-primary/10"
+                    : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white"
+                )}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border", toneClass[option.tone])}>
+                    <Icon size={16} />
+                  </span>
+                  <span className={cn("rounded-lg px-2 py-1 text-[11px] font-black", active ? "bg-primary text-white" : "bg-white text-slate-500")}>
+                    {active ? "معروض" : "عرض"}
+                  </span>
+                </div>
+                <p className="mt-2 line-clamp-1 text-sm font-black text-slate-900">{option.title}</p>
+                <p className="mt-1 hidden min-h-10 text-xs font-medium leading-5 text-slate-500 lg:line-clamp-2">{option.description}</p>
+                <p className="mt-2 text-xs font-bold text-primary">{option.insight}</p>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
