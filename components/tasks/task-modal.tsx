@@ -12,9 +12,11 @@ import {
   applyMyTaskRealtimeChange,
   applyTaskToTaskQueries,
   createTaskTimeEntry,
+  deleteTask,
   deleteTaskTimeEntry,
   fetchTaskById,
   fetchTaskTimeEntries,
+  removeTaskFromTaskQueries,
   taskKeys,
   taskTimeKeys,
   updateTask,
@@ -44,12 +46,13 @@ interface Props {
   profiles: Pick<Profile, "id" | "full_name" | "avatar_url">[];
   onClose: () => void;
   onTaskSaved?: (task: Task) => void;
+  onTaskDeleted?: (taskId: string) => void;
   myTasksOwnerId?: string;
 }
 
 type TaskUpdate = Database["public"]["Tables"]["tasks"]["Update"];
 
-export function TaskModal({ task, profiles, onClose, onTaskSaved, myTasksOwnerId }: Props) {
+export function TaskModal({ task, profiles, onClose, onTaskSaved, onTaskDeleted, myTasksOwnerId }: Props) {
   const queryClient = useQueryClient();
   const [title, setTitle] = useState(task.title);
   const [status, setStatus] = useState(task.status);
@@ -154,6 +157,10 @@ export function TaskModal({ task, profiles, onClose, onTaskSaved, myTasksOwnerId
 
   const deleteTimeEntryMutation = useMutation({
     mutationFn: deleteTaskTimeEntry,
+  });
+
+  const deleteTaskMutation = useMutation({
+    mutationFn: deleteTask,
   });
 
   const refreshTaskAfterTimeChange = useCallback(async () => {
@@ -345,6 +352,30 @@ export function TaskModal({ task, profiles, onClose, onTaskSaved, myTasksOwnerId
     }
   };
 
+  const handleDeleteTask = async () => {
+    const confirmed = window.confirm(
+      `هل تريد حذف مهمة "${task.title}"؟ سيتم حذف المهمة وسجلات الساعات المرتبطة بها، ولا يمكن التراجع من هذه الصفحة.`
+    );
+    if (!confirmed) return;
+
+    try {
+      const deletedTaskId = await deleteTaskMutation.mutateAsync(task.id);
+      removeTaskFromTaskQueries(queryClient, task);
+      if (myTasksOwnerId) {
+        applyMyTaskRealtimeChange(queryClient, myTasksOwnerId, "DELETE", task);
+      }
+      queryClient.removeQueries({ queryKey: taskTimeKeys.byTask(task.id) });
+      queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      recalcProjectProgress(task.project_id);
+      toast.success("تم حذف المهمة");
+      onTaskDeleted?.(deletedTaskId);
+      onClose();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      toast.error(`ما نجح حذف المهمة: ${message}`);
+    }
+  };
+
   const handleComment = async () => {
     if (!comment.trim()) return;
     setSendingComment(true);
@@ -380,8 +411,8 @@ export function TaskModal({ task, profiles, onClose, onTaskSaved, myTasksOwnerId
       >
         
         {/* Header Actions */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-slate-100 shrink-0">
+          <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
             <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors">
               <X size={20} />
             </button>
@@ -397,8 +428,17 @@ export function TaskModal({ task, profiles, onClose, onTaskSaved, myTasksOwnerId
           </div>
           
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleDeleteTask}
+              disabled={deleteTaskMutation.isPending || updateTaskMutation.isPending}
+              className="flex items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-bold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-60"
+            >
+              {deleteTaskMutation.isPending ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+              حذف
+            </button>
             <button onClick={onClose} className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 font-medium transition-colors">إلغاء</button>
-            <button onClick={handleSave} disabled={updateTaskMutation.isPending}
+            <button onClick={handleSave} disabled={updateTaskMutation.isPending || deleteTaskMutation.isPending}
               className="px-6 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 font-medium disabled:opacity-60 flex items-center gap-2 transition-colors shadow-sm active:scale-95">
               {updateTaskMutation.isPending && <Loader2 size={15} className="animate-spin" />}
               حفظ التغييرات

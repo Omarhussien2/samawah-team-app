@@ -335,6 +335,7 @@ export function MyTasksClient({ tasks: initialTasks, currentUser, profiles }: Pr
           task={selectedTask}
           profiles={profiles}
           onClose={() => setSelectedTaskId(null)}
+          onTaskDeleted={() => setSelectedTaskId(null)}
           myTasksOwnerId={currentUser.id}
         />
       )}

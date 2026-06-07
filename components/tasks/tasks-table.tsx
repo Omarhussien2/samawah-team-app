@@ -475,6 +475,7 @@ export function TasksTable({
           task={selectedTask}
           profiles={profiles}
           onClose={() => setSelectedTaskId(null)}
+          onTaskDeleted={() => setSelectedTaskId(null)}
         />
       )}
     </>

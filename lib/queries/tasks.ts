@@ -93,6 +93,23 @@ export async function updateTask(taskId: string, payload: TaskUpdatePayload): Pr
   return data as TaskWithRelations;
 }
 
+export async function deleteTask(taskId: string): Promise<string> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("tasks")
+    .delete()
+    .eq("id", taskId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) {
+    throw new Error("لم يتم العثور على المهمة أو لا تملك صلاحية حذفها");
+  }
+
+  return data.id;
+}
+
 export function markTaskDone(taskId: string) {
   return updateTask(taskId, { status: "Done", board_column: "Done", progress: 100 });
 }
@@ -205,6 +222,12 @@ export function applyTaskToTaskQueries(queryClient: QueryClient, task: TaskWithR
   if (task.owner_id) {
     applyTaskListChange(queryClient, taskKeys.myTasks(task.owner_id), "UPDATE", task, { ownerId: task.owner_id });
   }
+}
+
+export function removeTaskFromTaskQueries(queryClient: QueryClient, task: Pick<TaskWithRelations, "id">) {
+  queryClient.setQueriesData<TaskWithRelations[]>({ queryKey: taskKeys.all }, (old) =>
+    removeTaskFromList(old, task.id)
+  );
 }
 
 export function applyCreatedTaskToTaskQueries(queryClient: QueryClient, task: TaskWithRelations) {

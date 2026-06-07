@@ -504,6 +504,7 @@ export function TasksTimelineChart({ tasks, profiles, className }: Props) {
           task={selectedTask}
           profiles={profiles}
           onClose={() => setSelectedTaskId(null)}
+          onTaskDeleted={() => setSelectedTaskId(null)}
         />
       )}
     </div>

@@ -267,6 +267,7 @@ export function KanbanBoard({ tasks: initialTasks, projectId, profiles }: Props)
           task={selectedTask}
           profiles={profiles}
           onClose={() => setSelectedTaskId(null)}
+          onTaskDeleted={() => setSelectedTaskId(null)}
         />
       )}
       <QuickAddTaskModal
