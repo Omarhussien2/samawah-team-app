@@ -18,12 +18,13 @@ interface Props {
 
 const STATUSES = ["active", "paused", "completed", "cancelled"];
 
-export function ProjectsClient({ projects, profiles, templates, currentUser: _currentUser }: Props) {
+export function ProjectsClient({ projects, profiles, templates, currentUser }: Props) {
   const [view, setView] = useState<"card" | "list" | "timeline">("card");
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterManager, setFilterManager] = useState("");
   const [showCreate, setShowCreate] = useState(false);
+  const canCreateProject = currentUser.role === "admin" || currentUser.role === "project_manager";
 
   const filtered = useMemo(() => {
     const matchesSearch = createSearchMatcher(search);
@@ -67,13 +68,15 @@ export function ProjectsClient({ projects, profiles, templates, currentUser: _cu
             <p className="text-slate-500 text-sm font-medium mt-0.5">{filtered.length} مشروع متاح</p>
           </div>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-medium text-sm transition-colors shadow-sm active:scale-95"
-        >
-          <Plus size={18} />
-          مشروع جديد
-        </button>
+        {canCreateProject && (
+          <button
+            onClick={() => setShowCreate(true)}
+            className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-medium text-sm transition-colors shadow-sm active:scale-95"
+          >
+            <Plus size={18} />
+            مشروع جديد
+          </button>
+        )}
       </div>
 
       {/* Toolbar */}
@@ -156,7 +159,11 @@ export function ProjectsClient({ projects, profiles, templates, currentUser: _cu
               <FolderKanban size={32} className="text-slate-300" />
             </div>
             <h3 className="text-lg font-bold text-slate-800 mb-1">لا توجد مشاريع</h3>
-            <p className="text-sm text-slate-500 max-w-sm">لم يتم العثور على مشاريع مطابقة للبحث أو الفلتر، ابدأ بإنشاء مشروع جديد.</p>
+            <p className="text-sm text-slate-500 max-w-sm">
+              {canCreateProject
+                ? "لم يتم العثور على مشاريع مطابقة للبحث أو الفلتر، يمكنك إنشاء مشروع جديد."
+                : "لا توجد مشاريع ظاهرة لك حاليا. ستظهر هنا المشاريع التي تديرها أو تشارك فيها."}
+            </p>
           </div>
         ) : view === "card" ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -195,6 +202,7 @@ export function ProjectsClient({ projects, profiles, templates, currentUser: _cu
         open={showCreate}
         onClose={() => setShowCreate(false)}
         profiles={profiles}
+        currentUser={currentUser}
         templates={templates}
       />
     </div>

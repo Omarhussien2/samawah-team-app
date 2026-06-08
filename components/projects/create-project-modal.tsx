@@ -36,23 +36,41 @@ interface Props {
   open: boolean;
   onClose: () => void;
   profiles: Pick<Profile, "id" | "full_name">[];
+  currentUser: Pick<Profile, "id" | "full_name" | "role">;
   templates: (ProjectTemplate & { task_templates: { id: string; title: string }[] })[];
 }
 
-export function CreateProjectModal({ open, onClose, profiles, templates }: Props) {
+export function CreateProjectModal({ open, onClose, profiles, currentUser, templates }: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const canCreateProject = currentUser.role === "admin" || currentUser.role === "project_manager";
+  const defaultManagerId = currentUser.role === "project_manager" ? currentUser.id : "";
+  const managerOptions =
+    currentUser.role === "admin"
+      ? profiles
+      : [{ id: currentUser.id, full_name: currentUser.full_name ?? "المستخدم الحالي" }];
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
+    defaultValues: {
+      manager_id: defaultManagerId,
+      total_budget: 0,
+    },
   });
 
   if (!open) return null;
 
   const onSubmit = async (data: FormData) => {
     setLoading(true);
+    if (!canCreateProject) {
+      toast.error("إنشاء المشاريع متاح لمدير النظام أو مدير المشاريع فقط");
+      setLoading(false);
+      return;
+    }
+
     const supabase = createClient();
-    const manager = profiles.find((p) => p.id === data.manager_id);
+    const managerId = currentUser.role === "project_manager" ? currentUser.id : data.manager_id || null;
+    const manager = managerOptions.find((p) => p.id === managerId);
 
     const budget = normalizeMoney(data.total_budget);
 
@@ -60,7 +78,7 @@ export function CreateProjectModal({ open, onClose, profiles, templates }: Props
       .from("projects")
       .insert({
         name: data.name,
-        manager_id: data.manager_id || null,
+        manager_id: managerId,
         manager_name: manager?.full_name ?? null,
         current_stage: data.current_stage || null,
         start_date: data.start_date || null,
@@ -73,7 +91,10 @@ export function CreateProjectModal({ open, onClose, profiles, templates }: Props
       .single();
 
     if (error) {
-      toast.error(`فشل إنشاء المشروع: ${error.message}`);
+      const message = error.message.includes("row-level security")
+        ? "ليست لديك صلاحية إنشاء مشروع. تواصل مع مدير النظام لتعديل الدور."
+        : `فشل إنشاء المشروع: ${error.message}`;
+      toast.error(message);
       setLoading(false);
       return;
     }
@@ -95,7 +116,7 @@ export function CreateProjectModal({ open, onClose, profiles, templates }: Props
     }
 
     toast.success("تم إنشاء المشروع بنجاح");
-    reset();
+    reset({ manager_id: defaultManagerId, total_budget: 0 });
     onClose();
     router.refresh();
     setLoading(false);
@@ -118,13 +139,22 @@ export function CreateProjectModal({ open, onClose, profiles, templates }: Props
             {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name.message}</p>}
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1.5">مدير المشروع</label>
-            <select {...register("manager_id")} className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white">
-              <option value="">اختر المدير</option>
-              {profiles.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
-            </select>
-          </div>
+          {currentUser.role === "admin" ? (
+            <div>
+              <label className="block text-sm font-medium mb-1.5">مدير المشروع</label>
+              <select {...register("manager_id")} className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white">
+                <option value="">اختر المدير</option>
+                {managerOptions.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+              </select>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-medium mb-1.5">مدير المشروع</label>
+              <div className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
+                {currentUser.full_name ?? "المستخدم الحالي"}
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
