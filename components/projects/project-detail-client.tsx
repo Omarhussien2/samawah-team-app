@@ -221,9 +221,11 @@ export function ProjectDetailClient({
       </div>
 
       {/* Header */}
-      <div className="bg-white rounded-3xl border border-slate-200 p-6 md:p-8 mb-8 shadow-sm relative overflow-hidden">
+      <div className="bg-white rounded-3xl border border-slate-200 p-6 md:p-8 mb-8 shadow-sm relative overflow-visible z-20">
         {/* Decorative elements */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+        <div className="absolute inset-0 overflow-hidden rounded-3xl pointer-events-none">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+        </div>
         
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex items-center gap-5">
@@ -302,7 +304,7 @@ export function ProjectDetailClient({
                 <MoreHorizontal size={20} />
               </button>
               {menuOpen && (
-                <div className="absolute top-12 left-0 bg-white border border-slate-200 rounded-xl shadow-lg py-1 min-w-[160px] z-50">
+                <div className="absolute top-full left-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-lg py-1 min-w-[170px] z-[80]">
                   <button
                     onClick={openEdit}
                     className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
