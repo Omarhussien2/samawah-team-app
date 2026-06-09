@@ -21,7 +21,6 @@ import {
   MousePointerClick,
   ShieldAlert,
   SlidersHorizontal,
-  Sparkles,
   TrendingUp,
   Users,
   Wallet,
@@ -717,7 +716,6 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
   const SelectedViewIcon = selectedViewOption.icon;
   const roleLabel =
     user.role === "admin" ? "مدير منصة" : user.role === "project_manager" ? "مدير مشاريع" : "عضو فريق";
-  const analyticsHref = buildAnalyticsHref();
   const homeHref = selectedView === defaultView ? "/dashboard" : `/dashboard?view=${selectedView}`;
   const riskProjectsCount = projectInfos.filter((info) => info.health === "risk").length;
   const watchProjectsCount = projectInfos.filter((info) => info.health === "watch").length;
@@ -788,10 +786,12 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
               <span className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-bold text-slate-600">
                 {roleLabel}
               </span>
-              <span className="rounded-lg border border-indigo-100 bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700">
-                <SelectedViewIcon className="ml-1 inline" size={13} />
-                {selectedViewOption.label}
-              </span>
+              {isAnalyticsPage && (
+                <span className="rounded-lg border border-indigo-100 bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700">
+                  <SelectedViewIcon className="ml-1 inline" size={13} />
+                  {selectedViewOption.label}
+                </span>
+              )}
               <span className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-500">
                 {format(new Date(), "EEEE، d MMMM yyyy", { locale: ar })}
               </span>
@@ -799,11 +799,11 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
             <h1 className="mt-3 text-2xl font-black text-slate-950 font-heading">
               {isAnalyticsPage ? "التحليلات" : `${greeting}، ${firstName}`}
             </h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-              {isAnalyticsPage
-                ? "قراءة مركزة للمشاريع والمهام والميزانية والفريق حسب الفلاتر الحالية."
-                : "مركز عمل مختصر يعرض ما يحتاج انتباهك الآن بدون تشارتس أو تفاصيل زائدة."}
-            </p>
+            {isAnalyticsPage && (
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
+                قراءة مركزة للمشاريع والمهام والميزانية والفريق حسب الفلاتر الحالية.
+              </p>
+            )}
           </div>
 
           <div className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 lg:max-w-[430px]">
@@ -849,59 +849,57 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-600">
-            <Sparkles size={16} className="text-primary" />
-            <span>{isAnalyticsPage ? "التحليلات تستخدم نفس الفلاتر ولا تغير الصلاحيات." : "وضع العرض لا يغير الصلاحيات، فقط يرتب الصفحة حول ما يهمك الآن."}</span>
-          </div>
-          <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
-            <Link
-              href={isAnalyticsPage ? homeHref : analyticsHref}
-              className="flex h-10 items-center justify-center gap-2 rounded-lg border border-primary/20 bg-primary/10 px-3 text-sm font-bold text-primary hover:bg-primary/15"
-            >
-              {isAnalyticsPage ? <FolderKanban size={16} /> : <BarChart3 size={16} />}
-              {isAnalyticsPage ? "العودة للرئيسية" : "فتح التحليلات"}
-            </Link>
-            <div className="flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1">
-            {allowedViews.map((view) => {
-              const option = viewOptions[view];
-              const Icon = option.icon;
-              const active = selectedView === view;
-              return (
-                <button
-                  key={view}
-                  onClick={() =>
-                    setQuery({
-                      view,
-                      focus: null,
-                      status: null,
-                      priority: null,
-                      owner: null,
-                      period: null,
-                      project: null,
-                      projectStatus: null,
-                      insights: null,
-                      analytics: null,
-                    })
-                  }
-                  className={cn(
-                    "flex min-w-[132px] items-center gap-2 rounded-lg px-3 py-2 text-right text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-                    active
-                      ? "bg-white text-primary shadow-sm"
-                      : "text-slate-600 hover:bg-white/70 hover:text-slate-900"
-                  )}
-                >
-                  <Icon size={17} />
-                  <span>
-                    <span className="block font-bold">{option.label}</span>
-                    <span className="block text-[11px] opacity-75">{option.description}</span>
-                  </span>
-                </button>
-              );
-            })}
+        {isAnalyticsPage && (
+          <div className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-end">
+            <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
+              <Link
+                href={homeHref}
+                className="flex h-10 items-center justify-center gap-2 rounded-lg border border-primary/20 bg-primary/10 px-3 text-sm font-bold text-primary hover:bg-primary/15"
+              >
+                <FolderKanban size={16} />
+                العودة للرئيسية
+              </Link>
+              <div className="flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1">
+                {allowedViews.map((view) => {
+                  const option = viewOptions[view];
+                  const Icon = option.icon;
+                  const active = selectedView === view;
+                  return (
+                    <button
+                      key={view}
+                      onClick={() =>
+                        setQuery({
+                          view,
+                          focus: null,
+                          status: null,
+                          priority: null,
+                          owner: null,
+                          period: null,
+                          project: null,
+                          projectStatus: null,
+                          insights: null,
+                          analytics: null,
+                        })
+                      }
+                      className={cn(
+                        "flex min-w-[132px] items-center gap-2 rounded-lg px-3 py-2 text-right text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+                        active
+                          ? "bg-white text-primary shadow-sm"
+                          : "text-slate-600 hover:bg-white/70 hover:text-slate-900"
+                      )}
+                    >
+                      <Icon size={17} />
+                      <span>
+                        <span className="block font-bold">{option.label}</span>
+                        <span className="block text-[11px] opacity-75">{option.description}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {!isAnalyticsPage && (
@@ -1085,7 +1083,7 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
                 {focus === "projects" && "المشاريع حسب الفلتر"}
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                {focusResultCount.toLocaleString("ar")} نتيجة مرتبطة بوضع العرض والفلاتر الحالية.
+                {focusResultCount.toLocaleString("ar")} نتيجة مرتبطة بالنطاق والفلاتر الحالية.
               </p>
             </div>
             <div className="flex items-center gap-2">
