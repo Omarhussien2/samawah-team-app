@@ -68,6 +68,13 @@ Three cron jobs defined in `vercel.json` hitting `/api/cron/*`. Require `CRON_SE
 - Only one test file exists: `tests/recalc-progress.test.ts`
 - Tests are pure/unit only (no Supabase calls mocked)
 
+## Guard Skills
+
+- Use `$samawah-guard-suite` as the project release gate after implementation work and before presenting, committing, pushing, or merging meaningful changes.
+- `$samawah-guard-suite` adapts `clean-code-guard`, `test-guard`, and `docs-guard` to Samawah's Next.js, Supabase, Arabic RTL, dashboard, and release rules.
+- Use `$clean-code-guard`, `$test-guard`, or `$docs-guard` directly only when the user asks for one focused guard instead of the full Samawah gate.
+- `$wp-guard` and `$woo-guard` are installed from `amElnagdy/guard-skills`, but only use them if the diff actually contains WordPress or WooCommerce code.
+
 ## Gotchas
 
 - `lib/supabase/types.ts` is **manually maintained**, not generated. If you change `supabase/schema.sql`, update types.ts too.

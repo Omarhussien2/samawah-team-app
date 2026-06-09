@@ -1,0 +1,4 @@
+interface:
+  display_name: "Samawah Guard Suite"
+  short_description: "Samawah-specific guard pass for code, tests, docs, Supabase, and Arabic RTL UX"
+  default_prompt: "Use $samawah-guard-suite on the current Samawah Team App diff before presenting, committing, pushing, or merging."
