@@ -15,6 +15,7 @@ import type { Project } from "@/lib/supabase/types";
 
 const globalNavItems = [
   { href: "/dashboard",     label: "الرئيسية",   icon: LayoutDashboard },
+  { href: "/dashboard/analytics", label: "التحليلات", icon: BarChart3 },
   { href: "/projects",      label: "المشاريع",   icon: FolderKanban },
   { href: "/kpis",          label: "مركز المؤشرات", icon: BarChart3 },
   { href: "/my-tasks",      label: "مهامي",      icon: CheckSquare },
