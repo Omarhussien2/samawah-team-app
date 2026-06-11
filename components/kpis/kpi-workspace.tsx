@@ -22,7 +22,7 @@ import { buildOperationsKpiValues, buildProductKpiValues, buildQuarterlyKpiValue
 import { calculateProjectPerformance } from "@/lib/kpis/operations";
 import { getQuarterPeriodForDate } from "@/lib/kpis/periods";
 import { formatKpiValue, getValueForKpi } from "@/lib/kpis/status";
-import { cn } from "@/lib/utils";
+import { PROJECT_TYPE_OPTIONS, cn, getProjectTypeLabel } from "@/lib/utils";
 import {
   deleteIndicatorProduct,
   deleteProjectPerformanceUpdate,
@@ -414,6 +414,7 @@ function OperationsWorkspace({
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<ProjectPerformanceRecord | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [projectTypeFilter, setProjectTypeFilter] = useState<Project["project_type"] | "all">("all");
   const performanceKey = kpiKeys.projectPerformance(periodType, periodStart, periodEnd);
   const { data: projects = [] } = useQuery({
     queryKey: [...kpiKeys.all, "active-projects"],
@@ -484,11 +485,21 @@ function OperationsWorkspace({
     onError: showMutationError("تعذر حذف تحديث الأداء"),
   });
 
-  const calculatedRows = records.map((record) => ({ record, metrics: calculateProjectPerformance(record) }));
+  const filteredProjects = projects.filter(
+    (project) => projectTypeFilter === "all" || project.project_type === projectTypeFilter
+  );
+  const filteredProjectIds = new Set(filteredProjects.map((project) => project.id));
+  const visibleRecords = records.filter(
+    (record) =>
+      projectTypeFilter === "all" ||
+      record.project?.project_type === projectTypeFilter ||
+      filteredProjectIds.has(record.project_id)
+  );
+  const calculatedRows = visibleRecords.map((record) => ({ record, metrics: calculateProjectPerformance(record) }));
   const cpiAverage = average(calculatedRows.map(({ metrics }) => metrics.cpi));
   const spiAverage = average(calculatedRows.map(({ metrics }) => metrics.spi));
   const stats = [
-    { label: "تحديثات الأداء", value: records.length },
+    { label: "تحديثات الأداء", value: visibleRecords.length },
     { label: "متوسط CPI", value: cpiAverage === null ? "غير متاح" : cpiAverage.toFixed(2) },
     { label: "متوسط SPI", value: spiAverage === null ? "غير متاح" : spiAverage.toFixed(2) },
   ];
@@ -510,10 +521,30 @@ function OperationsWorkspace({
       periodType={periodType}
     >
       <RecordsTable
+        toolbar={
+          <div className="mb-4 flex justify-end">
+            <Select
+              value={projectTypeFilter}
+              onValueChange={(value) => setProjectTypeFilter(value as Project["project_type"] | "all")}
+            >
+              <SelectTrigger className="w-full sm:w-56">
+                <SelectValue placeholder="نوع المشروع" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">كل أنواع المشاريع</SelectItem>
+                {PROJECT_TYPE_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        }
         headers={["المشروع", "المخطط/الفعلي", "التكلفة", "CPI", "SPI", "الحالة"]}
         rows={calculatedRows}
         renderRow={({ record, metrics }) => [
-          <RecordTitle key="project" title={record.project?.name ?? "مشروع بدون اسم"} subtitle={`${record.period_type === "monthly" ? "شهري" : "ربع سنوي"} · ${record.period_start}`} />,
+          <RecordTitle key="project" title={record.project?.name ?? "مشروع بدون اسم"} subtitle={`${getProjectTypeLabel(record.project?.project_type)} · ${record.period_type === "monthly" ? "شهري" : "ربع سنوي"} · ${record.period_start}`} />,
           `${record.planned_progress}% / ${record.actual_progress}%`,
           formatKpiValue(record.actual_cost, "ريال"),
           metrics.cpi === null ? "غير متاح" : metrics.cpi.toFixed(2),
@@ -538,14 +569,14 @@ function OperationsWorkspace({
             label: "المشروع",
             type: "select",
             required: true,
-            options: projects.map((project) => ({ value: project.id, label: project.name })),
+            options: filteredProjects.map((project) => ({ value: project.id, label: `${project.name} - ${getProjectTypeLabel(project.project_type)}` })),
           },
           { name: "planned_progress", label: "الإنجاز المخطط %", type: "number" },
           { name: "actual_progress", label: "الإنجاز الفعلي %", type: "number" },
           { name: "actual_cost", label: "التكلفة الفعلية", type: "number" },
           { name: "notes", label: "ملاحظات", type: "textarea" },
         ]}
-        initialDraft={performanceToDraft(editing, projects[0]?.id)}
+        initialDraft={performanceToDraft(editing, filteredProjects[0]?.id)}
         isSaving={saveMutation.isPending}
         onOpenChange={setFormOpen}
         onSubmit={(draft) => saveMutation.mutate(draft)}
@@ -795,6 +826,7 @@ function WorkspaceShell({
 }
 
 function RecordsTable<T>({
+  toolbar,
   headers,
   rows,
   renderRow,
@@ -802,6 +834,7 @@ function RecordsTable<T>({
   onEdit,
   onDelete,
 }: {
+  toolbar?: ReactNode;
   headers: string[];
   rows: T[];
   renderRow: (row: T) => React.ReactNode[];
@@ -811,6 +844,7 @@ function RecordsTable<T>({
 }) {
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      {toolbar && <div className="border-b border-slate-100 p-4">{toolbar}</div>}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[860px] text-right text-sm">
           <thead className="bg-slate-50 text-xs font-bold text-slate-500">
@@ -1164,7 +1198,7 @@ function defaultFieldValue(field: FieldConfig, periodStart: string) {
 
 function attachProject(
   saved: ProjectPerformanceUpdate,
-  projects: Pick<Project, "id" | "name" | "manager_id" | "total_budget" | "progress">[]
+  projects: Pick<Project, "id" | "name" | "project_type" | "manager_id" | "total_budget" | "progress">[]
 ): ProjectPerformanceRecord {
   return {
     ...saved,

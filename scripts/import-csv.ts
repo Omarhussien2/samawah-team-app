@@ -32,6 +32,12 @@ function mapArabicStatus(status: string): string {
   return "Backlog";
 }
 
+function mapProjectType(type: string | null | undefined): "internal" | "external" {
+  const normalized = type?.trim().toLowerCase();
+  if (normalized && ["internal", "داخلية", "داخلي", "مشروع داخلي"].includes(normalized)) return "internal";
+  return "external";
+}
+
 async function importProjects(filePath: string) {
   console.log(`📂 قراءة ملف المشاريع: ${filePath}`);
   const content = fs.readFileSync(filePath, "utf-8");
@@ -53,6 +59,7 @@ async function importProjects(filePath: string) {
     const { error } = await supabase.from("projects").upsert({
       legacy_project_id: projectId,
       name,
+      project_type: mapProjectType(row["Project_Type"] ?? row["project_type"] ?? row["Type"] ?? row["type"] ?? row["نوع المشروع"]),
       manager_name: row["Manager"] ?? null,
       path: row["Project_Path"] ?? null,
       current_stage: row["Current_Stage"] ?? null,

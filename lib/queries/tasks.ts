@@ -7,7 +7,7 @@ export type TaskUpdatePayload = Database["public"]["Tables"]["tasks"]["Update"];
 export type TaskTimeEntryInsertPayload = Database["public"]["Tables"]["task_time_entries"]["Insert"];
 export type TaskTimeEntryUpdatePayload = Database["public"]["Tables"]["task_time_entries"]["Update"];
 export type TaskWithRelations = Task & {
-  project?: { id: string; name: string } | null;
+  project?: Pick<Database["public"]["Tables"]["projects"]["Row"], "id" | "name" | "project_type"> | null;
   owner?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null;
 };
 export type TaskTimeEntryWithUser = TaskTimeEntry & {
@@ -21,7 +21,7 @@ interface TaskListScope {
   ownerId?: string | null;
 }
 
-export const taskSelect = "*, project:projects(id,name), owner:profiles(id,full_name,avatar_url)";
+export const taskSelect = "*, project:projects(id,name,project_type), owner:profiles(id,full_name,avatar_url)";
 export const taskTimeEntrySelect =
   "*, user:profiles!task_time_entries_user_id_fkey(id,full_name,avatar_url), logger:profiles!task_time_entries_logged_by_fkey(id,full_name,avatar_url)";
 

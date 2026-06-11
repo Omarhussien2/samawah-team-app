@@ -5,7 +5,15 @@ import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, Wallet, Target, Activity, Users, MoreHorizontal, Pencil, Trash2, Clock } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import { formatDateShort, getProjectStatusLabel, cn, getAvatarUrl } from "@/lib/utils";
+import {
+  PROJECT_TYPE_OPTIONS,
+  cn,
+  formatDateShort,
+  getAvatarUrl,
+  getProjectStatusLabel,
+  getProjectTypeBadgeClass,
+  getProjectTypeLabel,
+} from "@/lib/utils";
 import { KanbanBoard } from "@/components/board/kanban-board";
 import { TasksTable } from "@/components/tasks/tasks-table";
 import { TasksTimelineChart } from "@/components/tasks/tasks-timeline-chart";
@@ -47,6 +55,7 @@ const budgetFieldSchema = z.preprocess(
 
 const editSchema = z.object({
   name: z.string().min(1, "اسم المشروع مطلوب"),
+  project_type: z.enum(["external", "internal"]),
   status: z.enum(["active", "paused", "completed", "cancelled"]),
   current_stage: z.string().optional(),
   start_date: z.string().optional(),
@@ -104,6 +113,7 @@ export function ProjectDetailClient({
     resolver: zodResolver(editSchema),
     defaultValues: {
       name: project.name,
+      project_type: project.project_type,
       status: project.status as "active" | "paused" | "completed" | "cancelled",
       current_stage: project.current_stage ?? "",
       start_date: project.start_date ?? "",
@@ -130,6 +140,7 @@ export function ProjectDetailClient({
 
     const { error } = await supabase.from("projects").update({
       name: data.name,
+      project_type: data.project_type,
       status: data.status,
       current_stage: data.current_stage || null,
       start_date: data.start_date || null,
@@ -166,6 +177,7 @@ export function ProjectDetailClient({
   const openEdit = () => {
     reset({
       name: project.name,
+      project_type: project.project_type,
       status: project.status as "active" | "paused" | "completed" | "cancelled",
       current_stage: project.current_stage ?? "",
       start_date: project.start_date ?? "",
@@ -245,6 +257,9 @@ export function ProjectDetailClient({
                   "bg-slate-100 text-slate-600 border-slate-200"
                 )}>
                   {getProjectStatusLabel(project.status)}
+                </span>
+                <span className={cn("text-xs px-2.5 py-1 rounded-md font-bold border", getProjectTypeBadgeClass(project.project_type))}>
+                  {getProjectTypeLabel(project.project_type)}
                 </span>
                 {project.current_stage && (
                   <span className="text-xs bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-md text-slate-600 font-medium">
@@ -537,6 +552,15 @@ export function ProjectDetailClient({
                 <label className="block text-sm font-medium mb-1.5">اسم المشروع *</label>
                 <input {...register("name")} className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary" />
                 {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name.message}</p>}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1.5">نوع المشروع</label>
+                <select {...register("project_type")} className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white">
+                  {PROJECT_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
               </div>
 
               <div>

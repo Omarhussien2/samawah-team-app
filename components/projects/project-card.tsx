@@ -1,5 +1,12 @@
 import Link from "next/link";
-import { formatDateShort, getProjectStatusLabel, cn, getAvatarUrl } from "@/lib/utils";
+import {
+  cn,
+  formatDateShort,
+  getAvatarUrl,
+  getProjectStatusLabel,
+  getProjectTypeBadgeClass,
+  getProjectTypeLabel,
+} from "@/lib/utils";
 import Image from "next/image";
 import type { Profile, Project } from "@/lib/supabase/types";
 import { CalendarDays, Users } from "lucide-react";
@@ -46,6 +53,9 @@ export function ProjectCard({ project }: Props) {
                 {project.current_stage && (
                   <p className="text-xs font-medium text-slate-500 mt-0.5">{project.current_stage}</p>
                 )}
+                <span className={cn("mt-2 inline-flex w-fit rounded-md border px-2 py-0.5 text-[11px] font-bold", getProjectTypeBadgeClass(project.project_type))}>
+                  {getProjectTypeLabel(project.project_type)}
+                </span>
               </div>
             </div>
           </div>

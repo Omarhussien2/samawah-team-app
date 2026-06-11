@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, ChevronDown, Download, FileText, Loader2, Plus, Search, Eye, Pencil, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
-import { cn, formatRelativeAr } from "@/lib/utils";
+import { cn, formatRelativeAr, getProjectTypeBadgeClass, getProjectTypeLabel } from "@/lib/utils";
 import { createSearchMatcher } from "@/lib/utils/search";
 import type { Profile, Project, ProjectFormTemplate } from "@/lib/supabase/types";
 import { FORM_STATUS_COLORS, FORM_STATUS_LABELS, type ProjectFormStatus } from "@/lib/project-forms/schema";
@@ -227,6 +227,9 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
                   <p className="text-sm font-bold text-slate-700">{project.manager?.full_name ?? "مدير المشروع"}</p>
                 </div>
               </div>
+              <span className={cn("rounded-xl border px-3 py-2 text-xs font-bold", getProjectTypeBadgeClass(project.project_type))}>
+                {getProjectTypeLabel(project.project_type)}
+              </span>
               {!canEdit && <span className="text-xs font-bold text-amber-600">يمكنك العرض فقط. التعبئة متاحة لمدير المشروع.</span>}
             </div>
           </div>

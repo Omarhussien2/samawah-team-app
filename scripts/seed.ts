@@ -49,6 +49,12 @@ function readSheet(name: string): Record<string, string>[] {
   return XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { defval: "" });
 }
 
+function mapProjectType(type: string | null | undefined): "internal" | "external" {
+  const normalized = type?.trim().toLowerCase();
+  if (normalized && ["internal", "داخلية", "داخلي", "مشروع داخلي"].includes(normalized)) return "internal";
+  return "external";
+}
+
 // ─── Helpers ───────────────────────────────────────────────────────────
 const statusMap: Record<string, string> = {
   "Execution": "active",
@@ -184,6 +190,7 @@ async function main() {
         id,
         legacy_project_id: legacyId,
         name: row.Name?.trim() || legacyId,
+        project_type: mapProjectType(row.Project_Type ?? row.project_type ?? row.Type ?? row.type ?? row["نوع المشروع"]),
         manager_id: null, // No auth users yet — will link later
         manager_name: row.Manager?.trim() || null,
         path: row.Project_Path?.trim() || null,

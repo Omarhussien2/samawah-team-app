@@ -5,9 +5,9 @@ import { LayoutGrid, List, Plus, Search, FolderKanban, Clock, X } from "lucide-r
 import { ProjectCard } from "./project-card";
 import { ProjectRow } from "./project-row";
 import { CreateProjectModal } from "./create-project-modal";
-import { getProjectStatusLabel } from "@/lib/utils";
+import { PROJECT_TYPE_OPTIONS, getProjectStatusLabel, getProjectTypeLabel } from "@/lib/utils";
 import { createSearchMatcher } from "@/lib/utils/search";
-import type { Profile, Project, ProjectTemplate } from "@/lib/supabase/types";
+import type { Profile, Project, ProjectTemplate, ProjectType } from "@/lib/supabase/types";
 
 interface Props {
   projects: (Project & { manager?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null })[];
@@ -22,6 +22,7 @@ export function ProjectsClient({ projects, profiles, templates, currentUser }: P
   const [view, setView] = useState<"card" | "list" | "timeline">("card");
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
+  const [filterType, setFilterType] = useState<ProjectType | "">("");
   const [filterManager, setFilterManager] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const canCreateProject = currentUser.role === "admin" || currentUser.role === "project_manager";
@@ -40,15 +41,18 @@ export function ProjectsClient({ projects, profiles, templates, currentUser }: P
           p.description,
           p.status,
           getProjectStatusLabel(p.status),
+          p.project_type,
+          getProjectTypeLabel(p.project_type),
         ])
       ) {
         return false;
       }
       if (filterStatus && p.status !== filterStatus) return false;
+      if (filterType && p.project_type !== filterType) return false;
       if (filterManager && p.manager_id !== filterManager) return false;
       return true;
     });
-  }, [projects, search, filterStatus, filterManager]);
+  }, [projects, search, filterStatus, filterType, filterManager]);
 
   const managers = useMemo(() => {
     const ids = new Set(projects.map((p) => p.manager_id).filter(Boolean));
@@ -110,6 +114,17 @@ export function ProjectsClient({ projects, profiles, templates, currentUser }: P
           <option value="">كل الحالات</option>
           {STATUSES.map((s) => (
             <option key={s} value={s}>{getProjectStatusLabel(s)}</option>
+          ))}
+        </select>
+
+        <select
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value as ProjectType | "")}
+          className="px-3 py-2 text-sm font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 bg-white cursor-pointer hover:border-slate-300 transition-colors"
+        >
+          <option value="">كل أنواع المشاريع</option>
+          {PROJECT_TYPE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
           ))}
         </select>
 

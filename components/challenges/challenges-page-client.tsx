@@ -20,13 +20,20 @@ import {
 import { buildChallengeRiskKpiValues } from "@/lib/kpis/auto-calculations";
 import { getCurrentKpiPeriod } from "@/lib/kpis/periods";
 import { fetchChallengeRiskRecords, upsertKpiValues } from "@/lib/queries/kpis";
-import { formatRelativeAr, getChallengeStatusLabel, cn } from "@/lib/utils";
+import {
+  PROJECT_TYPE_OPTIONS,
+  cn,
+  formatRelativeAr,
+  getChallengeStatusLabel,
+  getProjectTypeBadgeClass,
+  getProjectTypeLabel,
+} from "@/lib/utils";
 import { createSearchMatcher } from "@/lib/utils/search";
 import type { Challenge, Database, KpiDefinition, Profile, Project } from "@/lib/supabase/types";
 
 type ChallengeWithRelations = Challenge & {
   owner?: { id: string; full_name: string | null } | null;
-  project?: { id: string; name: string } | null;
+  project?: Pick<Project, "id" | "name" | "project_type"> | null;
   task?: { id: string; title: string } | null;
   kpi?: { id: string; name: string; code: string } | null;
 };
@@ -49,7 +56,7 @@ type ChallengeDraft = {
 interface Props {
   challenges: ChallengeWithRelations[];
   profiles: Pick<Profile, "id" | "full_name" | "avatar_url">[];
-  projects: Pick<Project, "id" | "name">[];
+  projects: Pick<Project, "id" | "name" | "project_type">[];
   kpiDefinitions: KpiDefinition[];
   currentUser: Profile;
 }
@@ -90,10 +97,16 @@ export function ChallengesPageClient({ challenges, profiles: _profiles, projects
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterLevel, setFilterLevel] = useState("");
+  const [filterProjectType, setFilterProjectType] = useState("");
+  const [filterProject, setFilterProject] = useState("");
   const [editing, setEditing] = useState<ChallengeWithRelations | null>(null);
   const [draft, setDraft] = useState<ChallengeDraft>(DEFAULT_DRAFT);
   const [saving, setSaving] = useState(false);
-  const summary = useMemo(() => summarizeChallenges(challenges), [challenges]);
+
+  const visibleProjects = useMemo(
+    () => projects.filter((project) => !filterProjectType || project.project_type === filterProjectType),
+    [filterProjectType, projects]
+  );
 
   const filtered = useMemo(() => {
     const matchesSearch = createSearchMatcher(search);
@@ -104,6 +117,7 @@ export function ChallengesPageClient({ challenges, profiles: _profiles, projects
           challenge.title,
           challenge.description,
           challenge.project?.name,
+          getProjectTypeLabel(challenge.project?.project_type),
           challenge.task?.title,
           challenge.owner?.full_name,
           challenge.status,
@@ -119,13 +133,17 @@ export function ChallengesPageClient({ challenges, profiles: _profiles, projects
       }
       if (filterStatus && challenge.status !== filterStatus) return false;
       if (filterLevel && getChallengeRiskLevel(challenge) !== filterLevel) return false;
+      if (filterProjectType && challenge.project?.project_type !== filterProjectType) return false;
+      if (filterProject && challenge.project_id !== filterProject) return false;
       return true;
     });
-  }, [challenges, filterLevel, filterStatus, search]);
+  }, [challenges, filterLevel, filterProject, filterProjectType, filterStatus, search]);
+
+  const summary = useMemo(() => summarizeChallenges(filtered), [filtered]);
 
   const openCreate = () => {
     setEditing(null);
-    setDraft({ ...DEFAULT_DRAFT, project_id: projects[0]?.id ?? "", kpi_id: kpiDefinitions.find((kpi) => kpi.code === "OPS_RISK_COVERAGE")?.id ?? "" });
+    setDraft({ ...DEFAULT_DRAFT, project_id: visibleProjects[0]?.id ?? "", kpi_id: kpiDefinitions.find((kpi) => kpi.code === "OPS_RISK_COVERAGE")?.id ?? "" });
   };
 
   const openEdit = (challenge: ChallengeWithRelations) => {
@@ -268,6 +286,25 @@ export function ChallengesPageClient({ challenges, profiles: _profiles, projects
           <option value="medium">متوسط</option>
           <option value="low">منخفض</option>
         </select>
+        <select
+          value={filterProjectType}
+          onChange={(event) => {
+            setFilterProjectType(event.target.value);
+            setFilterProject("");
+          }}
+          className="rounded-lg border border-border bg-white px-3 py-2 text-sm"
+        >
+          <option value="">كل أنواع المشاريع</option>
+          {PROJECT_TYPE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+        <select value={filterProject} onChange={(event) => setFilterProject(event.target.value)} className="rounded-lg border border-border bg-white px-3 py-2 text-sm">
+          <option value="">كل المشاريع</option>
+          {visibleProjects.map((project) => (
+            <option key={project.id} value={project.id}>{project.name}</option>
+          ))}
+        </select>
       </div>
 
       {filtered.length === 0 ? (
@@ -324,6 +361,9 @@ function ChallengeCard({
             <span className="rounded-full bg-white/70 px-2 py-0.5 text-xs font-bold">{CHALLENGE_KIND_LABELS[challenge.kind ?? "challenge"]}</span>
             <span className={cn("rounded-full px-2 py-0.5 text-xs font-bold", STATUS_COLORS[challenge.status])}>
               {getChallengeStatusLabel(challenge.status)}
+            </span>
+            <span className={cn("rounded-full border px-2 py-0.5 text-xs font-bold", getProjectTypeBadgeClass(challenge.project?.project_type))}>
+              {getProjectTypeLabel(challenge.project?.project_type)}
             </span>
           </div>
           <h3 className="text-base font-extrabold text-slate-900">{challenge.title}</h3>
@@ -382,7 +422,7 @@ function ChallengeFormModal({
 }: {
   draft: ChallengeDraft;
   editing: ChallengeWithRelations | null;
-  projects: Pick<Project, "id" | "name">[];
+  projects: Pick<Project, "id" | "name" | "project_type">[];
   kpiDefinitions: KpiDefinition[];
   saving: boolean;
   onChange: (patch: Partial<ChallengeDraft>) => void;
@@ -407,7 +447,7 @@ function ChallengeFormModal({
           <Field label="المشروع">
             <select value={draft.project_id} onChange={(event) => onChange({ project_id: event.target.value })} className={cn(FIELD_CLASS, "bg-white")}>
               <option value="">اختر المشروع</option>
-              {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+              {projects.map((project) => <option key={project.id} value={project.id}>{project.name} - {getProjectTypeLabel(project.project_type)}</option>)}
             </select>
           </Field>
           <Field label="النوع">

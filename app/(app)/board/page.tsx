@@ -7,7 +7,7 @@ export default async function BoardPage() {
   const supabase = await createClient();
 
   const [{ data: tasks }, { data: profiles }] = await Promise.all([
-    supabase.from("tasks").select("*, owner:profiles(id,full_name,avatar_url), project:projects(id,name)").order("sort_order"),
+    supabase.from("tasks").select("*, owner:profiles(id,full_name,avatar_url), project:projects(id,name,project_type)").order("sort_order"),
     supabase.from("profiles").select("id,full_name,avatar_url").eq("active", true),
   ]);
 
