@@ -18,7 +18,7 @@ import {
 } from "@/lib/queries/tasks";
 import { getTaskDateDuration } from "@/lib/tasks/duration";
 import { normalizeMoney } from "@/lib/projects/budget";
-import { PROJECT_TYPE_OPTIONS, getProjectTypeLabel } from "@/lib/utils";
+import { PROJECT_TYPE_OPTIONS, getProjectType, getProjectTypeLabel } from "@/lib/utils";
 
 const schema = z.object({
   title: z.string().min(1, "اسم المهمة مطلوب"),
@@ -55,7 +55,7 @@ interface Props {
 export function QuickAddTaskModal({ open, onClose, defaultProjectId, onTaskCreated }: Props) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [projects, setProjects] = useState<{ id: string; name: string; project_type: "internal" | "external" }[]>([]);
+  const [projects, setProjects] = useState<{ id: string; name: string; project_type?: "internal" | "external" }[]>([]);
   const [projectTypeFilter, setProjectTypeFilter] = useState("all");
   const [profiles, setProfiles] = useState<{ id: string; full_name: string | null }[]>([]);
 
@@ -66,7 +66,7 @@ export function QuickAddTaskModal({ open, onClose, defaultProjectId, onTaskCreat
   const watchedStartDate = watch("start_date");
   const watchedDueDate = watch("due_date");
   const visibleProjects = useMemo(
-    () => projects.filter((project) => projectTypeFilter === "all" || project.project_type === projectTypeFilter),
+    () => projects.filter((project) => projectTypeFilter === "all" || getProjectType(project) === projectTypeFilter),
     [projectTypeFilter, projects]
   );
   const dateDuration = useMemo(
@@ -95,7 +95,7 @@ export function QuickAddTaskModal({ open, onClose, defaultProjectId, onTaskCreat
     if (!open) return;
     const supabase = createClient();
     Promise.all([
-      supabase.from("projects").select("id, name, project_type").eq("status", "active").order("name"),
+      supabase.from("projects").select("id, name").eq("status", "active").order("name"),
       supabase.from("profiles").select("id, full_name").eq("active", true).order("full_name"),
     ]).then(([{ data: p }, { data: u }]) => {
       setProjects(p ?? []);
@@ -174,7 +174,7 @@ export function QuickAddTaskModal({ open, onClose, defaultProjectId, onTaskCreat
             <select {...register("project_id")} className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white">
               <option value="">اختر المشروع</option>
               {(defaultProjectId ? projects : visibleProjects).map((p) => (
-                <option key={p.id} value={p.id}>{p.name} - {getProjectTypeLabel(p.project_type)}</option>
+                <option key={p.id} value={p.id}>{p.name} - {getProjectTypeLabel(getProjectType(p))}</option>
               ))}
             </select>
             {errors.project_id && <p className="text-xs text-red-500 mt-1">{errors.project_id.message}</p>}

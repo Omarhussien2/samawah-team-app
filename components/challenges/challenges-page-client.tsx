@@ -25,6 +25,7 @@ import {
   cn,
   formatRelativeAr,
   getChallengeStatusLabel,
+  getProjectType,
   getProjectTypeBadgeClass,
   getProjectTypeLabel,
 } from "@/lib/utils";
@@ -33,7 +34,7 @@ import type { Challenge, Database, KpiDefinition, Profile, Project } from "@/lib
 
 type ChallengeWithRelations = Challenge & {
   owner?: { id: string; full_name: string | null } | null;
-  project?: Pick<Project, "id" | "name" | "project_type"> | null;
+  project?: Pick<Project, "id" | "name"> & Partial<Pick<Project, "project_type">> | null;
   task?: { id: string; title: string } | null;
   kpi?: { id: string; name: string; code: string } | null;
 };
@@ -56,7 +57,7 @@ type ChallengeDraft = {
 interface Props {
   challenges: ChallengeWithRelations[];
   profiles: Pick<Profile, "id" | "full_name" | "avatar_url">[];
-  projects: Pick<Project, "id" | "name" | "project_type">[];
+  projects: (Pick<Project, "id" | "name"> & Partial<Pick<Project, "project_type">>)[];
   kpiDefinitions: KpiDefinition[];
   currentUser: Profile;
 }
@@ -104,7 +105,7 @@ export function ChallengesPageClient({ challenges, profiles: _profiles, projects
   const [saving, setSaving] = useState(false);
 
   const visibleProjects = useMemo(
-    () => projects.filter((project) => !filterProjectType || project.project_type === filterProjectType),
+    () => projects.filter((project) => !filterProjectType || getProjectType(project) === filterProjectType),
     [filterProjectType, projects]
   );
 
@@ -117,7 +118,7 @@ export function ChallengesPageClient({ challenges, profiles: _profiles, projects
           challenge.title,
           challenge.description,
           challenge.project?.name,
-          getProjectTypeLabel(challenge.project?.project_type),
+          getProjectTypeLabel(getProjectType(challenge.project)),
           challenge.task?.title,
           challenge.owner?.full_name,
           challenge.status,
@@ -133,7 +134,7 @@ export function ChallengesPageClient({ challenges, profiles: _profiles, projects
       }
       if (filterStatus && challenge.status !== filterStatus) return false;
       if (filterLevel && getChallengeRiskLevel(challenge) !== filterLevel) return false;
-      if (filterProjectType && challenge.project?.project_type !== filterProjectType) return false;
+      if (filterProjectType && getProjectType(challenge.project) !== filterProjectType) return false;
       if (filterProject && challenge.project_id !== filterProject) return false;
       return true;
     });
@@ -362,8 +363,8 @@ function ChallengeCard({
             <span className={cn("rounded-full px-2 py-0.5 text-xs font-bold", STATUS_COLORS[challenge.status])}>
               {getChallengeStatusLabel(challenge.status)}
             </span>
-            <span className={cn("rounded-full border px-2 py-0.5 text-xs font-bold", getProjectTypeBadgeClass(challenge.project?.project_type))}>
-              {getProjectTypeLabel(challenge.project?.project_type)}
+            <span className={cn("rounded-full border px-2 py-0.5 text-xs font-bold", getProjectTypeBadgeClass(getProjectType(challenge.project)))}>
+              {getProjectTypeLabel(getProjectType(challenge.project))}
             </span>
           </div>
           <h3 className="text-base font-extrabold text-slate-900">{challenge.title}</h3>
@@ -422,7 +423,7 @@ function ChallengeFormModal({
 }: {
   draft: ChallengeDraft;
   editing: ChallengeWithRelations | null;
-  projects: Pick<Project, "id" | "name" | "project_type">[];
+  projects: (Pick<Project, "id" | "name"> & Partial<Pick<Project, "project_type">>)[];
   kpiDefinitions: KpiDefinition[];
   saving: boolean;
   onChange: (patch: Partial<ChallengeDraft>) => void;
@@ -447,7 +448,7 @@ function ChallengeFormModal({
           <Field label="المشروع">
             <select value={draft.project_id} onChange={(event) => onChange({ project_id: event.target.value })} className={cn(FIELD_CLASS, "bg-white")}>
               <option value="">اختر المشروع</option>
-              {projects.map((project) => <option key={project.id} value={project.id}>{project.name} - {getProjectTypeLabel(project.project_type)}</option>)}
+              {projects.map((project) => <option key={project.id} value={project.id}>{project.name} - {getProjectTypeLabel(getProjectType(project))}</option>)}
             </select>
           </Field>
           <Field label="النوع">

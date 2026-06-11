@@ -8,7 +8,7 @@ export default async function MyTasksPage() {
 
   const { data: tasks } = await supabase
     .from("tasks")
-    .select("*, project:projects(id,name,project_type), owner:profiles(id,full_name,avatar_url)")
+    .select("*, project:projects(id,name), owner:profiles(id,full_name,avatar_url)")
     .eq("owner_id", user.id)
     .order("due_date", { ascending: true, nullsFirst: false });
 

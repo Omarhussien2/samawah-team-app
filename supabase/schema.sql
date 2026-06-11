@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS projects (
   id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   legacy_project_id TEXT UNIQUE,
   name              TEXT NOT NULL,
-  project_type      TEXT NOT NULL DEFAULT 'external' CHECK (project_type IN ('internal', 'external')),
+  project_type      TEXT NOT NULL DEFAULT 'internal' CHECK (project_type IN ('internal', 'external')),
   manager_id        UUID REFERENCES profiles(id) ON DELETE SET NULL,
   manager_name      TEXT,
   path              TEXT,
@@ -47,7 +47,10 @@ ALTER TABLE projects
   ADD COLUMN IF NOT EXISTS forms_owner_id UUID REFERENCES profiles(id) ON DELETE SET NULL;
 
 ALTER TABLE projects
-  ADD COLUMN IF NOT EXISTS project_type TEXT NOT NULL DEFAULT 'external';
+  ADD COLUMN IF NOT EXISTS project_type TEXT NOT NULL DEFAULT 'internal';
+
+ALTER TABLE projects
+  ALTER COLUMN project_type SET DEFAULT 'internal';
 
 DO $$
 BEGIN

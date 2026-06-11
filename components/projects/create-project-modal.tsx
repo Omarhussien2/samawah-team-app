@@ -34,6 +34,11 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
+function isMissingProjectTypeColumn(error: { message?: string; code?: string } | null): boolean {
+  const message = error?.message ?? "";
+  return error?.code === "PGRST204" || (message.includes("project_type") && message.includes("schema cache"));
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -55,7 +60,7 @@ export function CreateProjectModal({ open, onClose, profiles, currentUser, templ
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
-      project_type: "external",
+      project_type: "internal",
       manager_id: defaultManagerId,
       total_budget: 0,
     },
@@ -77,22 +82,45 @@ export function CreateProjectModal({ open, onClose, profiles, currentUser, templ
 
     const budget = normalizeMoney(data.total_budget);
 
-    const { data: project, error } = await supabase
+    const payload = {
+      name: data.name,
+      project_type: data.project_type,
+      manager_id: managerId,
+      manager_name: manager?.full_name ?? null,
+      current_stage: data.current_stage || null,
+      start_date: data.start_date || null,
+      end_date: data.end_date || null,
+      total_budget: budget,
+      description: data.description || null,
+      status: "active" as const,
+    };
+
+    let { data: project, error } = await supabase
       .from("projects")
-      .insert({
-        name: data.name,
-        project_type: data.project_type,
-        manager_id: managerId,
-        manager_name: manager?.full_name ?? null,
-        current_stage: data.current_stage || null,
-        start_date: data.start_date || null,
-        end_date: data.end_date || null,
-        total_budget: budget,
-        description: data.description || null,
-        status: "active",
-      })
+      .insert(payload)
       .select()
       .single();
+
+    if (isMissingProjectTypeColumn(error)) {
+      const payloadWithoutType = {
+        name: payload.name,
+        manager_id: payload.manager_id,
+        manager_name: payload.manager_name,
+        current_stage: payload.current_stage,
+        start_date: payload.start_date,
+        end_date: payload.end_date,
+        total_budget: payload.total_budget,
+        description: payload.description,
+        status: payload.status,
+      };
+      const retry = await supabase
+        .from("projects")
+        .insert(payloadWithoutType)
+        .select()
+        .single();
+      project = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
       const message = error.message.includes("row-level security")
@@ -120,7 +148,7 @@ export function CreateProjectModal({ open, onClose, profiles, currentUser, templ
     }
 
     toast.success("تم إنشاء المشروع بنجاح");
-    reset({ project_type: "external", manager_id: defaultManagerId, total_budget: 0 });
+    reset({ project_type: "internal", manager_id: defaultManagerId, total_budget: 0 });
     onClose();
     router.refresh();
     setLoading(false);

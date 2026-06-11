@@ -4,6 +4,7 @@ import {
   formatDateShort,
   getAvatarUrl,
   getProjectStatusLabel,
+  getProjectType,
   getProjectTypeBadgeClass,
   getProjectTypeLabel,
 } from "@/lib/utils";
@@ -53,8 +54,8 @@ export function ProjectCard({ project }: Props) {
                 {project.current_stage && (
                   <p className="text-xs font-medium text-slate-500 mt-0.5">{project.current_stage}</p>
                 )}
-                <span className={cn("mt-2 inline-flex w-fit rounded-md border px-2 py-0.5 text-[11px] font-bold", getProjectTypeBadgeClass(project.project_type))}>
-                  {getProjectTypeLabel(project.project_type)}
+                <span className={cn("mt-2 inline-flex w-fit rounded-md border px-2 py-0.5 text-[11px] font-bold", getProjectTypeBadgeClass(getProjectType(project)))}>
+                  {getProjectTypeLabel(getProjectType(project))}
                 </span>
               </div>
             </div>

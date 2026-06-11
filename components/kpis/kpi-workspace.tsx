@@ -22,7 +22,7 @@ import { buildOperationsKpiValues, buildProductKpiValues, buildQuarterlyKpiValue
 import { calculateProjectPerformance } from "@/lib/kpis/operations";
 import { getQuarterPeriodForDate } from "@/lib/kpis/periods";
 import { formatKpiValue, getValueForKpi } from "@/lib/kpis/status";
-import { PROJECT_TYPE_OPTIONS, cn, getProjectTypeLabel } from "@/lib/utils";
+import { PROJECT_TYPE_OPTIONS, cn, getProjectType, getProjectTypeLabel } from "@/lib/utils";
 import {
   deleteIndicatorProduct,
   deleteProjectPerformanceUpdate,
@@ -486,13 +486,13 @@ function OperationsWorkspace({
   });
 
   const filteredProjects = projects.filter(
-    (project) => projectTypeFilter === "all" || project.project_type === projectTypeFilter
+    (project) => projectTypeFilter === "all" || getProjectType(project) === projectTypeFilter
   );
   const filteredProjectIds = new Set(filteredProjects.map((project) => project.id));
   const visibleRecords = records.filter(
     (record) =>
       projectTypeFilter === "all" ||
-      record.project?.project_type === projectTypeFilter ||
+      getProjectType(record.project) === projectTypeFilter ||
       filteredProjectIds.has(record.project_id)
   );
   const calculatedRows = visibleRecords.map((record) => ({ record, metrics: calculateProjectPerformance(record) }));
@@ -544,7 +544,7 @@ function OperationsWorkspace({
         headers={["المشروع", "المخطط/الفعلي", "التكلفة", "CPI", "SPI", "الحالة"]}
         rows={calculatedRows}
         renderRow={({ record, metrics }) => [
-          <RecordTitle key="project" title={record.project?.name ?? "مشروع بدون اسم"} subtitle={`${getProjectTypeLabel(record.project?.project_type)} · ${record.period_type === "monthly" ? "شهري" : "ربع سنوي"} · ${record.period_start}`} />,
+          <RecordTitle key="project" title={record.project?.name ?? "مشروع بدون اسم"} subtitle={`${getProjectTypeLabel(getProjectType(record.project))} · ${record.period_type === "monthly" ? "شهري" : "ربع سنوي"} · ${record.period_start}`} />,
           `${record.planned_progress}% / ${record.actual_progress}%`,
           formatKpiValue(record.actual_cost, "ريال"),
           metrics.cpi === null ? "غير متاح" : metrics.cpi.toFixed(2),
@@ -569,7 +569,7 @@ function OperationsWorkspace({
             label: "المشروع",
             type: "select",
             required: true,
-            options: filteredProjects.map((project) => ({ value: project.id, label: `${project.name} - ${getProjectTypeLabel(project.project_type)}` })),
+            options: filteredProjects.map((project) => ({ value: project.id, label: `${project.name} - ${getProjectTypeLabel(getProjectType(project))}` })),
           },
           { name: "planned_progress", label: "الإنجاز المخطط %", type: "number" },
           { name: "actual_progress", label: "الإنجاز الفعلي %", type: "number" },
@@ -1198,7 +1198,7 @@ function defaultFieldValue(field: FieldConfig, periodStart: string) {
 
 function attachProject(
   saved: ProjectPerformanceUpdate,
-  projects: Pick<Project, "id" | "name" | "project_type" | "manager_id" | "total_budget" | "progress">[]
+  projects: (Pick<Project, "id" | "name" | "manager_id" | "total_budget" | "progress"> & Partial<Pick<Project, "project_type">>)[]
 ): ProjectPerformanceRecord {
   return {
     ...saved,

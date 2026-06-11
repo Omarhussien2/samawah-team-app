@@ -11,6 +11,7 @@ import {
   formatDateShort,
   getAvatarUrl,
   getProjectStatusLabel,
+  getProjectType,
   getProjectTypeBadgeClass,
   getProjectTypeLabel,
 } from "@/lib/utils";
@@ -67,6 +68,11 @@ const editSchema = z.object({
 
 type EditFormData = z.infer<typeof editSchema>;
 
+function isMissingProjectTypeColumn(error: { message?: string; code?: string } | null): boolean {
+  const message = error?.message ?? "";
+  return error?.code === "PGRST204" || (message.includes("project_type") && message.includes("schema cache"));
+}
+
 interface Props {
   project: Project & { manager?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null };
   tasks: TaskWithRelations[];
@@ -113,7 +119,7 @@ export function ProjectDetailClient({
     resolver: zodResolver(editSchema),
     defaultValues: {
       name: project.name,
-      project_type: project.project_type,
+      project_type: getProjectType(project),
       status: project.status as "active" | "paused" | "completed" | "cancelled",
       current_stage: project.current_stage ?? "",
       start_date: project.start_date ?? "",
@@ -138,7 +144,7 @@ export function ProjectDetailClient({
     const budget = normalizeMoney(data.total_budget);
     const manager = profiles.find((p) => p.id === data.manager_id);
 
-    const { error } = await supabase.from("projects").update({
+    const payload = {
       name: data.name,
       project_type: data.project_type,
       status: data.status,
@@ -149,7 +155,25 @@ export function ProjectDetailClient({
       description: data.description || null,
       manager_id: data.manager_id || null,
       manager_name: manager?.full_name ?? null,
-    }).eq("id", project.id);
+    };
+
+    let { error } = await supabase.from("projects").update(payload).eq("id", project.id);
+
+    if (isMissingProjectTypeColumn(error)) {
+      const payloadWithoutType = {
+        name: payload.name,
+        status: payload.status,
+        current_stage: payload.current_stage,
+        start_date: payload.start_date,
+        end_date: payload.end_date,
+        total_budget: payload.total_budget,
+        description: payload.description,
+        manager_id: payload.manager_id,
+        manager_name: payload.manager_name,
+      };
+      const retry = await supabase.from("projects").update(payloadWithoutType).eq("id", project.id);
+      error = retry.error;
+    }
 
     if (error) {
       toast.error(`فشل التحديث: ${error.message}`);
@@ -177,7 +201,7 @@ export function ProjectDetailClient({
   const openEdit = () => {
     reset({
       name: project.name,
-      project_type: project.project_type,
+      project_type: getProjectType(project),
       status: project.status as "active" | "paused" | "completed" | "cancelled",
       current_stage: project.current_stage ?? "",
       start_date: project.start_date ?? "",
@@ -258,8 +282,8 @@ export function ProjectDetailClient({
                 )}>
                   {getProjectStatusLabel(project.status)}
                 </span>
-                <span className={cn("text-xs px-2.5 py-1 rounded-md font-bold border", getProjectTypeBadgeClass(project.project_type))}>
-                  {getProjectTypeLabel(project.project_type)}
+                <span className={cn("text-xs px-2.5 py-1 rounded-md font-bold border", getProjectTypeBadgeClass(getProjectType(project)))}>
+                  {getProjectTypeLabel(getProjectType(project))}
                 </span>
                 {project.current_stage && (
                   <span className="text-xs bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-md text-slate-600 font-medium">
