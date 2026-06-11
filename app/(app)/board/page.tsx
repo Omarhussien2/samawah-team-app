@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth/get-user";
 import { KanbanBoard } from "@/components/board/kanban-board";
+import { attachRelationProjectTypes } from "@/lib/projects/project-type-store";
 
 export default async function BoardPage() {
   await getUser();
@@ -11,13 +12,15 @@ export default async function BoardPage() {
     supabase.from("profiles").select("id,full_name,avatar_url").eq("active", true),
   ]);
 
+  const tasksWithTypes = await attachRelationProjectTypes(tasks ?? []);
+
   return (
     <div className="page-container">
       <div className="section-header">
         <h1 className="text-2xl font-bold text-foreground">لوحة المهام</h1>
         <p className="text-muted-foreground text-sm">{tasks?.length ?? 0} مهمة</p>
       </div>
-      <KanbanBoard tasks={tasks ?? []} projectId="" profiles={profiles ?? []} />
+      <KanbanBoard tasks={tasksWithTypes} projectId="" profiles={profiles ?? []} />
     </div>
   );
 }

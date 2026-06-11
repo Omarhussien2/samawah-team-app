@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth/get-user";
 import { ProjectsClient } from "@/components/projects/projects-client";
+import { attachProjectTypes } from "@/lib/projects/project-type-store";
 
 export default async function ProjectsPage() {
   const { user } = await getUser();
@@ -15,10 +16,12 @@ export default async function ProjectsPage() {
     supabase.from("project_templates").select("*, task_templates(*)"),
   ]);
 
+  const projectsWithTypes = await attachProjectTypes(projects ?? []);
+
   return (
     <div className="page-container">
       <ProjectsClient
-        projects={projects ?? []}
+        projects={projectsWithTypes}
         profiles={profiles ?? []}
         templates={templates ?? []}
         currentUser={user}

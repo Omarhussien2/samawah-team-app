@@ -82,7 +82,7 @@ function normalizeProjectName(name: string | null | undefined): string {
     .toLowerCase();
 }
 
-function isValidProjectType(type: string | null | undefined): type is ProjectType {
+export function isValidProjectType(type: string | null | undefined): type is ProjectType {
   return type === "internal" || type === "external";
 }
 

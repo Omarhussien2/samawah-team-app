@@ -18,6 +18,7 @@ import {
 } from "@/lib/queries/tasks";
 import { getTaskDateDuration } from "@/lib/tasks/duration";
 import { normalizeMoney } from "@/lib/projects/budget";
+import { attachProjectTypesFromApi } from "@/lib/projects/project-type-client";
 import { PROJECT_TYPE_OPTIONS, getProjectType, getProjectTypeLabel } from "@/lib/utils";
 
 const schema = z.object({
@@ -97,8 +98,8 @@ export function QuickAddTaskModal({ open, onClose, defaultProjectId, onTaskCreat
     Promise.all([
       supabase.from("projects").select("id, name").eq("status", "active").order("name"),
       supabase.from("profiles").select("id, full_name").eq("active", true).order("full_name"),
-    ]).then(([{ data: p }, { data: u }]) => {
-      setProjects(p ?? []);
+    ]).then(async ([{ data: p }, { data: u }]) => {
+      setProjects(await attachProjectTypesFromApi(p ?? []));
       setProfiles(u ?? []);
     });
   }, [open]);

@@ -1,5 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
+import { attachRelationProjectTypesFromApi } from "@/lib/projects/project-type-client";
 import type { Database, Profile, Task, TaskTimeEntry } from "@/lib/supabase/types";
 
 export type TaskInsertPayload = Database["public"]["Tables"]["tasks"]["Insert"];
@@ -50,7 +51,7 @@ export async function fetchTasks({ projectId }: { projectId?: string | null } = 
   const { data, error } = await query.order("sort_order");
 
   if (error) throw error;
-  return (data ?? []) as TaskWithRelations[];
+  return attachRelationProjectTypesFromApi((data ?? []) as TaskWithRelations[]);
 }
 
 export async function fetchMyTasks(userId: string): Promise<TaskWithRelations[]> {
@@ -62,7 +63,7 @@ export async function fetchMyTasks(userId: string): Promise<TaskWithRelations[]>
     .order("due_date", { ascending: true, nullsFirst: false });
 
   if (error) throw error;
-  return (data ?? []) as TaskWithRelations[];
+  return attachRelationProjectTypesFromApi((data ?? []) as TaskWithRelations[]);
 }
 
 export async function fetchTaskById(taskId: string): Promise<TaskWithRelations> {
@@ -70,7 +71,8 @@ export async function fetchTaskById(taskId: string): Promise<TaskWithRelations> 
   const { data, error } = await supabase.from("tasks").select(taskSelect).eq("id", taskId).single();
 
   if (error) throw error;
-  return data as TaskWithRelations;
+  const [task] = await attachRelationProjectTypesFromApi([data as TaskWithRelations]);
+  return task;
 }
 
 export async function createTask(payload: TaskInsertPayload): Promise<TaskWithRelations> {
@@ -78,7 +80,8 @@ export async function createTask(payload: TaskInsertPayload): Promise<TaskWithRe
   const { data, error } = await supabase.from("tasks").insert(payload).select(taskSelect).single();
 
   if (error) throw error;
-  return data as TaskWithRelations;
+  const [task] = await attachRelationProjectTypesFromApi([data as TaskWithRelations]);
+  return task;
 }
 
 export async function updateTask(taskId: string, payload: TaskUpdatePayload): Promise<TaskWithRelations> {
@@ -91,7 +94,8 @@ export async function updateTask(taskId: string, payload: TaskUpdatePayload): Pr
     .single();
 
   if (error) throw error;
-  return data as TaskWithRelations;
+  const [task] = await attachRelationProjectTypesFromApi([data as TaskWithRelations]);
+  return task;
 }
 
 export async function deleteTask(taskId: string): Promise<string> {

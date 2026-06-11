@@ -68,11 +68,6 @@ const editSchema = z.object({
 
 type EditFormData = z.infer<typeof editSchema>;
 
-function isMissingProjectTypeColumn(error: { message?: string; code?: string } | null): boolean {
-  const message = error?.message ?? "";
-  return error?.code === "PGRST204" || (message.includes("project_type") && message.includes("schema cache"));
-}
-
 interface Props {
   project: Project & { manager?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null };
   tasks: TaskWithRelations[];
@@ -140,7 +135,6 @@ export function ProjectDetailClient({
 
   const handleEdit = async (data: EditFormData) => {
     setSaving(true);
-    const supabase = createClient();
     const budget = normalizeMoney(data.total_budget);
     const manager = profiles.find((p) => p.id === data.manager_id);
 
@@ -157,31 +151,23 @@ export function ProjectDetailClient({
       manager_name: manager?.full_name ?? null,
     };
 
-    let { error } = await supabase.from("projects").update(payload).eq("id", project.id);
+    const response = await fetch(`/api/projects/${project.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const result = await response.json().catch(() => ({}));
 
-    if (isMissingProjectTypeColumn(error)) {
-      const payloadWithoutType = {
-        name: payload.name,
-        status: payload.status,
-        current_stage: payload.current_stage,
-        start_date: payload.start_date,
-        end_date: payload.end_date,
-        total_budget: payload.total_budget,
-        description: payload.description,
-        manager_id: payload.manager_id,
-        manager_name: payload.manager_name,
-      };
-      const retry = await supabase.from("projects").update(payloadWithoutType).eq("id", project.id);
-      error = retry.error;
+    if (!response.ok) {
+      const message = typeof result.error === "string" ? result.error : "فشل تحديث المشروع";
+      toast.error(message);
+      setSaving(false);
+      return;
     }
 
-    if (error) {
-      toast.error(`فشل التحديث: ${error.message}`);
-    } else {
-      toast.success("تم تحديث المشروع بنجاح");
-      setEditOpen(false);
-      router.refresh();
-    }
+    toast.success("تم تحديث المشروع بنجاح");
+    setEditOpen(false);
+    router.refresh();
     setSaving(false);
   };
 

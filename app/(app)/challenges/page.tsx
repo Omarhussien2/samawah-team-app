@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth/get-user";
 import { ChallengesPageClient } from "@/components/challenges/challenges-page-client";
+import { attachProjectTypes, attachRelationProjectTypes } from "@/lib/projects/project-type-store";
 
 export default async function ChallengesPage() {
   const { user } = await getUser();
@@ -16,12 +17,17 @@ export default async function ChallengesPage() {
     supabase.from("kpi_definitions").select("*").eq("active", true).eq("perspective", "العمليات والمشاريع").order("sort_order", { ascending: true }),
   ]);
 
+  const [challengesWithTypes, projectsWithTypes] = await Promise.all([
+    attachRelationProjectTypes(challenges ?? []),
+    attachProjectTypes(projects ?? []),
+  ]);
+
   return (
     <div className="page-container">
       <ChallengesPageClient
-        challenges={challenges ?? []}
+        challenges={challengesWithTypes}
         profiles={profiles ?? []}
-        projects={projects ?? []}
+        projects={projectsWithTypes}
         kpiDefinitions={kpiDefinitions ?? []}
         currentUser={user}
       />

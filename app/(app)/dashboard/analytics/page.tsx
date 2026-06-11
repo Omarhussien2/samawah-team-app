@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth/get-user";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
+import { attachProjectTypes, attachRelationProjectTypes } from "@/lib/projects/project-type-store";
 
 export default async function DashboardAnalyticsPage() {
   const { user } = await getUser();
@@ -28,15 +29,21 @@ export default async function DashboardAnalyticsPage() {
         .limit(12),
     ]);
 
+  const [projectsWithTypes, tasksWithTypes, challengesWithTypes] = await Promise.all([
+    attachProjectTypes(projects ?? []),
+    attachRelationProjectTypes(tasks ?? []),
+    attachRelationProjectTypes(challenges ?? []),
+  ]);
+
   return (
     <div className="min-h-full bg-slate-50/50 p-6 lg:p-8">
       <DashboardClient
         mode="analytics"
         user={user}
-        projects={projects ?? []}
-        tasks={tasks ?? []}
+        projects={projectsWithTypes}
+        tasks={tasksWithTypes}
         projectMembers={projectMembers ?? []}
-        challenges={challenges ?? []}
+        challenges={challengesWithTypes}
         comments={comments ?? []}
       />
     </div>

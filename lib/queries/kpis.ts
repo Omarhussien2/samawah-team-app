@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
+import { attachProjectTypesFromApi, attachRelationProjectTypesFromApi } from "@/lib/projects/project-type-client";
 import type {
   Database,
   AudienceMetric,
@@ -241,7 +242,7 @@ export async function fetchProjectPerformanceUpdates(
 
     if (quarterly.error) throw quarterly.error;
     if (monthly.error) throw monthly.error;
-    return [...(quarterly.data ?? []), ...(monthly.data ?? [])];
+    return attachRelationProjectTypesFromApi([...(quarterly.data ?? []), ...(monthly.data ?? [])]);
   }
 
   const { data, error } = await supabase
@@ -253,7 +254,7 @@ export async function fetchProjectPerformanceUpdates(
     .order("updated_at", { ascending: false });
 
   if (error) throw error;
-  return data ?? [];
+  return attachRelationProjectTypesFromApi(data ?? []);
 }
 
 export async function fetchActiveProjectsForPerformance(): Promise<ProjectReference[]> {
@@ -265,7 +266,7 @@ export async function fetchActiveProjectsForPerformance(): Promise<ProjectRefere
     .order("name", { ascending: true });
 
   if (error) throw error;
-  return data ?? [];
+  return attachProjectTypesFromApi(data ?? []);
 }
 
 export async function fetchChallengeRiskRecords(): Promise<ChallengeRiskRecord[]> {

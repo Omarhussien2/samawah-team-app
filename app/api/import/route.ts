@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { normalizeMoney } from "@/lib/projects/budget";
 import { mapProjectType } from "@/lib/utils";
+import { isMissingProjectTypeColumn, saveProjectTypeOverride } from "@/lib/projects/project-type-store";
 import type { Database } from "@/lib/supabase/types";
 
 type ProjectInsert = Database["public"]["Tables"]["projects"]["Insert"];
@@ -18,11 +19,6 @@ function cleanNum(val: number | string | null | undefined): number | null {
   return n;
 }
 
-function isMissingProjectTypeColumn(error: { message?: string; code?: string } | null): boolean {
-  const message = error?.message ?? "";
-  return error?.code === "PGRST204" || (message.includes("project_type") && message.includes("schema cache"));
-}
-
 export async function POST(request: NextRequest) {
   try {
     const { type, data } = await request.json();
@@ -36,10 +32,11 @@ export async function POST(request: NextRequest) {
       for (const project of data) {
         if (project._errors?.length > 0) { errorCount++; continue; }
         const legacyId = clean(project.legacy_project_id);
+        const projectType = mapProjectType(project.project_type);
         const row: ProjectInsert = {
           ...(legacyId ? { legacy_project_id: legacyId } : {}),
           name: project.name,
-          project_type: mapProjectType(project.project_type),
+          project_type: projectType,
           manager_name: clean(project.manager_name),
           path: clean(project.path),
           current_stage: clean(project.current_stage),
@@ -50,10 +47,10 @@ export async function POST(request: NextRequest) {
           status: "active",
         };
 
-        let { error } = await supabase.from("projects").upsert(row, {
+        let { data: savedProject, error } = await supabase.from("projects").upsert(row, {
           ...(legacyId ? { onConflict: "legacy_project_id" } : {}),
           ignoreDuplicates: false,
-        });
+        }).select("id").maybeSingle();
 
         if (isMissingProjectTypeColumn(error)) {
           const rowWithoutType: Omit<ProjectInsert, "project_type"> = {
@@ -71,14 +68,23 @@ export async function POST(request: NextRequest) {
           const retry = await supabase.from("projects").upsert(rowWithoutType, {
             ...(legacyId ? { onConflict: "legacy_project_id" } : {}),
             ignoreDuplicates: false,
-          });
+          }).select("id").maybeSingle();
+          savedProject = retry.data;
           error = retry.error;
         }
         if (error) {
           errorCount++;
           errorDetails.push(`مشروع "${project.name}": ${error.message}`);
         } else {
-          successCount++;
+          try {
+            if (!savedProject?.id) throw new Error("لم يتم إرجاع رقم المشروع بعد الحفظ");
+            await saveProjectTypeOverride(savedProject.id, projectType);
+            successCount++;
+          } catch (metadataError) {
+            errorCount++;
+            const message = metadataError instanceof Error ? metadataError.message : "تعذر حفظ نوع المشروع";
+            errorDetails.push(`مشروع "${project.name}": ${message}`);
+          }
         }
       }
     } else if (type === "tasks") {
