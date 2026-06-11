@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth/get-user";
 import { DocumentsPageClient } from "@/components/documents/documents-page-client";
+import { attachProjectTypes, attachRelationProjectTypes } from "@/lib/projects/project-type-store";
 
 export default async function DocumentsPage() {
   const { user } = await getUser();
@@ -11,9 +12,14 @@ export default async function DocumentsPage() {
     supabase.from("projects").select("id,name").eq("status", "active"),
   ]);
 
+  const [documentsWithTypes, projectsWithTypes] = await Promise.all([
+    attachRelationProjectTypes(documents ?? []),
+    attachProjectTypes(projects ?? []),
+  ]);
+
   return (
     <div className="page-container">
-      <DocumentsPageClient documents={documents ?? []} projects={projects ?? []} currentUser={user} />
+      <DocumentsPageClient documents={documentsWithTypes} projects={projectsWithTypes} currentUser={user} />
     </div>
   );
 }

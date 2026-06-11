@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth/get-user";
 import { MyTasksClient } from "@/components/tasks/my-tasks-client";
+import { attachRelationProjectTypes } from "@/lib/projects/project-type-store";
 
 export default async function MyTasksPage() {
   const { user } = await getUser();
@@ -17,9 +18,11 @@ export default async function MyTasksPage() {
     .select("id,full_name,avatar_url")
     .eq("active", true);
 
+  const tasksWithTypes = await attachRelationProjectTypes(tasks ?? []);
+
   return (
     <div className="page-container">
-      <MyTasksClient tasks={tasks ?? []} currentUser={user} profiles={profiles ?? []} />
+      <MyTasksClient tasks={tasksWithTypes} currentUser={user} profiles={profiles ?? []} />
     </div>
   );
 }

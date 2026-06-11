@@ -34,11 +34,6 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
-function isMissingProjectTypeColumn(error: { message?: string; code?: string } | null): boolean {
-  const message = error?.message ?? "";
-  return error?.code === "PGRST204" || (message.includes("project_type") && message.includes("schema cache"));
-}
-
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -76,7 +71,6 @@ export function CreateProjectModal({ open, onClose, profiles, currentUser, templ
       return;
     }
 
-    const supabase = createClient();
     const managerId = currentUser.role === "project_manager" ? currentUser.id : data.manager_id || null;
     const manager = managerOptions.find((p) => p.id === managerId);
 
@@ -95,44 +89,24 @@ export function CreateProjectModal({ open, onClose, profiles, currentUser, templ
       status: "active" as const,
     };
 
-    let { data: project, error } = await supabase
-      .from("projects")
-      .insert(payload)
-      .select()
-      .single();
+    const response = await fetch("/api/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const result = await response.json().catch(() => ({}));
 
-    if (isMissingProjectTypeColumn(error)) {
-      const payloadWithoutType = {
-        name: payload.name,
-        manager_id: payload.manager_id,
-        manager_name: payload.manager_name,
-        current_stage: payload.current_stage,
-        start_date: payload.start_date,
-        end_date: payload.end_date,
-        total_budget: payload.total_budget,
-        description: payload.description,
-        status: payload.status,
-      };
-      const retry = await supabase
-        .from("projects")
-        .insert(payloadWithoutType)
-        .select()
-        .single();
-      project = retry.data;
-      error = retry.error;
-    }
-
-    if (error) {
-      const message = error.message.includes("row-level security")
-        ? "ليست لديك صلاحية إنشاء مشروع. تواصل مع مدير النظام لتعديل الدور."
-        : `فشل إنشاء المشروع: ${error.message}`;
+    if (!response.ok) {
+      const message = typeof result.error === "string" ? result.error : "فشل إنشاء المشروع";
       toast.error(message);
       setLoading(false);
       return;
     }
+    const project = result.project as { id: string } | null;
 
     // Create tasks from template if selected
     if (data.template_id && project) {
+      const supabase = createClient();
       const template = templates.find((t) => t.id === data.template_id);
       if (template?.task_templates) {
         const tasks = template.task_templates.map((tt, idx) => ({

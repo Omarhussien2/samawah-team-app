@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth/get-user";
 import { notFound } from "next/navigation";
 import { ProjectDetailClient } from "@/components/projects/project-detail-client";
+import { attachProjectTypes } from "@/lib/projects/project-type-store";
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -36,11 +37,12 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   ]);
 
   if (!project) notFound();
+  const [projectWithType] = await attachProjectTypes([project]);
 
   return (
     <div className="page-container">
       <ProjectDetailClient
-        project={project}
+        project={projectWithType}
         tasks={tasks ?? []}
         challenges={challenges ?? []}
         documents={documents ?? []}
