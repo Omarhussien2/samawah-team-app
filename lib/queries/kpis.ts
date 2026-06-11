@@ -32,7 +32,7 @@ export type ServiceOutputInsert = Database["public"]["Tables"]["service_outputs"
 export type PartnershipActivityInsert = Database["public"]["Tables"]["partnership_activities"]["Insert"];
 export type KpiShareLinkSafe = Omit<KpiShareLink, "token_hash">;
 export type ProjectPerformanceRecord = ProjectPerformanceUpdate & {
-  project?: Pick<Project, "id" | "name" | "manager_id" | "total_budget" | "progress"> | null;
+  project?: Pick<Project, "id" | "name" | "project_type" | "manager_id" | "total_budget" | "progress"> | null;
 };
 export type ShareLinkCreatePayload = {
   name: string;
@@ -222,14 +222,14 @@ export async function fetchProjectPerformanceUpdates(
     const [quarterly, monthly] = await Promise.all([
       supabase
         .from("project_performance_updates")
-        .select("*, project:projects(id,name,manager_id,total_budget,progress)")
+        .select("*, project:projects(id,name,project_type,manager_id,total_budget,progress)")
         .eq("period_type", "quarterly")
         .eq("period_start", periodStart)
         .eq("period_end", periodEnd)
         .order("updated_at", { ascending: false }),
       supabase
         .from("project_performance_updates")
-        .select("*, project:projects(id,name,manager_id,total_budget,progress)")
+        .select("*, project:projects(id,name,project_type,manager_id,total_budget,progress)")
         .eq("period_type", "monthly")
         .gte("period_start", periodStart)
         .lte("period_end", periodEnd)
@@ -244,7 +244,7 @@ export async function fetchProjectPerformanceUpdates(
 
   const { data, error } = await supabase
     .from("project_performance_updates")
-    .select("*, project:projects(id,name,manager_id,total_budget,progress)")
+    .select("*, project:projects(id,name,project_type,manager_id,total_budget,progress)")
     .eq("period_type", periodType)
     .eq("period_start", periodStart)
     .eq("period_end", periodEnd)
@@ -255,12 +255,12 @@ export async function fetchProjectPerformanceUpdates(
 }
 
 export async function fetchActiveProjectsForPerformance(): Promise<
-  Pick<Project, "id" | "name" | "manager_id" | "total_budget" | "progress">[]
+  Pick<Project, "id" | "name" | "project_type" | "manager_id" | "total_budget" | "progress">[]
 > {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("projects")
-    .select("id,name,manager_id,total_budget,progress")
+    .select("id,name,project_type,manager_id,total_budget,progress")
     .neq("status", "cancelled")
     .order("name", { ascending: true });
 

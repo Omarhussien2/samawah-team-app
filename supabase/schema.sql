@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS projects (
   id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   legacy_project_id TEXT UNIQUE,
   name              TEXT NOT NULL,
+  project_type      TEXT NOT NULL DEFAULT 'external' CHECK (project_type IN ('internal', 'external')),
   manager_id        UUID REFERENCES profiles(id) ON DELETE SET NULL,
   manager_name      TEXT,
   path              TEXT,
@@ -44,6 +45,22 @@ CREATE TABLE IF NOT EXISTS projects (
 
 ALTER TABLE projects
   ADD COLUMN IF NOT EXISTS forms_owner_id UUID REFERENCES profiles(id) ON DELETE SET NULL;
+
+ALTER TABLE projects
+  ADD COLUMN IF NOT EXISTS project_type TEXT NOT NULL DEFAULT 'external';
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'projects_project_type_check'
+      AND conrelid = 'projects'::regclass
+  ) THEN
+    ALTER TABLE projects
+      ADD CONSTRAINT projects_project_type_check CHECK (project_type IN ('internal', 'external'));
+  END IF;
+END $$;
 
 -- ============================================================
 -- 3. جدول أعضاء المشروع (project_members)
@@ -889,6 +906,7 @@ CREATE INDEX IF NOT EXISTS idx_tasks_board_column ON tasks(board_column);
 CREATE INDEX IF NOT EXISTS idx_task_time_entries_task ON task_time_entries(task_id);
 CREATE INDEX IF NOT EXISTS idx_task_time_entries_user ON task_time_entries(user_id);
 CREATE INDEX IF NOT EXISTS idx_task_time_entries_work_date ON task_time_entries(work_date);
+CREATE INDEX IF NOT EXISTS idx_projects_project_type ON projects(project_type);
 CREATE INDEX IF NOT EXISTS idx_project_members_project ON project_members(project_id);
 CREATE INDEX IF NOT EXISTS idx_project_members_user ON project_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_project_form_templates_active ON project_form_templates(active);

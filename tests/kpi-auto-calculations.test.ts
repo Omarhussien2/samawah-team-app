@@ -200,6 +200,7 @@ function performanceUpdate(patch: Partial<ProjectPerformanceRecord>): ProjectPer
     project: {
       id: patch.project?.id ?? "project-1",
       name: patch.project?.name ?? "Project",
+      project_type: patch.project?.project_type ?? "external",
       manager_id: patch.project?.manager_id ?? null,
       total_budget: patch.project?.total_budget ?? 1000,
       progress: patch.project?.progress ?? 0,

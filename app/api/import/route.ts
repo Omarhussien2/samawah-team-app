@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { normalizeMoney } from "@/lib/projects/budget";
+import { mapProjectType } from "@/lib/utils";
 import type { Database } from "@/lib/supabase/types";
 
 type ProjectInsert = Database["public"]["Tables"]["projects"]["Insert"];
@@ -33,6 +34,7 @@ export async function POST(request: NextRequest) {
         const row: ProjectInsert = {
           ...(legacyId ? { legacy_project_id: legacyId } : {}),
           name: project.name,
+          project_type: mapProjectType(project.project_type),
           manager_name: clean(project.manager_name),
           path: clean(project.path),
           current_stage: clean(project.current_stage),

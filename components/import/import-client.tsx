@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import Papa from "papaparse";
 import { toast } from "sonner";
 import { Upload, CheckCircle, AlertCircle, Loader2, X } from "lucide-react";
-import { mapArabicStatus } from "@/lib/utils";
+import { getProjectTypeLabel, mapArabicStatus, mapProjectType } from "@/lib/utils";
 import { normalizeMoney } from "@/lib/projects/budget";
 import type { Profile } from "@/lib/supabase/types";
 
 interface ParsedProject {
   legacy_project_id: string;
   name: string;
+  project_type: "internal" | "external";
   manager_name: string;
   path: string;
   current_stage: string;
@@ -66,6 +67,7 @@ export function ImportClient({ currentUser: _currentUser }: Props) {
       return {
         legacy_project_id: row["Project_ID"] ?? row["project_id"] ?? "",
         name: row["Name"] ?? row["name"] ?? "",
+        project_type: mapProjectType(row["Project_Type"] ?? row["project_type"] ?? row["Type"] ?? row["type"] ?? row["نوع المشروع"]),
         manager_name: row["Manager"] ?? row["manager"] ?? "",
         path: row["Project_Path"] ?? row["path"] ?? "",
         current_stage: row["Current_Stage"] ?? row["current_stage"] ?? "",
@@ -204,7 +206,7 @@ export function ImportClient({ currentUser: _currentUser }: Props) {
             <h3 className="font-semibold text-blue-800 mb-2">تعليمات الاستيراد</h3>
             <ol className="text-sm text-blue-700 space-y-1 list-decimal list-inside">
               <li>افتح Google Sheet واذهب إلى ملف &gt; تنزيل &gt; CSV</li>
-              <li>تأكد من وجود أعمدة: {importType === "projects" ? "Project_ID, Name, Manager, Start_Date, End_Date" : "Task_ID, Project_ID, Task, Status, Owner"}</li>
+              <li>تأكد من وجود أعمدة: {importType === "projects" ? "Project_ID, Name, Project_Type, Manager, Start_Date, End_Date" : "Task_ID, Project_ID, Task, Status, Owner"}</li>
               <li>ارفع الملف أدناه</li>
               <li>راجع البيانات قبل الاستيراد</li>
             </ol>
@@ -264,6 +266,7 @@ export function ImportClient({ currentUser: _currentUser }: Props) {
                       <th className="text-right px-3 py-2 font-medium">الحالة</th>
                       <th className="text-right px-3 py-2 font-medium">المعرف</th>
                       <th className="text-right px-3 py-2 font-medium">الاسم</th>
+                      <th className="text-right px-3 py-2 font-medium">نوع المشروع</th>
                       <th className="text-right px-3 py-2 font-medium">المدير</th>
                       <th className="text-right px-3 py-2 font-medium">تاريخ الانتهاء</th>
                     </tr>
@@ -278,6 +281,7 @@ export function ImportClient({ currentUser: _currentUser }: Props) {
                         </td>
                         <td className="px-3 py-2 text-muted-foreground">{p.legacy_project_id}</td>
                         <td className="px-3 py-2 font-medium">{p.name}</td>
+                        <td className="px-3 py-2 text-muted-foreground">{getProjectTypeLabel(p.project_type)}</td>
                         <td className="px-3 py-2 text-muted-foreground">{p.manager_name}</td>
                         <td className="px-3 py-2 text-muted-foreground">{p.end_date}</td>
                       </tr>

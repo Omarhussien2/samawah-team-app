@@ -8,6 +8,7 @@ export type KpiPeriodType = "monthly" | "quarterly";
 export type KpiStatus = "green" | "yellow" | "red" | "neutral";
 export type KpiTrend = "up" | "down" | "flat" | "unknown";
 export type KpiValueSource = "auto" | "manual" | "semi_auto";
+export type ProjectType = "internal" | "external";
 export type ChallengeKind = "challenge" | "risk" | "issue";
 export type ChallengeResponseStrategy = "mitigate" | "avoid" | "transfer" | "accept" | "monitor";
 export type ChallengeRiskLevel = "low" | "medium" | "high" | "critical";
@@ -53,6 +54,7 @@ export interface Database {
           id: string;
           legacy_project_id: string | null;
           name: string;
+          project_type: ProjectType;
           manager_id: string | null;
           manager_name: string | null;
           path: string | null;
@@ -72,6 +74,7 @@ export interface Database {
           id?: string;
           legacy_project_id?: string | null;
           name?: string;
+          project_type?: ProjectType;
           manager_id?: string | null;
           manager_name?: string | null;
           path?: string | null;
@@ -91,6 +94,7 @@ export interface Database {
           id?: string;
           legacy_project_id?: string | null;
           name?: string;
+          project_type?: ProjectType;
           manager_id?: string | null;
           manager_name?: string | null;
           path?: string | null;

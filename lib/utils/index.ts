@@ -2,6 +2,7 @@ import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { format, formatDistanceToNow, isBefore, startOfDay } from "date-fns";
 import { ar } from "date-fns/locale";
+import type { ProjectType } from "@/lib/supabase/types";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -65,6 +66,42 @@ export function getProjectStatusLabel(status: string): string {
     cancelled: "ملغي",
   };
   return map[status] ?? status;
+}
+
+export const PROJECT_TYPE_OPTIONS: Array<{ value: ProjectType; label: string }> = [
+  { value: "external", label: "مشروع خارجي" },
+  { value: "internal", label: "مشروع داخلي" },
+];
+
+export function getProjectTypeLabel(type: string | null | undefined): string {
+  const map: Record<string, string> = {
+    internal: "مشروع داخلي",
+    external: "مشروع خارجي",
+  };
+  return type ? (map[type] ?? type) : map.external;
+}
+
+export function getProjectTypeBadgeClass(type: string | null | undefined): string {
+  const map: Record<string, string> = {
+    internal: "border-emerald-100 bg-emerald-50 text-emerald-700",
+    external: "border-sky-100 bg-sky-50 text-sky-700",
+  };
+  return type ? (map[type] ?? map.external) : map.external;
+}
+
+export function mapProjectType(value: string | null | undefined): ProjectType {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) return "external";
+
+  if (["internal", "داخلية", "داخلي", "مشروع داخلي"].includes(normalized)) {
+    return "internal";
+  }
+
+  if (["external", "خارجية", "خارجي", "مشروع خارجي"].includes(normalized)) {
+    return "external";
+  }
+
+  return "external";
 }
 
 export function getChallengeStatusLabel(status: string): string {

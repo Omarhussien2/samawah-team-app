@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { createClient } from "@/lib/supabase/client";
-import { formatRelativeAr } from "@/lib/utils";
+import { PROJECT_TYPE_OPTIONS, formatRelativeAr, getProjectTypeBadgeClass, getProjectTypeLabel } from "@/lib/utils";
 import { createSearchMatcher } from "@/lib/utils/search";
 import {
   buildDocumentStoragePath,
@@ -30,12 +30,12 @@ import type { Document, Profile, Project } from "@/lib/supabase/types";
 
 type DocumentWithRelations = Document & {
   creator?: { id: string; full_name: string | null } | null;
-  project?: { id: string; name: string } | null;
+  project?: Pick<Project, "id" | "name" | "project_type"> | null;
 };
 
 interface Props {
   documents: DocumentWithRelations[];
-  projects: Pick<Project, "id" | "name">[];
+  projects: Pick<Project, "id" | "name" | "project_type">[];
   currentUser: Profile;
 }
 
@@ -51,6 +51,7 @@ export function DocumentsPageClient({ documents, projects, currentUser }: Props)
   const [filterType, setFilterType] = useState("all");
   const [filterStage, setFilterStage] = useState("all");
   const [filterProject, setFilterProject] = useState("all");
+  const [filterProjectType, setFilterProjectType] = useState("all");
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<DocumentWithRelations | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -63,15 +64,31 @@ export function DocumentsPageClient({ documents, projects, currentUser }: Props)
     const matchesSearch = createSearchMatcher(search);
 
     return documents.filter((doc) => {
-      if (!matchesSearch([doc.title, doc.type, doc.stage, doc.project?.name, doc.creator?.full_name, doc.url, doc.file_path, doc.file_name])) {
+      if (!matchesSearch([
+        doc.title,
+        doc.type,
+        doc.stage,
+        doc.project?.name,
+        getProjectTypeLabel(doc.project?.project_type),
+        doc.creator?.full_name,
+        doc.url,
+        doc.file_path,
+        doc.file_name,
+      ])) {
         return false;
       }
       if (filterType !== "all" && doc.type !== filterType) return false;
       if (filterStage !== "all" && (doc.stage ?? "none") !== filterStage) return false;
+      if (filterProjectType !== "all" && doc.project?.project_type !== filterProjectType) return false;
       if (filterProject !== "all" && doc.project_id !== filterProject) return false;
       return true;
     });
-  }, [documents, search, filterType, filterStage, filterProject]);
+  }, [documents, search, filterType, filterStage, filterProjectType, filterProject]);
+
+  const visibleProjects = useMemo(
+    () => projects.filter((project) => filterProjectType === "all" || project.project_type === filterProjectType),
+    [filterProjectType, projects]
+  );
 
   const closeDialogs = () => {
     setShowCreate(false);
@@ -230,7 +247,7 @@ export function DocumentsPageClient({ documents, projects, currentUser }: Props)
         </Button>
       </div>
 
-      <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_180px_180px_220px]">
+      <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_160px_160px_180px_220px]">
         <div className="relative">
           <Search size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -281,15 +298,35 @@ export function DocumentsPageClient({ documents, projects, currentUser }: Props)
           </SelectContent>
         </Select>
 
+        <Select
+          value={filterProjectType}
+          onValueChange={(value) => {
+            setFilterProjectType(value);
+            setFilterProject("all");
+          }}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="نوع المشروع" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">كل أنواع المشاريع</SelectItem>
+            {PROJECT_TYPE_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
         <Select value={filterProject} onValueChange={setFilterProject}>
           <SelectTrigger>
             <SelectValue placeholder="المشروع" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">كل المشاريع</SelectItem>
-            {projects.map((project) => (
+            {visibleProjects.map((project) => (
               <SelectItem key={project.id} value={project.id}>
-                {project.name}
+                {project.name} - {getProjectTypeLabel(project.project_type)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -319,6 +356,9 @@ export function DocumentsPageClient({ documents, projects, currentUser }: Props)
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <Badge variant="secondary">{doc.type ?? "أخرى"}</Badge>
                   <Badge variant="outline">{doc.stage ?? "غير محدد"}</Badge>
+                  <Badge variant="outline" className={getProjectTypeBadgeClass(doc.project?.project_type)}>
+                    {getProjectTypeLabel(doc.project?.project_type)}
+                  </Badge>
                 </div>
 
                 <div className="mt-3 space-y-1 text-xs text-muted-foreground">
@@ -368,7 +408,7 @@ export function DocumentsPageClient({ documents, projects, currentUser }: Props)
         open={showCreate || Boolean(editing)}
         title={editing ? "تعديل المستند" : "مستند جديد"}
         form={form}
-        projects={projects}
+        projects={visibleProjects}
         saving={saving}
         selectedFile={selectedFile}
         allowFileUpload={!editing}
@@ -388,7 +428,7 @@ interface DocumentDialogProps {
   open: boolean;
   title: string;
   form: typeof EMPTY_FORM;
-  projects: Pick<Project, "id" | "name">[];
+  projects: Pick<Project, "id" | "name" | "project_type">[];
   saving: boolean;
   selectedFile: File | null;
   allowFileUpload: boolean;
@@ -445,7 +485,7 @@ function DocumentDialog({
                 <SelectItem value="none">اختر المشروع</SelectItem>
                 {projects.map((project) => (
                   <SelectItem key={project.id} value={project.id}>
-                    {project.name}
+                    {project.name} - {getProjectTypeLabel(project.project_type)}
                   </SelectItem>
                 ))}
               </SelectContent>

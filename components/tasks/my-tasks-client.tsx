@@ -5,7 +5,18 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { CheckCircle2, AlertCircle, Clock, CalendarCheck, List, Search, X } from "lucide-react";
-import { formatDateShort, getPriorityLabel, getStatusColor, getStatusLabel, isOverdue, isDueToday, cn } from "@/lib/utils";
+import {
+  PROJECT_TYPE_OPTIONS,
+  cn,
+  formatDateShort,
+  getPriorityLabel,
+  getProjectTypeBadgeClass,
+  getProjectTypeLabel,
+  getStatusColor,
+  getStatusLabel,
+  isDueToday,
+  isOverdue,
+} from "@/lib/utils";
 import { recalcProjectProgress } from "@/lib/utils/recalc-progress";
 import { createSearchMatcher } from "@/lib/utils/search";
 import { formatHours, getTaskHourSummary } from "@/lib/tasks/hours";
@@ -42,6 +53,7 @@ const FILTERS: { key: Filter; label: string; icon: React.ElementType }[] = [
 export function MyTasksClient({ tasks: initialTasks, currentUser, profiles }: Props) {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<Filter>("all");
+  const [projectTypeFilter, setProjectTypeFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
@@ -107,11 +119,13 @@ export function MyTasksClient({ tasks: initialTasks, currentUser, profiles }: Pr
                 : true;
 
       if (!matchesFilter) return false;
+      if (projectTypeFilter !== "all" && t.project?.project_type !== projectTypeFilter) return false;
 
       return matchesSearch([
         t.title,
         t.sub_task,
         t.project?.name,
+        getProjectTypeLabel(t.project?.project_type),
         t.owner?.full_name,
         t.owner_name,
         t.category,
@@ -123,7 +137,7 @@ export function MyTasksClient({ tasks: initialTasks, currentUser, profiles }: Pr
         t.alert_message,
       ]);
     });
-  }, [tasks, filter, search, weekEnd]);
+  }, [tasks, filter, projectTypeFilter, search, weekEnd]);
 
   const counts = useMemo(
     () => ({
@@ -164,25 +178,37 @@ export function MyTasksClient({ tasks: initialTasks, currentUser, profiles }: Pr
         </div>
       </div>
 
-      <div className="relative mb-4 max-w-md">
-        <Search size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <input
-          type="text"
-          placeholder="ابحث في مهامك..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full rounded-lg border border-border py-2 pl-9 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-        />
-        {search && (
-          <button
-            type="button"
-            aria-label="مسح البحث"
-            onClick={() => setSearch("")}
-            className="absolute left-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition hover:bg-accent hover:text-foreground"
-          >
-            <X size={14} />
-          </button>
-        )}
+      <div className="mb-4 flex flex-col gap-3 md:flex-row">
+        <div className="relative max-w-md flex-1">
+          <Search size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="ابحث في مهامك..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full rounded-lg border border-border py-2 pl-9 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+          {search && (
+            <button
+              type="button"
+              aria-label="مسح البحث"
+              onClick={() => setSearch("")}
+              className="absolute left-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition hover:bg-accent hover:text-foreground"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+        <select
+          value={projectTypeFilter}
+          onChange={(event) => setProjectTypeFilter(event.target.value)}
+          className="rounded-lg border border-border bg-white px-3 py-2 text-sm font-medium text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+        >
+          <option value="all">كل أنواع المشاريع</option>
+          {PROJECT_TYPE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
       </div>
 
       <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
@@ -251,6 +277,11 @@ export function MyTasksClient({ tasks: initialTasks, currentUser, profiles }: Pr
                       {task.project && (
                         <span className="text-xs text-muted-foreground bg-accent px-2 py-0.5 rounded-full">
                           {task.project.name}
+                        </span>
+                      )}
+                      {task.project && (
+                        <span className={cn("text-xs rounded-full border px-2 py-0.5 font-bold", getProjectTypeBadgeClass(task.project.project_type))}>
+                          {getProjectTypeLabel(task.project.project_type)}
                         </span>
                       )}
                       {overdueTask && (

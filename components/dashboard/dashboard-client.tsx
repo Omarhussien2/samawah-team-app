@@ -48,8 +48,11 @@ import {
   getPriorityColor,
   getPriorityLabel,
   getProjectStatusLabel,
+  getProjectTypeBadgeClass,
+  getProjectTypeLabel,
   getStatusColor,
   getStatusLabel,
+  PROJECT_TYPE_OPTIONS,
 } from "@/lib/utils";
 import { recalcProjectProgress } from "@/lib/utils/recalc-progress";
 import { getProjectBudgetSummary, normalizeMoney } from "@/lib/projects/budget";
@@ -65,6 +68,7 @@ type TaskStatusFilter = Task["status"] | "all";
 type TaskPriorityFilter = Task["priority"] | "all";
 type PeriodFilter = "all" | "today" | "week" | "month" | "overdue";
 type ProjectStatusFilter = Project["status"] | "all";
+type ProjectTypeFilter = Project["project_type"] | "all";
 type AnalyticsTab = "progress" | "tasks" | "team" | "budget" | "risks";
 
 type DashboardProject = Project & {
@@ -302,6 +306,9 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
   const projectStatusParam = searchParams.get("projectStatus") as Project["status"] | null;
   const projectStatusFilter: ProjectStatusFilter =
     projectStatusParam && PROJECT_STATUSES.includes(projectStatusParam) ? projectStatusParam : "all";
+  const projectTypeParam = searchParams.get("projectType") as Project["project_type"] | null;
+  const projectTypeFilter: ProjectTypeFilter =
+    projectTypeParam && PROJECT_TYPE_OPTIONS.some((option) => option.value === projectTypeParam) ? projectTypeParam : "all";
   const periodParam = searchParams.get("period") as PeriodFilter | null;
   const periodFilter: PeriodFilter =
     periodParam && ["all", "today", "week", "month", "overdue"].includes(periodParam) ? periodParam : "all";
@@ -389,9 +396,13 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
   const personalProjectIds = useMemo(() => new Set(rolesByProject.keys()), [rolesByProject]);
 
   const scopedProjects = useMemo(() => {
-    if (selectedView === "portfolio" && user.role === "admin") return projects;
-    return projects.filter((project) => personalProjectIds.has(project.id));
-  }, [personalProjectIds, projects, selectedView, user.role]);
+    const visibleProjects =
+      selectedView === "portfolio" && user.role === "admin"
+        ? projects
+        : projects.filter((project) => personalProjectIds.has(project.id));
+
+    return visibleProjects.filter((project) => projectTypeFilter === "all" || project.project_type === projectTypeFilter);
+  }, [personalProjectIds, projectTypeFilter, projects, selectedView, user.role]);
 
   const scopedProjectIds = useMemo(() => new Set(scopedProjects.map((project) => project.id)), [scopedProjects]);
 
@@ -748,6 +759,11 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
       label: getProjectStatusLabel(projectStatusFilter),
       onRemove: () => setQuery({ projectStatus: null }),
     },
+    projectTypeFilter !== "all" && {
+      key: "projectType",
+      label: getProjectTypeLabel(projectTypeFilter),
+      onRemove: () => setQuery({ projectType: null }),
+    },
     selectedOwner !== "all" && {
       key: "owner",
       label: ownerOptions.find((owner) => owner.id === selectedOwner)?.name ?? "عضو محدد",
@@ -876,6 +892,7 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
                           owner: null,
                           period: null,
                           project: null,
+                          projectType: null,
                           projectStatus: null,
                           insights: null,
                           analytics: null,
@@ -947,6 +964,18 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
               {scopedProjects.map((project) => (
                 <option key={project.id} value={project.id}>
                   {project.name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={projectTypeFilter}
+              onChange={(event) => setQuery({ projectType: event.target.value, project: null, focus: "projects" })}
+              className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-primary/20"
+            >
+              <option value="all">كل أنواع المشاريع</option>
+              {PROJECT_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>
@@ -1025,6 +1054,7 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
               onClick={() =>
                 setQuery({
                   project: null,
+                  projectType: null,
                   projectStatus: null,
                   status: null,
                   priority: null,
@@ -1605,7 +1635,7 @@ function HomeTaskPanel({
                   primaryClassName="line-clamp-1 text-sm font-bold text-slate-800"
                 />
                 <p className="mt-1 text-xs text-slate-500">
-                  {projects.get(task.project_id)?.name ?? "مشروع"} · {formatDateShort(task.due_date)}
+                  {projects.get(task.project_id)?.name ?? "مشروع"} · {getProjectTypeLabel(projects.get(task.project_id)?.project_type)} · {formatDateShort(task.due_date)}
                 </p>
               </Link>
             </div>
@@ -1665,7 +1695,12 @@ function ProjectResultList({
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="line-clamp-1 text-sm font-black text-slate-900">{info.project.name}</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="line-clamp-1 text-sm font-black text-slate-900">{info.project.name}</p>
+                <span className={cn("shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-bold", getProjectTypeBadgeClass(info.project.project_type))}>
+                  {getProjectTypeLabel(info.project.project_type)}
+                </span>
+              </div>
               <p className="mt-1 line-clamp-1 text-xs font-semibold text-slate-500">{info.healthReason}</p>
             </div>
             <span className={cn("shrink-0 rounded-md border px-2 py-1 text-[11px] font-bold", HEALTH_COLORS[info.health])}>
@@ -1722,7 +1757,7 @@ function TaskResultList({
               primaryClassName="line-clamp-1 text-sm font-bold text-slate-800"
             />
             <p className="mt-1 text-xs text-slate-500">
-              {projects.get(task.project_id)?.name ?? "مشروع"} · {formatDateShort(task.due_date)}
+              {projects.get(task.project_id)?.name ?? "مشروع"} · {getProjectTypeLabel(projects.get(task.project_id)?.project_type)} · {formatDateShort(task.due_date)}
             </p>
           </button>
         </div>
@@ -1784,6 +1819,8 @@ function ProjectCards({
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-bold text-slate-500">
                   <span>{info.role === "manager" ? "مدير المشروع" : info.role === "member" ? "عضو" : "ضمن المحفظة"}</span>
+                  <span className="h-1 w-1 rounded-full bg-slate-300" />
+                  <span>{getProjectTypeLabel(info.project.project_type)}</span>
                   <span className="h-1 w-1 rounded-full bg-slate-300" />
                   <span>{getProjectStatusLabel(info.project.status)}</span>
                   <span className="h-1 w-1 rounded-full bg-slate-300" />
@@ -1895,7 +1932,12 @@ function TaskDrillDown({
                   </span>
                 )}
               </td>
-              <td className="hidden px-5 py-3 text-slate-600 md:table-cell">{projects.get(task.project_id)?.name ?? "—"}</td>
+              <td className="hidden px-5 py-3 text-slate-600 md:table-cell">
+                <div className="grid gap-1">
+                  <span>{projects.get(task.project_id)?.name ?? "—"}</span>
+                  <span className="text-[11px] font-bold text-slate-400">{getProjectTypeLabel(projects.get(task.project_id)?.project_type)}</span>
+                </div>
+              </td>
               <td className="hidden px-5 py-3 lg:table-cell">
                 <span className={cn("rounded-full px-2 py-1 text-xs font-bold", getStatusColor(task.status))}>{getStatusLabel(task.status)}</span>
               </td>
@@ -1938,7 +1980,12 @@ function ProjectDrillDown({ infos, onSelect }: { infos: ProjectInfo[]; onSelect:
         >
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="line-clamp-1 text-sm font-black text-slate-900">{info.project.name}</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="line-clamp-1 text-sm font-black text-slate-900">{info.project.name}</p>
+                <span className={cn("shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-bold", getProjectTypeBadgeClass(info.project.project_type))}>
+                  {getProjectTypeLabel(info.project.project_type)}
+                </span>
+              </div>
               <p className="mt-1 text-xs text-slate-500">{info.healthReason}</p>
             </div>
             <span className={cn("rounded-md border px-2 py-1 text-[11px] font-bold", HEALTH_COLORS[info.health])}>

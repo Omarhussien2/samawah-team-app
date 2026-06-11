@@ -4,7 +4,17 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X, Loader2, AlertTriangle, Send, MessageSquare, CalendarDays, AlignLeft, CheckSquare, Paperclip, MoreHorizontal, Clock, Plus, Pencil, Trash2, Wallet } from "lucide-react";
 import { toast } from "sonner";
-import { getStatusLabel, getAlertLevelColor, formatRelativeAr, formatDateShort, cn, getAvatarUrl, getPriorityColor } from "@/lib/utils";
+import {
+  cn,
+  formatDateShort,
+  formatRelativeAr,
+  getAlertLevelColor,
+  getAvatarUrl,
+  getPriorityColor,
+  getProjectTypeBadgeClass,
+  getProjectTypeLabel,
+  getStatusLabel,
+} from "@/lib/utils";
 import { useCommentsSubscription } from "@/lib/supabase/realtime";
 import { createClient } from "@/lib/supabase/client";
 import { recalcProjectProgress } from "@/lib/utils/recalc-progress";
@@ -27,7 +37,7 @@ import { formatHours, getTaskHourSummary } from "@/lib/tasks/hours";
 import { getTaskDateDuration } from "@/lib/tasks/duration";
 import { normalizeMoney } from "@/lib/projects/budget";
 import Image from "next/image";
-import type { Database, Profile, Task, TaskProgressMode } from "@/lib/supabase/types";
+import type { Database, Profile, Project, Task, TaskProgressMode } from "@/lib/supabase/types";
 
 const STATUSES = ["Backlog", "To Do", "In Progress", "Review", "Done", "Cancelled"];
 const PRIORITIES = ["low", "medium", "high", "critical"];
@@ -42,7 +52,7 @@ interface CommentWithUser {
 }
 
 interface Props {
-  task: Task & { owner?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null; project?: { id: string, name: string } | null };
+  task: Task & { owner?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null; project?: Pick<Project, "id" | "name" | "project_type"> | null };
   profiles: Pick<Profile, "id" | "full_name" | "avatar_url">[];
   onClose: () => void;
   onTaskSaved?: (task: Task) => void;
@@ -423,6 +433,11 @@ export function TaskModal({ task, profiles, onClose, onTaskSaved, onTaskDeleted,
             {task.project && (
               <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md uppercase tracking-wider">
                 {task.project.name}
+              </span>
+            )}
+            {task.project && (
+              <span className={cn("text-xs font-bold rounded-md border px-2.5 py-1", getProjectTypeBadgeClass(task.project.project_type))}>
+                {getProjectTypeLabel(task.project.project_type)}
               </span>
             )}
           </div>

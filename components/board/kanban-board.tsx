@@ -23,7 +23,7 @@ import {
 } from "@/lib/queries/tasks";
 import { Search, Filter, LayoutGrid, List, Calendar, Plus, X } from "lucide-react";
 import { recalcProjectProgress } from "@/lib/utils/recalc-progress";
-import { getPriorityLabel, getStatusLabel } from "@/lib/utils";
+import { PROJECT_TYPE_OPTIONS, getPriorityLabel, getProjectTypeLabel, getStatusLabel } from "@/lib/utils";
 import { createSearchMatcher } from "@/lib/utils/search";
 import type { Profile, Task } from "@/lib/supabase/types";
 
@@ -53,6 +53,7 @@ export function KanbanBoard({ tasks: initialTasks, projectId, profiles }: Props)
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [projectTypeFilter, setProjectTypeFilter] = useState("all");
   const [viewMode, setViewMode] = useState<"board" | "list" | "calendar">("board");
 
   const activeTask = useMemo(
@@ -158,10 +159,12 @@ export function KanbanBoard({ tasks: initialTasks, projectId, profiles }: Props)
     const matchesSearch = createSearchMatcher(searchQuery);
 
     return tasks.filter((task) =>
+      (projectTypeFilter === "all" || task.project?.project_type === projectTypeFilter) &&
       matchesSearch([
         task.title,
         task.sub_task,
         task.project?.name,
+        getProjectTypeLabel(task.project?.project_type),
         task.owner?.full_name,
         task.owner_name,
         task.category,
@@ -173,7 +176,7 @@ export function KanbanBoard({ tasks: initialTasks, projectId, profiles }: Props)
         task.alert_message,
       ])
     );
-  }, [tasks, searchQuery]);
+  }, [projectTypeFilter, tasks, searchQuery]);
 
   const tasksByColumn = COLUMNS.reduce<Record<string, typeof tasks>>((acc, col) => {
     acc[col.id] = filteredTasks.filter((t) => t.board_column === col.id);
@@ -205,6 +208,18 @@ export function KanbanBoard({ tasks: initialTasks, projectId, profiles }: Props)
               </button>
             )}
           </div>
+          {!projectId && (
+            <select
+              value={projectTypeFilter}
+              onChange={(event) => setProjectTypeFilter(event.target.value)}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+            >
+              <option value="all">كل أنواع المشاريع</option>
+              {PROJECT_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          )}
           <button className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 text-slate-700 text-sm rounded-lg hover:bg-slate-50 transition-colors shadow-sm font-medium">
             <Filter size={16} className="text-slate-500" /> فلترة
           </button>

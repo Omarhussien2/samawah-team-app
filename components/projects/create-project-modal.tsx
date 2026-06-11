@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { X, Loader2 } from "lucide-react";
 import { normalizeMoney } from "@/lib/projects/budget";
+import { PROJECT_TYPE_OPTIONS } from "@/lib/utils";
 import type { Profile, ProjectTemplate } from "@/lib/supabase/types";
 
 const budgetFieldSchema = z.preprocess(
@@ -21,6 +22,7 @@ const budgetFieldSchema = z.preprocess(
 
 const schema = z.object({
   name: z.string().min(1, "اسم المشروع مطلوب"),
+  project_type: z.enum(["external", "internal"]),
   manager_id: z.string().optional(),
   current_stage: z.string().optional(),
   start_date: z.string().optional(),
@@ -53,6 +55,7 @@ export function CreateProjectModal({ open, onClose, profiles, currentUser, templ
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
+      project_type: "external",
       manager_id: defaultManagerId,
       total_budget: 0,
     },
@@ -78,6 +81,7 @@ export function CreateProjectModal({ open, onClose, profiles, currentUser, templ
       .from("projects")
       .insert({
         name: data.name,
+        project_type: data.project_type,
         manager_id: managerId,
         manager_name: manager?.full_name ?? null,
         current_stage: data.current_stage || null,
@@ -116,7 +120,7 @@ export function CreateProjectModal({ open, onClose, profiles, currentUser, templ
     }
 
     toast.success("تم إنشاء المشروع بنجاح");
-    reset({ manager_id: defaultManagerId, total_budget: 0 });
+    reset({ project_type: "external", manager_id: defaultManagerId, total_budget: 0 });
     onClose();
     router.refresh();
     setLoading(false);
@@ -137,6 +141,15 @@ export function CreateProjectModal({ open, onClose, profiles, currentUser, templ
             <label className="block text-sm font-medium mb-1.5">اسم المشروع *</label>
             <input {...register("name")} className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary" placeholder="اسم المشروع" />
             {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name.message}</p>}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1.5">نوع المشروع</label>
+            <select {...register("project_type")} className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white">
+              {PROJECT_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
           </div>
 
           {currentUser.role === "admin" ? (
