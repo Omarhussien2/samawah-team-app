@@ -55,7 +55,7 @@ export function CreateProjectModal({ open, onClose, profiles, currentUser, templ
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
-      project_type: "external",
+      project_type: "internal",
       manager_id: defaultManagerId,
       total_budget: 0,
     },
@@ -120,7 +120,7 @@ export function CreateProjectModal({ open, onClose, profiles, currentUser, templ
     }
 
     toast.success("تم إنشاء المشروع بنجاح");
-    reset({ project_type: "external", manager_id: defaultManagerId, total_budget: 0 });
+    reset({ project_type: "internal", manager_id: defaultManagerId, total_budget: 0 });
     onClose();
     router.refresh();
     setLoading(false);

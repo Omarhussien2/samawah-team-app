@@ -8,7 +8,8 @@ describe("project type helpers", () => {
     expect(mapProjectType("internal")).toBe("internal");
     expect(mapProjectType("خارجي")).toBe("external");
     expect(mapProjectType("external")).toBe("external");
-    expect(mapProjectType("")).toBe("external");
+    expect(mapProjectType("")).toBe("internal");
+    expect(mapProjectType("غير محدد")).toBe("internal");
   });
 
   it("returns Arabic project type labels", () => {

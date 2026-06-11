@@ -69,8 +69,8 @@ export function getProjectStatusLabel(status: string): string {
 }
 
 export const PROJECT_TYPE_OPTIONS: Array<{ value: ProjectType; label: string }> = [
-  { value: "external", label: "مشروع خارجي" },
   { value: "internal", label: "مشروع داخلي" },
+  { value: "external", label: "مشروع خارجي" },
 ];
 
 export function getProjectTypeLabel(type: string | null | undefined): string {
@@ -78,7 +78,7 @@ export function getProjectTypeLabel(type: string | null | undefined): string {
     internal: "مشروع داخلي",
     external: "مشروع خارجي",
   };
-  return type ? (map[type] ?? type) : map.external;
+  return type ? (map[type] ?? type) : map.internal;
 }
 
 export function getProjectTypeBadgeClass(type: string | null | undefined): string {
@@ -86,12 +86,12 @@ export function getProjectTypeBadgeClass(type: string | null | undefined): strin
     internal: "border-emerald-100 bg-emerald-50 text-emerald-700",
     external: "border-sky-100 bg-sky-50 text-sky-700",
   };
-  return type ? (map[type] ?? map.external) : map.external;
+  return type ? (map[type] ?? map.internal) : map.internal;
 }
 
 export function mapProjectType(value: string | null | undefined): ProjectType {
   const normalized = value?.trim().toLowerCase();
-  if (!normalized) return "external";
+  if (!normalized) return "internal";
 
   if (["internal", "داخلية", "داخلي", "مشروع داخلي"].includes(normalized)) {
     return "internal";
@@ -101,7 +101,7 @@ export function mapProjectType(value: string | null | undefined): ProjectType {
     return "external";
   }
 
-  return "external";
+  return "internal";
 }
 
 export function getChallengeStatusLabel(status: string): string {

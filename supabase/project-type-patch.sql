@@ -2,7 +2,10 @@
 -- Run after the base schema/RLS files if the database already exists.
 
 ALTER TABLE projects
-  ADD COLUMN IF NOT EXISTS project_type TEXT NOT NULL DEFAULT 'external';
+  ADD COLUMN IF NOT EXISTS project_type TEXT NOT NULL DEFAULT 'internal';
+
+ALTER TABLE projects
+  ALTER COLUMN project_type SET DEFAULT 'internal';
 
 DO $$
 BEGIN
@@ -17,4 +20,20 @@ BEGIN
   END IF;
 END $$;
 
+UPDATE projects
+SET project_type = CASE
+  WHEN btrim(name) IN (
+    'أكوا',
+    'البنك المركزي',
+    'رصد - هداية ثون',
+    'هاكاثون هداية',
+    'مؤسسة الجفالي',
+    'مبرة منى، مشروع الأمير متعب'
+  ) THEN 'external'
+  ELSE 'internal'
+END;
+
 CREATE INDEX IF NOT EXISTS idx_projects_project_type ON projects(project_type);
+
+NOTIFY pgrst, 'reload schema';
+SELECT pg_notification_queue_usage();
