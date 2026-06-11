@@ -48,6 +48,7 @@ import {
   getPriorityColor,
   getPriorityLabel,
   getProjectStatusLabel,
+  getProjectType,
   getProjectTypeBadgeClass,
   getProjectTypeLabel,
   getStatusColor,
@@ -401,7 +402,7 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
         ? projects
         : projects.filter((project) => personalProjectIds.has(project.id));
 
-    return visibleProjects.filter((project) => projectTypeFilter === "all" || project.project_type === projectTypeFilter);
+    return visibleProjects.filter((project) => projectTypeFilter === "all" || getProjectType(project) === projectTypeFilter);
   }, [personalProjectIds, projectTypeFilter, projects, selectedView, user.role]);
 
   const scopedProjectIds = useMemo(() => new Set(scopedProjects.map((project) => project.id)), [scopedProjects]);
@@ -1635,7 +1636,7 @@ function HomeTaskPanel({
                   primaryClassName="line-clamp-1 text-sm font-bold text-slate-800"
                 />
                 <p className="mt-1 text-xs text-slate-500">
-                  {projects.get(task.project_id)?.name ?? "مشروع"} · {getProjectTypeLabel(projects.get(task.project_id)?.project_type)} · {formatDateShort(task.due_date)}
+                  {projects.get(task.project_id)?.name ?? "مشروع"} · {getProjectTypeLabel(getProjectType(projects.get(task.project_id)))} · {formatDateShort(task.due_date)}
                 </p>
               </Link>
             </div>
@@ -1697,8 +1698,8 @@ function ProjectResultList({
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="line-clamp-1 text-sm font-black text-slate-900">{info.project.name}</p>
-                <span className={cn("shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-bold", getProjectTypeBadgeClass(info.project.project_type))}>
-                  {getProjectTypeLabel(info.project.project_type)}
+                <span className={cn("shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-bold", getProjectTypeBadgeClass(getProjectType(info.project)))}>
+                  {getProjectTypeLabel(getProjectType(info.project))}
                 </span>
               </div>
               <p className="mt-1 line-clamp-1 text-xs font-semibold text-slate-500">{info.healthReason}</p>
@@ -1757,7 +1758,7 @@ function TaskResultList({
               primaryClassName="line-clamp-1 text-sm font-bold text-slate-800"
             />
             <p className="mt-1 text-xs text-slate-500">
-              {projects.get(task.project_id)?.name ?? "مشروع"} · {getProjectTypeLabel(projects.get(task.project_id)?.project_type)} · {formatDateShort(task.due_date)}
+              {projects.get(task.project_id)?.name ?? "مشروع"} · {getProjectTypeLabel(getProjectType(projects.get(task.project_id)))} · {formatDateShort(task.due_date)}
             </p>
           </button>
         </div>
@@ -1820,7 +1821,7 @@ function ProjectCards({
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-bold text-slate-500">
                   <span>{info.role === "manager" ? "مدير المشروع" : info.role === "member" ? "عضو" : "ضمن المحفظة"}</span>
                   <span className="h-1 w-1 rounded-full bg-slate-300" />
-                  <span>{getProjectTypeLabel(info.project.project_type)}</span>
+                  <span>{getProjectTypeLabel(getProjectType(info.project))}</span>
                   <span className="h-1 w-1 rounded-full bg-slate-300" />
                   <span>{getProjectStatusLabel(info.project.status)}</span>
                   <span className="h-1 w-1 rounded-full bg-slate-300" />
@@ -1935,7 +1936,7 @@ function TaskDrillDown({
               <td className="hidden px-5 py-3 text-slate-600 md:table-cell">
                 <div className="grid gap-1">
                   <span>{projects.get(task.project_id)?.name ?? "—"}</span>
-                  <span className="text-[11px] font-bold text-slate-400">{getProjectTypeLabel(projects.get(task.project_id)?.project_type)}</span>
+                  <span className="text-[11px] font-bold text-slate-400">{getProjectTypeLabel(getProjectType(projects.get(task.project_id)))}</span>
                 </div>
               </td>
               <td className="hidden px-5 py-3 lg:table-cell">
@@ -1982,8 +1983,8 @@ function ProjectDrillDown({ infos, onSelect }: { infos: ProjectInfo[]; onSelect:
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <p className="line-clamp-1 text-sm font-black text-slate-900">{info.project.name}</p>
-                <span className={cn("shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-bold", getProjectTypeBadgeClass(info.project.project_type))}>
-                  {getProjectTypeLabel(info.project.project_type)}
+                <span className={cn("shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-bold", getProjectTypeBadgeClass(getProjectType(info.project)))}>
+                  {getProjectTypeLabel(getProjectType(info.project))}
                 </span>
               </div>
               <p className="mt-1 text-xs text-slate-500">{info.healthReason}</p>

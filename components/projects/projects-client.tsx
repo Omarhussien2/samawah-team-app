@@ -5,7 +5,7 @@ import { LayoutGrid, List, Plus, Search, FolderKanban, Clock, X } from "lucide-r
 import { ProjectCard } from "./project-card";
 import { ProjectRow } from "./project-row";
 import { CreateProjectModal } from "./create-project-modal";
-import { PROJECT_TYPE_OPTIONS, getProjectStatusLabel, getProjectTypeLabel } from "@/lib/utils";
+import { PROJECT_TYPE_OPTIONS, getProjectStatusLabel, getProjectType, getProjectTypeLabel } from "@/lib/utils";
 import { createSearchMatcher } from "@/lib/utils/search";
 import type { Profile, Project, ProjectTemplate, ProjectType } from "@/lib/supabase/types";
 
@@ -41,14 +41,13 @@ export function ProjectsClient({ projects, profiles, templates, currentUser }: P
           p.description,
           p.status,
           getProjectStatusLabel(p.status),
-          p.project_type,
-          getProjectTypeLabel(p.project_type),
+          getProjectTypeLabel(getProjectType(p)),
         ])
       ) {
         return false;
       }
       if (filterStatus && p.status !== filterStatus) return false;
-      if (filterType && p.project_type !== filterType) return false;
+      if (filterType && getProjectType(p) !== filterType) return false;
       if (filterManager && p.manager_id !== filterManager) return false;
       return true;
     });

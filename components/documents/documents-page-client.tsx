@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { createClient } from "@/lib/supabase/client";
-import { PROJECT_TYPE_OPTIONS, formatRelativeAr, getProjectTypeBadgeClass, getProjectTypeLabel } from "@/lib/utils";
+import { PROJECT_TYPE_OPTIONS, formatRelativeAr, getProjectType, getProjectTypeBadgeClass, getProjectTypeLabel } from "@/lib/utils";
 import { createSearchMatcher } from "@/lib/utils/search";
 import {
   buildDocumentStoragePath,
@@ -30,12 +30,12 @@ import type { Document, Profile, Project } from "@/lib/supabase/types";
 
 type DocumentWithRelations = Document & {
   creator?: { id: string; full_name: string | null } | null;
-  project?: Pick<Project, "id" | "name" | "project_type"> | null;
+  project?: Pick<Project, "id" | "name"> & Partial<Pick<Project, "project_type">> | null;
 };
 
 interface Props {
   documents: DocumentWithRelations[];
-  projects: Pick<Project, "id" | "name" | "project_type">[];
+  projects: (Pick<Project, "id" | "name"> & Partial<Pick<Project, "project_type">>)[];
   currentUser: Profile;
 }
 
@@ -69,7 +69,7 @@ export function DocumentsPageClient({ documents, projects, currentUser }: Props)
         doc.type,
         doc.stage,
         doc.project?.name,
-        getProjectTypeLabel(doc.project?.project_type),
+        getProjectTypeLabel(getProjectType(doc.project)),
         doc.creator?.full_name,
         doc.url,
         doc.file_path,
@@ -79,14 +79,14 @@ export function DocumentsPageClient({ documents, projects, currentUser }: Props)
       }
       if (filterType !== "all" && doc.type !== filterType) return false;
       if (filterStage !== "all" && (doc.stage ?? "none") !== filterStage) return false;
-      if (filterProjectType !== "all" && doc.project?.project_type !== filterProjectType) return false;
+      if (filterProjectType !== "all" && getProjectType(doc.project) !== filterProjectType) return false;
       if (filterProject !== "all" && doc.project_id !== filterProject) return false;
       return true;
     });
   }, [documents, search, filterType, filterStage, filterProjectType, filterProject]);
 
   const visibleProjects = useMemo(
-    () => projects.filter((project) => filterProjectType === "all" || project.project_type === filterProjectType),
+    () => projects.filter((project) => filterProjectType === "all" || getProjectType(project) === filterProjectType),
     [filterProjectType, projects]
   );
 
@@ -326,7 +326,7 @@ export function DocumentsPageClient({ documents, projects, currentUser }: Props)
             <SelectItem value="all">كل المشاريع</SelectItem>
             {visibleProjects.map((project) => (
               <SelectItem key={project.id} value={project.id}>
-                {project.name} - {getProjectTypeLabel(project.project_type)}
+                {project.name} - {getProjectTypeLabel(getProjectType(project))}
               </SelectItem>
             ))}
           </SelectContent>
@@ -356,8 +356,8 @@ export function DocumentsPageClient({ documents, projects, currentUser }: Props)
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <Badge variant="secondary">{doc.type ?? "أخرى"}</Badge>
                   <Badge variant="outline">{doc.stage ?? "غير محدد"}</Badge>
-                  <Badge variant="outline" className={getProjectTypeBadgeClass(doc.project?.project_type)}>
-                    {getProjectTypeLabel(doc.project?.project_type)}
+                  <Badge variant="outline" className={getProjectTypeBadgeClass(getProjectType(doc.project))}>
+                    {getProjectTypeLabel(getProjectType(doc.project))}
                   </Badge>
                 </div>
 
@@ -428,7 +428,7 @@ interface DocumentDialogProps {
   open: boolean;
   title: string;
   form: typeof EMPTY_FORM;
-  projects: Pick<Project, "id" | "name" | "project_type">[];
+  projects: (Pick<Project, "id" | "name"> & Partial<Pick<Project, "project_type">>)[];
   saving: boolean;
   selectedFile: File | null;
   allowFileUpload: boolean;
@@ -485,7 +485,7 @@ function DocumentDialog({
                 <SelectItem value="none">اختر المشروع</SelectItem>
                 {projects.map((project) => (
                   <SelectItem key={project.id} value={project.id}>
-                    {project.name} - {getProjectTypeLabel(project.project_type)}
+                    {project.name} - {getProjectTypeLabel(getProjectType(project))}
                   </SelectItem>
                 ))}
               </SelectContent>

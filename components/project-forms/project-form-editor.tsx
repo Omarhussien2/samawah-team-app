@@ -10,7 +10,7 @@ import { parseFormSchema, type ProjectFormData } from "@/lib/project-forms/schem
 import type { ProjectFormTemplateWithInstance } from "@/lib/project-forms/types";
 import { DynamicFormRenderer } from "./dynamic-form-renderer";
 import { ProjectFormPreview } from "./project-form-preview";
-import { getProjectTypeLabel } from "@/lib/utils";
+import { getProjectType, getProjectTypeLabel } from "@/lib/utils";
 
 interface Props {
   open: boolean;
@@ -27,8 +27,8 @@ function getPrefillValue(prefill: string | undefined, project: Project) {
   if (!prefill) return undefined;
   const map: Record<string, unknown> = {
     "project.name": project.name,
-    "project.project_type": project.project_type,
-    "project.project_type_label": getProjectTypeLabel(project.project_type),
+    "project.project_type": getProjectType(project),
+    "project.project_type_label": getProjectTypeLabel(getProjectType(project)),
     "project.start_date": project.start_date,
     "project.end_date": project.end_date,
     "project.total_budget": project.total_budget,

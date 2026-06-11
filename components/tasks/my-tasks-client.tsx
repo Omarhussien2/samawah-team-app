@@ -10,6 +10,7 @@ import {
   cn,
   formatDateShort,
   getPriorityLabel,
+  getProjectType,
   getProjectTypeBadgeClass,
   getProjectTypeLabel,
   getStatusColor,
@@ -119,13 +120,13 @@ export function MyTasksClient({ tasks: initialTasks, currentUser, profiles }: Pr
                 : true;
 
       if (!matchesFilter) return false;
-      if (projectTypeFilter !== "all" && t.project?.project_type !== projectTypeFilter) return false;
+      if (projectTypeFilter !== "all" && getProjectType(t.project) !== projectTypeFilter) return false;
 
       return matchesSearch([
         t.title,
         t.sub_task,
         t.project?.name,
-        getProjectTypeLabel(t.project?.project_type),
+        getProjectTypeLabel(getProjectType(t.project)),
         t.owner?.full_name,
         t.owner_name,
         t.category,
@@ -280,8 +281,8 @@ export function MyTasksClient({ tasks: initialTasks, currentUser, profiles }: Pr
                         </span>
                       )}
                       {task.project && (
-                        <span className={cn("text-xs rounded-full border px-2 py-0.5 font-bold", getProjectTypeBadgeClass(task.project.project_type))}>
-                          {getProjectTypeLabel(task.project.project_type)}
+                        <span className={cn("text-xs rounded-full border px-2 py-0.5 font-bold", getProjectTypeBadgeClass(getProjectType(task.project)))}>
+                          {getProjectTypeLabel(getProjectType(task.project))}
                         </span>
                       )}
                       {overdueTask && (

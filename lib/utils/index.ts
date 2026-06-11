@@ -73,12 +73,47 @@ export const PROJECT_TYPE_OPTIONS: Array<{ value: ProjectType; label: string }> 
   { value: "external", label: "مشروع خارجي" },
 ];
 
+function normalizeProjectName(name: string | null | undefined): string {
+  return (name ?? "")
+    .trim()
+    .replace(/[أإآ]/g, "ا")
+    .replace(/[،,\-_]/g, " ")
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+function isValidProjectType(type: string | null | undefined): type is ProjectType {
+  return type === "internal" || type === "external";
+}
+
+export function inferProjectTypeFromName(name: string | null | undefined): ProjectType {
+  const normalized = normalizeProjectName(name);
+
+  if (
+    normalized.includes("خارجي") ||
+    normalized.includes("اكو") ||
+    normalized.includes("البنك المركزي") ||
+    normalized.includes("الجفالي") ||
+    normalized.includes("مبرة منى") ||
+    (normalized.includes("رصد") && normalized.includes("هداية")) ||
+    (normalized.includes("هاكاثون") && normalized.includes("هداية"))
+  ) {
+    return "external";
+  }
+
+  return "internal";
+}
+
+export function getProjectType(project: { name?: string | null; project_type?: string | null } | null | undefined): ProjectType {
+  return isValidProjectType(project?.project_type) ? project.project_type : inferProjectTypeFromName(project?.name);
+}
+
 export function getProjectTypeLabel(type: string | null | undefined): string {
   const map: Record<string, string> = {
     internal: "مشروع داخلي",
     external: "مشروع خارجي",
   };
-  return type ? (map[type] ?? type) : map.internal;
+  return type ? (map[type] ?? getProjectTypeLabel(inferProjectTypeFromName(type))) : map.internal;
 }
 
 export function getProjectTypeBadgeClass(type: string | null | undefined): string {
@@ -86,7 +121,8 @@ export function getProjectTypeBadgeClass(type: string | null | undefined): strin
     internal: "border-emerald-100 bg-emerald-50 text-emerald-700",
     external: "border-sky-100 bg-sky-50 text-sky-700",
   };
-  return type ? (map[type] ?? map.internal) : map.internal;
+  if (isValidProjectType(type)) return map[type];
+  return type ? map[inferProjectTypeFromName(type)] : map.internal;
 }
 
 export function mapProjectType(value: string | null | undefined): ProjectType {

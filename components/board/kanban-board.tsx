@@ -23,7 +23,7 @@ import {
 } from "@/lib/queries/tasks";
 import { Search, Filter, LayoutGrid, List, Calendar, Plus, X } from "lucide-react";
 import { recalcProjectProgress } from "@/lib/utils/recalc-progress";
-import { PROJECT_TYPE_OPTIONS, getPriorityLabel, getProjectTypeLabel, getStatusLabel } from "@/lib/utils";
+import { PROJECT_TYPE_OPTIONS, getPriorityLabel, getProjectType, getProjectTypeLabel, getStatusLabel } from "@/lib/utils";
 import { createSearchMatcher } from "@/lib/utils/search";
 import type { Profile, Task } from "@/lib/supabase/types";
 
@@ -159,12 +159,12 @@ export function KanbanBoard({ tasks: initialTasks, projectId, profiles }: Props)
     const matchesSearch = createSearchMatcher(searchQuery);
 
     return tasks.filter((task) =>
-      (projectTypeFilter === "all" || task.project?.project_type === projectTypeFilter) &&
+      (projectTypeFilter === "all" || getProjectType(task.project) === projectTypeFilter) &&
       matchesSearch([
         task.title,
         task.sub_task,
         task.project?.name,
-        getProjectTypeLabel(task.project?.project_type),
+        getProjectTypeLabel(getProjectType(task.project)),
         task.owner?.full_name,
         task.owner_name,
         task.category,

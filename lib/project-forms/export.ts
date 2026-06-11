@@ -1,7 +1,7 @@
 import type { Profile, Project } from "@/lib/supabase/types";
 import { parseFormSchema, type ProjectFormData, type ProjectFormField, type ProjectFormSchema, type ProjectFormTableColumn } from "./schema";
 import type { ProjectFormTemplateWithInstance } from "./types";
-import { getProjectTypeLabel } from "@/lib/utils";
+import { getProjectType, getProjectTypeLabel } from "@/lib/utils";
 
 type ExportProfile = Pick<Profile, "id" | "full_name">;
 
@@ -124,7 +124,7 @@ function buildExportBody(project: Project, form: ProjectFormTemplateWithInstance
       <h1>${escapeHtml(form.template.name)}</h1>
       <div class="meta-grid">
         <div><span>المشروع</span><strong>${escapeHtml(project.name)}</strong></div>
-        <div><span>نوع المشروع</span><strong>${escapeHtml(getProjectTypeLabel(project.project_type))}</strong></div>
+        <div><span>نوع المشروع</span><strong>${escapeHtml(getProjectTypeLabel(getProjectType(project)))}</strong></div>
         <div><span>الحالة</span><strong>${escapeHtml(form.statusLabel)}</strong></div>
         <div><span>الإكمال</span><strong>${escapeHtml(form.completion)}%</strong></div>
         <div><span>آخر تحديث</span><strong>${escapeHtml(form.updatedAt ? new Date(form.updatedAt).toLocaleDateString("ar") : "-")}</strong></div>
@@ -274,7 +274,7 @@ export async function buildFormDocxBlob({ project, form, data, profiles = [] }: 
       children: [new docx.TextRun({ text: form.template.name, bold: true, size: 34, font: "Arial" })],
     }),
     docxParagraph(docx, `المشروع: ${project.name}`, true),
-    docxParagraph(docx, `نوع المشروع: ${getProjectTypeLabel(project.project_type)}`, true),
+    docxParagraph(docx, `نوع المشروع: ${getProjectTypeLabel(getProjectType(project))}`, true),
     docxParagraph(docx, `الحالة: ${form.statusLabel}`),
     docxParagraph(docx, `نسبة الإكمال: ${form.completion}%`),
   ];

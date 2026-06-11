@@ -19,12 +19,12 @@ export default async function DashboardPage() {
       .order("updated_at", { ascending: false }),
     supabase
       .from("tasks")
-      .select("*, owner:profiles(id,full_name,avatar_url), project:projects(id,name,project_type)")
+      .select("*, owner:profiles(id,full_name,avatar_url), project:projects(id,name)")
       .order("due_date", { ascending: true, nullsFirst: false }),
     supabase.from("project_members").select("project_id,user_id,role_in_project"),
     supabase
       .from("challenges")
-      .select("*, owner:profiles(id,full_name), project:projects(id,name,project_type)")
+      .select("*, owner:profiles(id,full_name), project:projects(id,name)")
       .order("created_at", { ascending: false }),
     supabase
       .from("comments")

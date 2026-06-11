@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { formatDateShort, getProjectStatusLabel, getProjectTypeBadgeClass, getProjectTypeLabel, cn } from "@/lib/utils";
+import { formatDateShort, getProjectStatusLabel, getProjectType, getProjectTypeBadgeClass, getProjectTypeLabel, cn } from "@/lib/utils";
 import type { Profile, Project } from "@/lib/supabase/types";
 
 const statusColors: Record<string, string> = {
@@ -25,8 +25,8 @@ export function ProjectRow({ project }: Props) {
           <span className="font-medium text-foreground hover:text-primary transition-colors line-clamp-1">
             {project.name}
           </span>
-          <span className={cn("hidden rounded-md border px-2 py-0.5 text-[11px] font-bold sm:inline-flex", getProjectTypeBadgeClass(project.project_type))}>
-            {getProjectTypeLabel(project.project_type)}
+          <span className={cn("hidden rounded-md border px-2 py-0.5 text-[11px] font-bold sm:inline-flex", getProjectTypeBadgeClass(getProjectType(project)))}>
+            {getProjectTypeLabel(getProjectType(project))}
           </span>
         </Link>
       </td>

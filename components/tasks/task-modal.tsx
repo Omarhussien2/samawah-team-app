@@ -11,6 +11,7 @@ import {
   getAlertLevelColor,
   getAvatarUrl,
   getPriorityColor,
+  getProjectType,
   getProjectTypeBadgeClass,
   getProjectTypeLabel,
   getStatusLabel,
@@ -52,7 +53,10 @@ interface CommentWithUser {
 }
 
 interface Props {
-  task: Task & { owner?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null; project?: Pick<Project, "id" | "name" | "project_type"> | null };
+  task: Task & {
+    owner?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null;
+    project?: Pick<Project, "id" | "name"> & Partial<Pick<Project, "project_type">> | null;
+  };
   profiles: Pick<Profile, "id" | "full_name" | "avatar_url">[];
   onClose: () => void;
   onTaskSaved?: (task: Task) => void;
@@ -436,8 +440,8 @@ export function TaskModal({ task, profiles, onClose, onTaskSaved, onTaskDeleted,
               </span>
             )}
             {task.project && (
-              <span className={cn("text-xs font-bold rounded-md border px-2.5 py-1", getProjectTypeBadgeClass(task.project.project_type))}>
-                {getProjectTypeLabel(task.project.project_type)}
+              <span className={cn("text-xs font-bold rounded-md border px-2.5 py-1", getProjectTypeBadgeClass(getProjectType(task.project)))}>
+                {getProjectTypeLabel(getProjectType(task.project))}
               </span>
             )}
           </div>

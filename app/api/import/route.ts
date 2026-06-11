@@ -18,6 +18,11 @@ function cleanNum(val: number | string | null | undefined): number | null {
   return n;
 }
 
+function isMissingProjectTypeColumn(error: { message?: string; code?: string } | null): boolean {
+  const message = error?.message ?? "";
+  return error?.code === "PGRST204" || (message.includes("project_type") && message.includes("schema cache"));
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { type, data } = await request.json();
@@ -45,10 +50,30 @@ export async function POST(request: NextRequest) {
           status: "active",
         };
 
-        const { error } = await supabase.from("projects").upsert(row, {
+        let { error } = await supabase.from("projects").upsert(row, {
           ...(legacyId ? { onConflict: "legacy_project_id" } : {}),
           ignoreDuplicates: false,
         });
+
+        if (isMissingProjectTypeColumn(error)) {
+          const rowWithoutType: Omit<ProjectInsert, "project_type"> = {
+            ...(legacyId ? { legacy_project_id: legacyId } : {}),
+            name: row.name,
+            manager_name: row.manager_name,
+            path: row.path,
+            current_stage: row.current_stage,
+            start_date: row.start_date,
+            end_date: row.end_date,
+            total_budget: row.total_budget,
+            description: row.description,
+            status: row.status,
+          };
+          const retry = await supabase.from("projects").upsert(rowWithoutType, {
+            ...(legacyId ? { onConflict: "legacy_project_id" } : {}),
+            ignoreDuplicates: false,
+          });
+          error = retry.error;
+        }
         if (error) {
           errorCount++;
           errorDetails.push(`مشروع "${project.name}": ${error.message}`);

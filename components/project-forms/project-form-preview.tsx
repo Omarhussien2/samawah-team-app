@@ -8,7 +8,7 @@ import { DynamicFormRenderer } from "./dynamic-form-renderer";
 import { buildPrintableHtml, downloadFormDocx, downloadFormPdf } from "@/lib/project-forms/export";
 import { parseFormSchema, type ProjectFormData } from "@/lib/project-forms/schema";
 import type { ProjectFormTemplateWithInstance } from "@/lib/project-forms/types";
-import { getProjectTypeLabel } from "@/lib/utils";
+import { getProjectType, getProjectTypeLabel } from "@/lib/utils";
 
 interface Props {
   project: Project;
@@ -54,7 +54,7 @@ export function ProjectFormPreview({ project, form, data, profiles = [], open, o
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <div>
             <h2 className="text-lg font-black text-slate-900">{form.template.name}</h2>
-            <p className="text-xs text-slate-500">معاينة قابلة للطباعة - {project.name} - {getProjectTypeLabel(project.project_type)}</p>
+            <p className="text-xs text-slate-500">معاينة قابلة للطباعة - {project.name} - {getProjectTypeLabel(getProjectType(project))}</p>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => handleExport("pdf")} disabled={exporting === "pdf"} className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50 disabled:opacity-60" title="تحميل PDF">
@@ -75,7 +75,7 @@ export function ProjectFormPreview({ project, form, data, profiles = [], open, o
           <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-5">
             <div className="grid gap-3 text-sm md:grid-cols-5">
               <div><span className="text-slate-400">المشروع</span><p className="font-bold text-slate-800">{project.name}</p></div>
-              <div><span className="text-slate-400">نوع المشروع</span><p className="font-bold text-slate-800">{getProjectTypeLabel(project.project_type)}</p></div>
+              <div><span className="text-slate-400">نوع المشروع</span><p className="font-bold text-slate-800">{getProjectTypeLabel(getProjectType(project))}</p></div>
               <div><span className="text-slate-400">الحالة</span><p className="font-bold text-slate-800">{form.statusLabel}</p></div>
               <div><span className="text-slate-400">الإكمال</span><p className="font-bold text-slate-800">{form.completion}%</p></div>
               <div><span className="text-slate-400">آخر تحديث</span><p className="font-bold text-slate-800">{form.updatedAt ? new Date(form.updatedAt).toLocaleDateString("ar") : "-"}</p></div>
