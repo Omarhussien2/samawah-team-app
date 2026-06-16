@@ -45,7 +45,7 @@ import type { Challenge, Profile, Project, ProjectDailySnapshot, Task } from "@/
 
 type BurnMode = "burndown" | "burnup";
 type AnalyticsFocus = "tasks" | "risks" | null;
-type AnalyticsChart = "burn" | "progress" | "budget" | "flow" | "risks";
+type AnalyticsChart = "progress" | "budget" | "flow" | "risks";
 type TaskStatusFilter = Task["status"] | "all";
 type TaskPriorityFilter = Task["priority"] | "all";
 type PeriodFilter = "all" | "today" | "week" | "month" | "overdue";
@@ -90,7 +90,7 @@ const TASK_STATUSES: Task["status"][] = ["Backlog", "To Do", "In Progress", "Rev
 const TASK_PRIORITIES: Task["priority"][] = ["critical", "high", "medium", "low"];
 const OPEN_TASK_STATUSES: Task["status"][] = ["Backlog", "To Do", "In Progress", "Review"];
 const OPEN_CHALLENGE_STATUSES = ["open", "in_progress"];
-const ANALYTICS_CHARTS: AnalyticsChart[] = ["burn", "progress", "budget", "flow", "risks"];
+const ANALYTICS_CHARTS: AnalyticsChart[] = ["progress", "budget", "flow", "risks"];
 
 const STATUS_COLORS: Record<Task["status"], string> = {
   Backlog: "#a78bfa",
@@ -237,6 +237,14 @@ function timelinePayload(event: unknown) {
   return payload?.[0]?.payload ?? null;
 }
 
+function progressTooltipFormatter(value: number | string, name: string | number) {
+  const numericValue = Number(value);
+  const displayValue = Number.isFinite(numericValue) ? Math.round(numericValue).toLocaleString("ar") : value;
+  const label = String(name);
+
+  return [label.includes("نسبة") ? `${displayValue}%` : `${displayValue} مهمة`, label];
+}
+
 export function ProjectOverviewAnalytics({ project, tasks, challenges, snapshots = [] }: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -257,13 +265,14 @@ export function ProjectOverviewAnalytics({ project, tasks, challenges, snapshots
   const focus: AnalyticsFocus = focusParam === "tasks" || focusParam === "risks" ? focusParam : null;
   const selectedDate = searchParams.get("analyticsDate");
   const selectedRiskCell = parseRiskCell(searchParams.get("analyticsRisk"));
-  const chartParam = searchParams.get("analyticsChart") as AnalyticsChart | null;
+  const chartParam = searchParams.get("analyticsChart");
+  const normalizedChartParam = chartParam === "burn" ? "progress" : chartParam;
   const activeChart: AnalyticsChart =
-    chartParam && ANALYTICS_CHARTS.includes(chartParam)
-      ? chartParam
+    normalizedChartParam && ANALYTICS_CHARTS.includes(normalizedChartParam as AnalyticsChart)
+      ? (normalizedChartParam as AnalyticsChart)
       : focus === "risks" || selectedRiskCell
         ? "risks"
-        : "burn";
+        : "progress";
 
   const setQuery = useCallback((updates: Record<string, string | null>) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -473,23 +482,21 @@ export function ProjectOverviewAnalytics({ project, tasks, challenges, snapshots
     periodFilter !== "all" ||
     Boolean(focus || selectedDate || selectedRiskCell);
   const analyticsFocusForFilters: Exclude<AnalyticsFocus, null> = activeChart === "risks" ? "risks" : "tasks";
+  const latestTimelinePoint = timeline.length > 0 ? timeline[timeline.length - 1] : null;
+  const progressCountLabel = burnMode === "burndown" ? "المتبقي" : "المنجز";
+  const latestActualCount = latestTimelinePoint?.["الفعلي"] ?? 0;
+  const latestPlannedCount = latestTimelinePoint?.["المخطط"] ?? 0;
+  const latestActualProgress = latestTimelinePoint?.["الإنجاز الفعلي"] ?? pct(doneCount, filteredTasks.length);
+  const latestPlannedProgress = latestTimelinePoint?.["الإنجاز المخطط"] ?? 0;
   const chartOptions = useMemo<ChartOption[]>(
     () => [
       {
-        id: "burn",
-        title: burnMode === "burndown" ? "منحنى المتبقي" : "منحنى المنجز",
-        description: "هل العمل يسير أسرع أو أبطأ من المخطط.",
-        insight: `${filteredTasks.length} مهمة`,
-        icon: TrendingUp,
-        tone: overdueCount > 0 ? "warning" : "neutral",
-      },
-      {
         id: "progress",
-        title: "S-Curve للإنجاز",
-        description: "المخطط مقابل الفعلي عبر الزمن.",
-        insight: `${pct(doneCount, filteredTasks.length)}% إنجاز`,
-        icon: Activity,
-        tone: "good",
+        title: "منحنى التقدم",
+        description: "يجمع عدد المهام ونسبة الإنجاز في قراءة واحدة.",
+        insight: `${doneCount}/${filteredTasks.length} مكتملة`,
+        icon: TrendingUp,
+        tone: overdueCount > 0 ? "warning" : "good",
       },
       {
         id: "budget",
@@ -516,7 +523,7 @@ export function ProjectOverviewAnalytics({ project, tasks, challenges, snapshots
         tone: riskSource.length > 0 ? "risk" : "good",
       },
     ],
-    [budgetUsage, burnMode, doneCount, filteredTasks.length, overdueCount, riskSource.length]
+    [budgetUsage, doneCount, filteredTasks.length, overdueCount, riskSource.length]
   );
 
   return (
@@ -679,55 +686,37 @@ export function ProjectOverviewAnalytics({ project, tasks, challenges, snapshots
         }
       />
 
-      {activeChart === "burn" && (
+      {activeChart === "progress" && (
         <AnalyticsCard
-          title={burnMode === "burndown" ? "منحنى المتبقي" : "منحنى المنجز"}
-          subtitle={timelineSourceLabel}
+          title="منحنى التقدم المتكامل"
+          subtitle={`${timelineSourceLabel} · العدد على اليمين والنسبة على اليسار`}
           icon={TrendingUp}
           action={
             <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-1 text-xs font-bold">
               <button
-                onClick={() => setBurnMode("burndown")}
-                className={cn("rounded-md px-3 py-1.5", burnMode === "burndown" ? "bg-white text-primary shadow-sm" : "text-slate-500")}
-              >
-                Burn-down
-              </button>
-              <button
                 onClick={() => setBurnMode("burnup")}
                 className={cn("rounded-md px-3 py-1.5", burnMode === "burnup" ? "bg-white text-primary shadow-sm" : "text-slate-500")}
               >
-                Burn-up
+                المنجز
+              </button>
+              <button
+                onClick={() => setBurnMode("burndown")}
+                className={cn("rounded-md px-3 py-1.5", burnMode === "burndown" ? "bg-white text-primary shadow-sm" : "text-slate-500")}
+              >
+                المتبقي
               </button>
             </div>
           }
         >
+          <div className="mb-4 grid gap-3 sm:grid-cols-3">
+            <ProgressInsight label={`${progressCountLabel} الفعلي`} value={`${latestActualCount.toLocaleString("ar")} مهمة`} tone="primary" />
+            <ProgressInsight label={`${progressCountLabel} المخطط`} value={`${latestPlannedCount.toLocaleString("ar")} مهمة`} tone="muted" />
+            <ProgressInsight label="نسبة الإنجاز" value={`${latestActualProgress}%`} hint={`المخطط ${latestPlannedProgress}%`} tone="success" />
+          </div>
           <ResponsiveContainer width="100%" height={320}>
             <LineChart
               data={timeline}
-              margin={{ top: 8, right: 10, left: 8, bottom: 8 }}
-              onClick={(event) => {
-                const entry = timelinePayload(event);
-                if (entry) setQuery({ analyticsChart: "burn", analyticsFocus: "tasks", analyticsDate: entry.date, analyticsRisk: null });
-              }}
-            >
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-              <XAxis dataKey="label" fontSize={11} />
-              <YAxis allowDecimals={false} fontSize={11} />
-              <Tooltip contentStyle={TOOLTIP_STYLE} />
-              <Legend />
-              <Line type="monotone" dataKey="المخطط" stroke="#94a3b8" strokeWidth={3} dot={false} />
-              <Line type="monotone" dataKey="الفعلي" stroke="#4f46e5" strokeWidth={3} activeDot={{ r: 6 }} />
-            </LineChart>
-          </ResponsiveContainer>
-        </AnalyticsCard>
-      )}
-
-      {activeChart === "progress" && (
-        <AnalyticsCard title="S-Curve للإنجاز" subtitle={timelineSourceLabel} icon={Activity}>
-          <ResponsiveContainer width="100%" height={320}>
-            <LineChart
-              data={timeline}
-              margin={{ top: 8, right: 10, left: 8, bottom: 8 }}
+              margin={{ top: 8, right: 8, left: 8, bottom: 8 }}
               onClick={(event) => {
                 const entry = timelinePayload(event);
                 if (entry) setQuery({ analyticsChart: "progress", analyticsFocus: "tasks", analyticsDate: entry.date, analyticsRisk: null });
@@ -735,11 +724,14 @@ export function ProjectOverviewAnalytics({ project, tasks, challenges, snapshots
             >
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
               <XAxis dataKey="label" fontSize={11} />
-              <YAxis domain={[0, 100]} tickFormatter={(value) => `${value}%`} fontSize={11} />
-              <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value: number | string) => `${value}%`} />
+              <YAxis yAxisId="percent" orientation="left" domain={[0, 100]} tickFormatter={(value) => `${value}%`} fontSize={11} />
+              <YAxis yAxisId="tasks" orientation="right" allowDecimals={false} fontSize={11} />
+              <Tooltip contentStyle={TOOLTIP_STYLE} formatter={progressTooltipFormatter} />
               <Legend />
-              <Line type="monotone" dataKey="الإنجاز المخطط" stroke="#94a3b8" strokeWidth={3} dot={false} />
-              <Line type="monotone" dataKey="الإنجاز الفعلي" stroke="#10b981" strokeWidth={3} activeDot={{ r: 6 }} />
+              <Line yAxisId="tasks" type="monotone" dataKey="المخطط" name={`${progressCountLabel} المخطط`} stroke="#94a3b8" strokeWidth={3} strokeDasharray="6 4" dot={false} />
+              <Line yAxisId="tasks" type="monotone" dataKey="الفعلي" name={`${progressCountLabel} الفعلي`} stroke="#4f46e5" strokeWidth={3} activeDot={{ r: 6 }} />
+              <Line yAxisId="percent" type="monotone" dataKey="الإنجاز المخطط" name="نسبة المخطط" stroke="#14b8a6" strokeWidth={2.5} strokeDasharray="5 4" dot={false} />
+              <Line yAxisId="percent" type="monotone" dataKey="الإنجاز الفعلي" name="نسبة الفعلي" stroke="#10b981" strokeWidth={3} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         </AnalyticsCard>
@@ -894,7 +886,7 @@ function ChartSelector({
       </div>
 
       <div className="overflow-x-auto pb-1">
-        <div className="grid min-w-max grid-flow-col auto-cols-[170px] gap-2 xl:min-w-0 xl:grid-flow-row xl:grid-cols-5 xl:auto-cols-auto">
+        <div className="grid min-w-max grid-flow-col auto-cols-[170px] gap-2 xl:min-w-0 xl:grid-flow-row xl:grid-cols-4 xl:auto-cols-auto">
           {options.map((option) => {
             const Icon = option.icon;
             const active = activeChart === option.id;
@@ -971,6 +963,32 @@ function AnalyticsStat({
         </span>
       </div>
       <p className="mt-2 text-[11px] font-medium text-slate-500">{hint}</p>
+    </div>
+  );
+}
+
+function ProgressInsight({
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  tone: "primary" | "muted" | "success";
+}) {
+  const toneClass = {
+    primary: "border-indigo-100 bg-indigo-50 text-indigo-700",
+    muted: "border-slate-200 bg-slate-50 text-slate-700",
+    success: "border-emerald-100 bg-emerald-50 text-emerald-700",
+  }[tone];
+
+  return (
+    <div className={cn("rounded-xl border px-3 py-2.5", toneClass)}>
+      <p className="text-[11px] font-bold text-slate-500">{label}</p>
+      <p className="mt-1 text-lg font-black">{value}</p>
+      {hint && <p className="mt-1 text-[11px] font-bold opacity-75">{hint}</p>}
     </div>
   );
 }
