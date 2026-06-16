@@ -136,15 +136,16 @@ export function QuickAddTaskModal({ open, onClose, defaultProjectId, onTaskCreat
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 p-3 sm:p-4">
+      <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:max-h-[calc(100dvh-2rem)]">
         <div className="flex items-center gap-2 px-6 py-4 border-b border-border">
           <Zap size={18} className="text-primary" />
           <h2 className="text-lg font-bold flex-1">إضافة مهمة سريعة</h2>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X size={20} /></button>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5 overscroll-contain">
           <div>
             <label className="block text-sm font-medium mb-1.5">اسم المهمة *</label>
             <input {...register("title")} className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary" placeholder="ما الذي تريد إنجازه؟" autoFocus />
@@ -256,12 +257,16 @@ export function QuickAddTaskModal({ open, onClose, defaultProjectId, onTaskCreat
             </div>
           </div>
 
-          <div className="flex gap-3 pt-2">
-            <button type="button" onClick={onClose} className="flex-1 py-2.5 border border-border rounded-lg text-sm hover:bg-accent transition-colors">إلغاء</button>
-            <button type="submit" disabled={createTaskMutation.isPending} className="flex-1 py-2.5 bg-primary text-white rounded-lg text-sm hover:bg-primary/90 transition-colors font-medium disabled:opacity-60 flex items-center justify-center gap-2">
-              {createTaskMutation.isPending && <Loader2 size={15} className="animate-spin" />}
-              إضافة
-            </button>
+          </div>
+
+          <div className="shrink-0 border-t border-border bg-white px-6 py-4">
+            <div className="flex gap-3">
+              <button type="button" onClick={onClose} className="flex-1 py-2.5 border border-border rounded-lg text-sm hover:bg-accent transition-colors">إلغاء</button>
+              <button type="submit" disabled={createTaskMutation.isPending} className="flex-1 py-2.5 bg-primary text-white rounded-lg text-sm hover:bg-primary/90 transition-colors font-medium disabled:opacity-60 flex items-center justify-center gap-2">
+                {createTaskMutation.isPending && <Loader2 size={15} className="animate-spin" />}
+                إضافة
+              </button>
+            </div>
           </div>
         </form>
       </div>
