@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Edit3, Plus, Search, ShieldAlert, X } from "lucide-react";
+import { CheckCircle2, Edit3, Plus, Search, ShieldAlert, X } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -43,6 +43,7 @@ type ChallengeDraft = {
   title: string;
   project_id: string;
   description: string;
+  status: Challenge["status"];
   kind: ChallengeKind;
   risk_type: string;
   probability_score: string;
@@ -52,6 +53,7 @@ type ChallengeDraft = {
   contingency_plan: string;
   due_date: string;
   kpi_id: string;
+  resolution: string;
 };
 
 interface Props {
@@ -80,6 +82,7 @@ const DEFAULT_DRAFT: ChallengeDraft = {
   title: "",
   project_id: "",
   description: "",
+  status: "open",
   kind: "challenge",
   risk_type: "",
   probability_score: "3",
@@ -89,6 +92,7 @@ const DEFAULT_DRAFT: ChallengeDraft = {
   contingency_plan: "",
   due_date: "",
   kpi_id: "",
+  resolution: "",
 };
 
 const FIELD_CLASS = "w-full rounded-lg border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30";
@@ -126,6 +130,7 @@ export function ChallengesPageClient({ challenges, profiles: _profiles, projects
           challenge.risk_type,
           challenge.mitigation_plan,
           challenge.contingency_plan,
+          challenge.resolution,
           challenge.kpi?.name,
           challenge.kpi?.code,
         ])
@@ -153,6 +158,7 @@ export function ChallengesPageClient({ challenges, profiles: _profiles, projects
       title: challenge.title,
       project_id: challenge.project_id,
       description: challenge.description ?? "",
+      status: challenge.status,
       kind: challenge.kind ?? "challenge",
       risk_type: challenge.risk_type ?? "",
       probability_score: String(challenge.probability_score ?? 3),
@@ -162,6 +168,7 @@ export function ChallengesPageClient({ challenges, profiles: _profiles, projects
       contingency_plan: challenge.contingency_plan ?? "",
       due_date: challenge.due_date ?? "",
       kpi_id: challenge.kpi_id ?? "",
+      resolution: challenge.resolution ?? "",
     });
   };
 
@@ -178,10 +185,12 @@ export function ChallengesPageClient({ challenges, profiles: _profiles, projects
 
     setSaving(true);
     const supabase = createClient();
+    const isResolved = draft.status === "resolved" || draft.status === "closed";
     const payload: Database["public"]["Tables"]["challenges"]["Insert"] = {
       title: draft.title.trim(),
       project_id: draft.project_id,
       description: emptyToNull(draft.description),
+      status: draft.status,
       kind: draft.kind,
       risk_type: emptyToNull(draft.risk_type),
       probability_score: toRiskNumber(draft.probability_score),
@@ -193,7 +202,8 @@ export function ChallengesPageClient({ challenges, profiles: _profiles, projects
       kpi_id: emptyToNull(draft.kpi_id),
       risk_impact: riskImpactFromScore(calculateRiskScore(Number(draft.probability_score), Number(draft.impact_score))),
       owner_id: editing?.owner_id ?? currentUser.id,
-      status: editing?.status ?? "open",
+      resolution: isResolved ? emptyToNull(draft.resolution) : null,
+      resolved_at: isResolved ? editing?.resolved_at ?? new Date().toISOString() : null,
     };
 
     const result = editing
@@ -214,12 +224,16 @@ export function ChallengesPageClient({ challenges, profiles: _profiles, projects
   };
 
   const handleStatusChange = async (challenge: ChallengeWithRelations, status: Challenge["status"]) => {
+    if (challenge.status === status) return;
+
+    const isResolved = status === "resolved" || status === "closed";
     const supabase = createClient();
     const { error } = await supabase
       .from("challenges")
       .update({
         status,
-        resolved_at: status === "resolved" || status === "closed" ? new Date().toISOString() : null,
+        resolved_at: isResolved ? challenge.resolved_at ?? new Date().toISOString() : null,
+        resolution: isResolved ? challenge.resolution : null,
       })
       .eq("id", challenge.id);
 
@@ -353,6 +367,7 @@ function ChallengeCard({
 }) {
   const level = getChallengeRiskLevel(challenge);
   const score = getChallengeRiskScore(challenge);
+  const isResolved = challenge.status === "resolved" || challenge.status === "closed";
 
   return (
     <article className={cn("rounded-lg border bg-white p-5 shadow-sm", RISK_LEVEL_COLORS[level])}>
@@ -397,15 +412,34 @@ function ChallengeCard({
         </div>
       )}
 
+      {challenge.resolution && isResolved && (
+        <div className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">
+          <span className="font-bold">طريقة الحل: </span>
+          {challenge.resolution}
+        </div>
+      )}
+
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/70 pt-3 text-xs text-slate-500">
         <span>{challenge.owner?.full_name ? `المسؤول: ${challenge.owner.full_name}` : "لا يوجد مسؤول"}</span>
         <span>{formatRelativeAr(challenge.updated_at ?? challenge.created_at)}</span>
-        <select value={challenge.status} onChange={(event) => onStatusChange(event.target.value as Challenge["status"])} className="rounded-md border border-white/70 bg-white px-2 py-1 text-xs">
-          <option value="open">مفتوح</option>
-          <option value="in_progress">قيد المعالجة</option>
-          <option value="resolved">تم الحل</option>
-          <option value="closed">مغلق</option>
-        </select>
+        <div className="flex flex-wrap items-center gap-2">
+          {!isResolved && (
+            <button
+              type="button"
+              onClick={() => onStatusChange("resolved")}
+              className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-700"
+            >
+              <CheckCircle2 size={14} />
+              تم الحل
+            </button>
+          )}
+          <select value={challenge.status} onChange={(event) => onStatusChange(event.target.value as Challenge["status"])} className="rounded-md border border-white/70 bg-white px-2 py-1.5 text-xs">
+            <option value="open">مفتوح</option>
+            <option value="in_progress">قيد المعالجة</option>
+            <option value="resolved">تم الحل</option>
+            <option value="closed">مغلق</option>
+          </select>
+        </div>
       </div>
     </article>
   );
@@ -432,6 +466,7 @@ function ChallengeFormModal({
 }) {
   const score = calculateRiskScore(Number(draft.probability_score), Number(draft.impact_score));
   const level = RISK_LEVEL_LABELS[getRiskLevelFromScore(score)];
+  const showResolution = draft.status === "resolved" || draft.status === "closed";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -449,6 +484,14 @@ function ChallengeFormModal({
             <select value={draft.project_id} onChange={(event) => onChange({ project_id: event.target.value })} className={cn(FIELD_CLASS, "bg-white")}>
               <option value="">اختر المشروع</option>
               {projects.map((project) => <option key={project.id} value={project.id}>{project.name} - {getProjectTypeLabel(getProjectType(project))}</option>)}
+            </select>
+          </Field>
+          <Field label="الحالة">
+            <select value={draft.status} onChange={(event) => onChange({ status: event.target.value as Challenge["status"] })} className={cn(FIELD_CLASS, "bg-white")}>
+              <option value="open">مفتوح</option>
+              <option value="in_progress">قيد المعالجة</option>
+              <option value="resolved">تم الحل</option>
+              <option value="closed">مغلق</option>
             </select>
           </Field>
           <Field label="النوع">
@@ -498,6 +541,11 @@ function ChallengeFormModal({
           <Field label="خطة بديلة / تصعيد" className="md:col-span-2">
             <textarea value={draft.contingency_plan} onChange={(event) => onChange({ contingency_plan: event.target.value })} rows={2} className={cn(FIELD_CLASS, "resize-none")} />
           </Field>
+          {showResolution && (
+            <Field label="كيف تم الحل؟" className="md:col-span-2">
+              <textarea value={draft.resolution} onChange={(event) => onChange({ resolution: event.target.value })} rows={2} className={cn(FIELD_CLASS, "resize-none")} />
+            </Field>
+          )}
         </div>
 
         <div className="flex gap-3 border-t border-slate-100 px-6 py-4">
