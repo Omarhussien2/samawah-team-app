@@ -122,7 +122,7 @@ export function ProjectFormEditor({ open, project, form, profiles, currentUser, 
           <div className="flex-1 overflow-y-auto p-5">
             {!canEdit && (
               <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
-                يمكنك عرض النموذج فقط. تعبئة النماذج متاحة لمدير المشروع.
+                يمكنك عرض النموذج فقط. تعبئة النماذج متاحة لمدير المشروع أو مسؤول التدريب/التوصيات.
               </div>
             )}
             <DynamicFormRenderer schema={schema} data={data} profiles={profiles} readOnly={!canEdit} onChange={setData} />

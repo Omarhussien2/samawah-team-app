@@ -25,6 +25,7 @@ const updateProjectSchema = z.object({
   end_date: z.string().nullable().optional(),
   total_budget: budgetFieldSchema,
   description: z.string().nullable().optional(),
+  forms_owner_id: z.string().nullable().optional(),
 });
 
 async function getApiUser(): Promise<{ user: Profile | null; status?: number; error?: string }> {
@@ -96,6 +97,7 @@ export async function PATCH(
     end_date: data.end_date || null,
     total_budget: normalizeMoney(data.total_budget),
     description: data.description || null,
+    forms_owner_id: data.forms_owner_id || null,
     manager_id: managerId,
     manager_name: manager?.full_name ?? null,
   };

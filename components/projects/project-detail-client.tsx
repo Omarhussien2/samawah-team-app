@@ -22,6 +22,7 @@ import { ChallengesList } from "@/components/challenges/challenges-list";
 import { DocumentsList } from "@/components/documents/documents-list";
 import { ProjectFormsTab } from "@/components/project-forms/project-forms-tab";
 import { ProjectOverviewAnalytics } from "@/components/projects/project-overview-analytics";
+import { ProjectRecommendationsTab } from "@/components/recommendations/project-recommendations-tab";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
@@ -31,6 +32,7 @@ import { z } from "zod";
 import { Loader2, X } from "lucide-react";
 import { fetchTasks, taskKeys, type TaskWithRelations } from "@/lib/queries/tasks";
 import { summarizeChallenges } from "@/lib/challenges/risk";
+import { isRecommendationTask } from "@/lib/recommendations/tasks";
 import { formatHours } from "@/lib/tasks/hours";
 import { normalizeMoney } from "@/lib/projects/budget";
 import type { Profile, Project, Challenge, Document, KpiDefinition, ProjectDailySnapshot } from "@/lib/supabase/types";
@@ -41,6 +43,7 @@ const TABS = [
   { key: "timeline", label: "المخطط الزمني" },
   { key: "board", label: "اللوحة" },
   { key: "challenges", label: "التحديات" },
+  { key: "recommendations", label: "التوصيات" },
   { key: "forms", label: "نماذج المشروع" },
   { key: "documents", label: "المستندات" },
   { key: "members", label: "الأعضاء" },
@@ -64,6 +67,7 @@ const editSchema = z.object({
   total_budget: budgetFieldSchema,
   description: z.string().optional(),
   manager_id: z.string().optional(),
+  forms_owner_id: z.string().optional(),
 });
 
 type EditFormData = z.infer<typeof editSchema>;
@@ -122,6 +126,7 @@ export function ProjectDetailClient({
       total_budget: project.total_budget ?? 0,
       description: project.description ?? "",
       manager_id: project.manager_id ?? "",
+      forms_owner_id: project.forms_owner_id ?? "",
     },
   });
 
@@ -148,6 +153,7 @@ export function ProjectDetailClient({
       total_budget: budget,
       description: data.description || null,
       manager_id: data.manager_id || null,
+      forms_owner_id: data.forms_owner_id || null,
       manager_name: manager?.full_name ?? null,
     };
 
@@ -195,6 +201,7 @@ export function ProjectDetailClient({
       total_budget: project.total_budget ?? 0,
       description: project.description ?? "",
       manager_id: project.manager_id ?? "",
+      forms_owner_id: project.forms_owner_id ?? "",
     });
     setMenuOpen(false);
     setEditOpen(true);
@@ -213,6 +220,7 @@ export function ProjectDetailClient({
   };
 
   const progress = Math.round(project.progress ?? 0);
+  const recommendationCount = tasks.filter((task) => isRecommendationTask(task)).length;
   const challengeSummary = summarizeChallenges(challenges);
   const hourTotals = tasks.reduce(
     (totals, task) => {
@@ -366,6 +374,7 @@ export function ProjectDetailClient({
           >
             {tab.label}
             {tab.key === "tasks" && <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full", activeTab === tab.key ? "bg-indigo-100 text-indigo-700" : "bg-slate-100 text-slate-500")}>{tasks.length}</span>}
+            {tab.key === "recommendations" && recommendationCount > 0 && <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full", activeTab === tab.key ? "bg-indigo-100 text-indigo-700" : "bg-slate-100 text-slate-500")}>{recommendationCount}</span>}
           </button>
         ))}
       </div>
@@ -504,6 +513,16 @@ export function ProjectDetailClient({
           </div>
         )}
 
+        {/* RECOMMENDATIONS TAB */}
+        {activeTab === "recommendations" && (
+          <ProjectRecommendationsTab
+            project={project}
+            tasks={tasks}
+            profiles={profiles}
+            currentUser={currentUser}
+          />
+        )}
+
         {/* FORMS TAB */}
         {activeTab === "forms" && (
           <ProjectFormsTab project={project} profiles={profiles} currentUser={currentUser} />
@@ -587,6 +606,14 @@ export function ProjectDetailClient({
                 <label className="block text-sm font-medium mb-1.5">مدير المشروع</label>
                 <select {...register("manager_id")} className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white">
                   <option value="">اختر المدير</option>
+                  {profiles.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1.5">مسؤول التدريب/التوصيات</label>
+                <select {...register("forms_owner_id")} className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white">
+                  <option value="">بدون مسؤول محدد</option>
                   {profiles.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
                 </select>
               </div>

@@ -70,7 +70,16 @@ $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
 CREATE OR REPLACE FUNCTION can_edit_project_forms(p_project_id UUID)
 RETURNS BOOLEAN AS $$
-  SELECT is_project_manager(p_project_id);
+  SELECT get_my_role() = 'admin'
+    OR is_project_manager(p_project_id)
+    OR is_project_forms_owner(p_project_id);
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+CREATE OR REPLACE FUNCTION can_manage_project_recommendations(p_project_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT get_my_role() = 'admin'
+    OR is_project_manager(p_project_id)
+    OR is_project_forms_owner(p_project_id);
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
 CREATE OR REPLACE FUNCTION has_project_form_share(p_form_instance_id UUID, p_permission TEXT DEFAULT NULL)
@@ -113,6 +122,7 @@ CREATE POLICY "projects_select" ON projects
   FOR SELECT USING (
     get_my_role() = 'admin'
     OR manager_id = auth.uid()
+    OR forms_owner_id = auth.uid()
     OR is_project_member(id)
   );
 
@@ -171,6 +181,10 @@ CREATE POLICY "tasks_select" ON tasks
     OR owner_id = auth.uid()
     OR is_project_manager(project_id)
     OR is_project_member(project_id)
+    OR (
+      source_type = 'recommendation'
+      AND can_manage_project_recommendations(project_id)
+    )
   );
 
 DROP POLICY IF EXISTS "tasks_insert" ON tasks;
@@ -178,6 +192,10 @@ CREATE POLICY "tasks_insert" ON tasks
   FOR INSERT WITH CHECK (
     get_my_role() IN ('admin', 'project_manager')
     OR is_project_manager(project_id)
+    OR (
+      source_type = 'recommendation'
+      AND can_manage_project_recommendations(project_id)
+    )
   );
 
 DROP POLICY IF EXISTS "tasks_update" ON tasks;
@@ -186,6 +204,19 @@ CREATE POLICY "tasks_update" ON tasks
     get_my_role() = 'admin'
     OR owner_id = auth.uid()
     OR is_project_manager(project_id)
+    OR (
+      source_type = 'recommendation'
+      AND can_manage_project_recommendations(project_id)
+    )
+  )
+  WITH CHECK (
+    get_my_role() = 'admin'
+    OR owner_id = auth.uid()
+    OR is_project_manager(project_id)
+    OR (
+      source_type = 'recommendation'
+      AND can_manage_project_recommendations(project_id)
+    )
   );
 
 DROP POLICY IF EXISTS "tasks_delete" ON tasks;
@@ -193,6 +224,10 @@ CREATE POLICY "tasks_delete" ON tasks
   FOR DELETE USING (
     get_my_role() = 'admin'
     OR is_project_manager(project_id)
+    OR (
+      source_type = 'recommendation'
+      AND can_manage_project_recommendations(project_id)
+    )
   );
 
 -- ============================================================
@@ -210,6 +245,10 @@ CREATE POLICY "task_time_entries_select" ON task_time_entries
           OR tasks.owner_id = auth.uid()
           OR is_project_manager(tasks.project_id)
           OR is_project_member(tasks.project_id)
+          OR (
+            tasks.source_type = 'recommendation'
+            AND can_manage_project_recommendations(tasks.project_id)
+          )
         )
     )
   );
@@ -227,6 +266,10 @@ CREATE POLICY "task_time_entries_insert" ON task_time_entries
           AND (
             get_my_role() = 'admin'
             OR is_project_manager(tasks.project_id)
+            OR (
+              tasks.source_type = 'recommendation'
+              AND can_manage_project_recommendations(tasks.project_id)
+            )
             OR (
               tasks.owner_id = auth.uid()
               AND task_time_entries.user_id = auth.uid()
@@ -247,6 +290,10 @@ CREATE POLICY "task_time_entries_update" ON task_time_entries
           get_my_role() = 'admin'
           OR is_project_manager(tasks.project_id)
           OR (
+            tasks.source_type = 'recommendation'
+            AND can_manage_project_recommendations(tasks.project_id)
+          )
+          OR (
             tasks.owner_id = auth.uid()
             AND task_time_entries.user_id = auth.uid()
             AND task_time_entries.logged_by = auth.uid()
@@ -262,6 +309,10 @@ CREATE POLICY "task_time_entries_update" ON task_time_entries
         AND (
           get_my_role() = 'admin'
           OR is_project_manager(tasks.project_id)
+          OR (
+            tasks.source_type = 'recommendation'
+            AND can_manage_project_recommendations(tasks.project_id)
+          )
           OR (
             tasks.owner_id = auth.uid()
             AND task_time_entries.user_id = auth.uid()
@@ -281,6 +332,10 @@ CREATE POLICY "task_time_entries_delete" ON task_time_entries
         AND (
           get_my_role() = 'admin'
           OR is_project_manager(tasks.project_id)
+          OR (
+            tasks.source_type = 'recommendation'
+            AND can_manage_project_recommendations(tasks.project_id)
+          )
           OR (
             tasks.owner_id = auth.uid()
             AND task_time_entries.user_id = auth.uid()
@@ -477,8 +532,7 @@ CREATE POLICY "project_form_instances_update" ON project_form_instances
 DROP POLICY IF EXISTS "project_form_instances_delete" ON project_form_instances;
 CREATE POLICY "project_form_instances_delete" ON project_form_instances
   FOR DELETE USING (
-    get_my_role() = 'admin'
-    OR is_project_manager(project_id)
+    can_edit_project_forms(project_id)
   );
 
 DROP POLICY IF EXISTS "project_form_shares_select" ON project_form_shares;

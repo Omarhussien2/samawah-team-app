@@ -50,7 +50,8 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const isManager = project.manager_id === currentUser.id;
-  const canEdit = isManager;
+  const formsOwner = profiles.find((profile) => profile.id === project.forms_owner_id);
+  const canEdit = currentUser.role === "admin" || isManager || project.forms_owner_id === currentUser.id;
 
   const fetchForms = useCallback(async () => {
     setLoading(true);
@@ -126,7 +127,7 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
 
   const createInstances = async (templateNames: string[]) => {
     if (!canEdit) {
-      toast.error("تعبئة نماذج المشروع متاحة لمدير المشروع فقط");
+      toast.error("تعبئة نماذج المشروع متاحة لمدير المشروع أو مسؤول التدريب/التوصيات");
       return;
     }
 
@@ -173,7 +174,7 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
 
   const deleteForm = async (form: ProjectFormTemplateWithInstance) => {
     if (!canEdit) {
-      toast.error("حذف نماذج المشروع متاح لمدير المشروع فقط");
+      toast.error("حذف نماذج المشروع متاح لمدير المشروع أو مسؤول التدريب/التوصيات");
       return;
     }
 
@@ -229,13 +230,13 @@ export function ProjectFormsTab({ project, profiles, currentUser }: Props) {
               <div className="flex items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
                 <div>
                   <p className="text-[11px] font-bold text-slate-400">صلاحية التعبئة</p>
-                  <p className="text-sm font-bold text-slate-700">{project.manager?.full_name ?? "مدير المشروع"}</p>
+                  <p className="text-sm font-bold text-slate-700">{formsOwner?.full_name ?? project.manager?.full_name ?? "مدير المشروع"}</p>
                 </div>
               </div>
               <span className={cn("rounded-xl border px-3 py-2 text-xs font-bold", getProjectTypeBadgeClass(getProjectType(project)))}>
                 {getProjectTypeLabel(getProjectType(project))}
               </span>
-              {!canEdit && <span className="text-xs font-bold text-amber-600">يمكنك العرض فقط. التعبئة متاحة لمدير المشروع.</span>}
+              {!canEdit && <span className="text-xs font-bold text-amber-600">يمكنك العرض فقط. التعبئة متاحة لمدير المشروع أو مسؤول التدريب/التوصيات.</span>}
             </div>
           </div>
           <div className="flex flex-wrap gap-2">

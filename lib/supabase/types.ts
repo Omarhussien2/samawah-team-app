@@ -1,5 +1,6 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 export type TaskProgressMode = "manual" | "quantity";
+export type TaskSourceType = "recommendation";
 export type KpiDirection = "higher_is_better" | "lower_is_better";
 export type KpiCalculationMethod = "auto" | "manual" | "semi_auto";
 export type KpiFrequency = "daily" | "weekly" | "monthly" | "quarterly" | "yearly";
@@ -247,6 +248,11 @@ export interface Database {
           alert_message: string | null;
           alert_action: string | null;
           days_to_due: number | null;
+          source_type: TaskSourceType | null;
+          source_meeting_title: string | null;
+          source_meeting_date: string | null;
+          source_created_by: string | null;
+          affects_project_progress: boolean;
           sort_order: number;
           created_at: string;
           updated_at: string;
@@ -276,6 +282,11 @@ export interface Database {
           alert_message?: string | null;
           alert_action?: string | null;
           days_to_due?: number | null;
+          source_type?: TaskSourceType | null;
+          source_meeting_title?: string | null;
+          source_meeting_date?: string | null;
+          source_created_by?: string | null;
+          affects_project_progress?: boolean;
           sort_order?: number;
           created_at?: string;
           updated_at?: string;
@@ -305,6 +316,11 @@ export interface Database {
           alert_message?: string | null;
           alert_action?: string | null;
           days_to_due?: number | null;
+          source_type?: TaskSourceType | null;
+          source_meeting_title?: string | null;
+          source_meeting_date?: string | null;
+          source_created_by?: string | null;
+          affects_project_progress?: boolean;
           sort_order?: number;
           created_at?: string;
           updated_at?: string;

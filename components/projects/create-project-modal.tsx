@@ -30,6 +30,7 @@ const schema = z.object({
   total_budget: budgetFieldSchema,
   description: z.string().optional(),
   template_id: z.string().optional(),
+  forms_owner_id: z.string().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -58,6 +59,7 @@ export function CreateProjectModal({ open, onClose, profiles, currentUser, templ
       project_type: "internal",
       manager_id: defaultManagerId,
       total_budget: 0,
+      forms_owner_id: "",
     },
   });
 
@@ -86,6 +88,7 @@ export function CreateProjectModal({ open, onClose, profiles, currentUser, templ
       end_date: data.end_date || null,
       total_budget: budget,
       description: data.description || null,
+      forms_owner_id: data.forms_owner_id || null,
       status: "active" as const,
     };
 
@@ -122,7 +125,7 @@ export function CreateProjectModal({ open, onClose, profiles, currentUser, templ
     }
 
     toast.success("تم إنشاء المشروع بنجاح");
-    reset({ project_type: "internal", manager_id: defaultManagerId, total_budget: 0 });
+    reset({ project_type: "internal", manager_id: defaultManagerId, total_budget: 0, forms_owner_id: "" });
     onClose();
     router.refresh();
     setLoading(false);
@@ -170,6 +173,14 @@ export function CreateProjectModal({ open, onClose, profiles, currentUser, templ
               </div>
             </div>
           )}
+
+          <div>
+            <label className="block text-sm font-medium mb-1.5">مسؤول التدريب/التوصيات</label>
+            <select {...register("forms_owner_id")} className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white">
+              <option value="">بدون مسؤول محدد</option>
+              {profiles.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+            </select>
+          </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>

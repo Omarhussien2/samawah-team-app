@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { createNotification } from "@/lib/notifications/create-notification";
+import { computeProjectProgressFromTasks } from "@/lib/utils/recalc-progress";
 
 /**
  * POST /api/task-events
@@ -110,13 +111,22 @@ export async function POST(request: NextRequest) {
 
   // --- Recalculate project progress ---
   if (body.project_id && body.new_status && body.old_status && body.new_status !== body.old_status) {
-    const { data: projTasks } = await serviceClient
+    let { data: projTasks, error: projectTasksError } = await serviceClient
       .from("tasks")
-      .select("status")
+      .select("status,affects_project_progress")
       .eq("project_id", body.project_id);
-    if (projTasks && projTasks.length > 0) {
-      const doneCount = projTasks.filter((t) => t.status === "Done").length;
-      const newProgress = Math.round((doneCount / projTasks.length) * 100);
+
+    if (projectTasksError && projectTasksError.message.includes("affects_project_progress")) {
+      const retry = await serviceClient
+        .from("tasks")
+        .select("status")
+        .eq("project_id", body.project_id);
+      projTasks = retry.data?.map((task) => ({ ...task, affects_project_progress: true })) ?? null;
+      projectTasksError = retry.error;
+    }
+
+    if (!projectTasksError && projTasks) {
+      const newProgress = computeProjectProgressFromTasks(projTasks);
       await serviceClient.from("projects").update({ progress: newProgress }).eq("id", body.project_id);
     }
   }

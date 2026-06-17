@@ -106,6 +106,11 @@ CREATE TABLE IF NOT EXISTS tasks (
   alert_message   TEXT,
   alert_action    TEXT,
   days_to_due     INTEGER,
+  source_type     TEXT CHECK (source_type IS NULL OR source_type IN ('recommendation')),
+  source_meeting_title TEXT,
+  source_meeting_date  DATE,
+  source_created_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  affects_project_progress BOOLEAN NOT NULL DEFAULT TRUE,
   sort_order      INTEGER DEFAULT 0,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -118,6 +123,13 @@ ALTER TABLE tasks
   ADD COLUMN IF NOT EXISTS planned_hours NUMERIC NOT NULL DEFAULT 0 CHECK (planned_hours >= 0),
   ADD COLUMN IF NOT EXISTS actual_hours NUMERIC NOT NULL DEFAULT 0 CHECK (actual_hours >= 0);
 
+ALTER TABLE tasks
+  ADD COLUMN IF NOT EXISTS source_type TEXT,
+  ADD COLUMN IF NOT EXISTS source_meeting_title TEXT,
+  ADD COLUMN IF NOT EXISTS source_meeting_date DATE,
+  ADD COLUMN IF NOT EXISTS source_created_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS affects_project_progress BOOLEAN NOT NULL DEFAULT TRUE;
+
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -128,6 +140,19 @@ BEGIN
   ) THEN
     ALTER TABLE tasks
       ADD CONSTRAINT tasks_progress_mode_check CHECK (progress_mode IN ('manual', 'quantity'));
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'tasks_source_type_check'
+      AND conrelid = 'tasks'::regclass
+  ) THEN
+    ALTER TABLE tasks
+      ADD CONSTRAINT tasks_source_type_check CHECK (source_type IS NULL OR source_type IN ('recommendation'));
   END IF;
 END $$;
 
@@ -906,6 +931,9 @@ CREATE INDEX IF NOT EXISTS idx_tasks_owner_id ON tasks(owner_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);
 CREATE INDEX IF NOT EXISTS idx_tasks_board_column ON tasks(board_column);
+CREATE INDEX IF NOT EXISTS idx_tasks_project_source ON tasks(project_id, source_type);
+CREATE INDEX IF NOT EXISTS idx_tasks_source_created_by ON tasks(source_created_by);
+CREATE INDEX IF NOT EXISTS idx_tasks_project_progress_scope ON tasks(project_id, affects_project_progress);
 CREATE INDEX IF NOT EXISTS idx_task_time_entries_task ON task_time_entries(task_id);
 CREATE INDEX IF NOT EXISTS idx_task_time_entries_user ON task_time_entries(user_id);
 CREATE INDEX IF NOT EXISTS idx_task_time_entries_work_date ON task_time_entries(work_date);

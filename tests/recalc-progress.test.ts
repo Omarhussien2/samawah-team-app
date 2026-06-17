@@ -11,4 +11,22 @@ describe('computeProjectProgressFromTasks', () => {
   it('returns 0 when there are no tasks', () => {
     expect(computeProjectProgressFromTasks([])).toBe(0)
   })
+
+  it('ignores tasks that do not affect project progress', () => {
+    const progress = computeProjectProgressFromTasks([
+      { status: 'Done' },
+      { status: 'To Do' },
+      { status: 'To Do', affects_project_progress: false },
+      { status: 'Done', affects_project_progress: false },
+    ])
+
+    expect(progress).toBe(50)
+  })
+
+  it('returns 0 when all tasks are excluded from project progress', () => {
+    expect(computeProjectProgressFromTasks([
+      { status: 'Done', affects_project_progress: false },
+      { status: 'To Do', affects_project_progress: false },
+    ])).toBe(0)
+  })
 })
