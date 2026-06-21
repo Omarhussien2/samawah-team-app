@@ -11,14 +11,15 @@ const statusColors: Record<string, string> = {
 
 interface Props {
   project: Project & { manager?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null };
+  href?: string;
 }
 
-export function ProjectRow({ project }: Props) {
+export function ProjectRow({ project, href = `/projects/${project.id}` }: Props) {
   const progress = Math.round(project.progress ?? 0);
   return (
     <tr className="hover:bg-accent/50 transition-colors">
       <td className="px-4 py-3">
-        <Link href={`/projects/${project.id}`} className="flex items-center gap-3">
+        <Link href={href} className="flex items-center gap-3">
           <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center text-primary font-bold text-sm flex-shrink-0">
             {project.name[0]}
           </div>
