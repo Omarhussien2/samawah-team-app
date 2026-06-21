@@ -1,17 +1,19 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import type { ElementType } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, FolderKanban, CheckSquare, KanbanSquare,
-  AlertTriangle, FileText, Users, Zap, Settings, Upload, X, Bell,
-  ChevronDown, ChevronLeft, Star, Folder, Hash, ListTodo, BarChart3
+  FileText, Users, Zap, Settings, Upload, X, Bell,
+  ChevronDown, ChevronLeft, ListTodo, BarChart3
 } from "lucide-react";
+import { dedupeProjectsById, uniqueProjectIds } from "@/lib/projects/project-access";
 import { createClient } from "@/lib/supabase/client";
-import type { Project } from "@/lib/supabase/types";
+import type { Profile, Project } from "@/lib/supabase/types";
 
 const globalNavItems = [
   { href: "/dashboard",     label: "الرئيسية",   icon: LayoutDashboard },
@@ -30,10 +32,18 @@ const teamNavItems = [
 ];
 
 interface SidebarProps {
+  user: Profile;
   onClose?: () => void;
 }
 
-export function Sidebar({ onClose }: SidebarProps) {
+interface NavItemProps {
+  href: string;
+  label: string;
+  icon: ElementType;
+  isSub?: boolean;
+}
+
+export function Sidebar({ user, onClose }: SidebarProps) {
   const pathname = usePathname();
   const [projects, setProjects] = useState<Project[]>([]);
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
@@ -42,11 +52,24 @@ export function Sidebar({ onClose }: SidebarProps) {
   useEffect(() => {
     const fetchProjects = async () => {
       const supabase = createClient();
-      const { data } = await supabase.from("projects").select("*").eq("status", "active").order("created_at", { ascending: false });
-      if (data) setProjects(data);
+      const { data: memberships } = await supabase
+        .from("project_members")
+        .select("project_id")
+        .eq("user_id", user.id);
+      const memberProjectIds = uniqueProjectIds((memberships ?? []).map((membership) => membership.project_id));
+      const memberProjectsQuery = memberProjectIds.length
+        ? supabase.from("projects").select("*").eq("status", "active").in("id", memberProjectIds)
+        : null;
+      const projectResults = await Promise.all([
+        supabase.from("projects").select("*").eq("status", "active").eq("manager_id", user.id),
+        supabase.from("projects").select("*").eq("status", "active").eq("forms_owner_id", user.id),
+        ...(memberProjectsQuery ? [memberProjectsQuery] : []),
+      ]);
+
+      setProjects(dedupeProjectsById(projectResults.flatMap((result) => result.data ?? [])));
     };
     fetchProjects();
-  }, []);
+  }, [user.id]);
 
   const toggleProject = (id: string, e: React.MouseEvent) => {
     e.preventDefault();
@@ -54,7 +77,7 @@ export function Sidebar({ onClose }: SidebarProps) {
     setExpandedProjects((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const NavItem = ({ href, label, icon: Icon, isSub = false }: any) => {
+  const NavItem = ({ href, label, icon: Icon, isSub = false }: NavItemProps) => {
     const isActive = pathname === href;
     return (
       <Link

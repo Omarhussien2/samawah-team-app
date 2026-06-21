@@ -57,6 +57,11 @@ import {
 } from "@/lib/utils";
 import { recalcProjectProgress } from "@/lib/utils/recalc-progress";
 import { getProjectBudgetSummary, normalizeMoney } from "@/lib/projects/budget";
+import {
+  PROJECT_LIST_SCOPE_PARAM,
+  canViewAllProjects,
+  type ProjectListScope,
+} from "@/lib/projects/project-access";
 import { TaskTitleStack } from "@/components/tasks/task-title-stack";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Challenge, Profile, Project, Task } from "@/lib/supabase/types";
@@ -108,6 +113,7 @@ interface Props {
   projectMembers: DashboardProjectMember[];
   challenges: DashboardChallenge[];
   comments: DashboardComment[];
+  projectScope: ProjectListScope;
   mode?: "home" | "analytics";
 }
 
@@ -273,12 +279,22 @@ function getProjectHealth(info: {
   return { health: "good", reason: "المؤشرات مستقرة" };
 }
 
-export function DashboardClient({ user, projects, tasks, projectMembers, challenges, comments, mode = "home" }: Props) {
+export function DashboardClient({
+  user,
+  projects,
+  tasks,
+  projectMembers,
+  challenges,
+  comments,
+  projectScope,
+  mode = "home",
+}: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [localTasks, setLocalTasks] = useState<DashboardTask[]>(tasks);
   const isAnalyticsPage = mode === "analytics";
+  const canViewAllProjectScope = canViewAllProjects(user);
 
   const todayKey = getTodayKey();
   const hour = new Date().getHours();
@@ -332,6 +348,12 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
   const setQuery = useCallback((updates: Record<string, string | null>) => {
     const params = new URLSearchParams(searchParams.toString());
     Object.entries(updates).forEach(([key, value]) => {
+      if (key === PROJECT_LIST_SCOPE_PARAM) {
+        if (!value || value === "mine") params.delete(key);
+        else params.set(key, value);
+        return;
+      }
+
       if (!value || value === "all") params.delete(key);
       else params.set(key, value);
     });
@@ -377,6 +399,7 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
 
     projects.forEach((project) => {
       if (project.manager_id === user.id) roles.set(project.id, "manager");
+      if (project.forms_owner_id === user.id && roles.get(project.id) !== "manager") roles.set(project.id, "manager");
     });
 
     projectMembers.forEach((member) => {
@@ -488,7 +511,9 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
     (challenge) => OPEN_CHALLENGE_STATUSES.includes(challenge.status) && challenge.risk_level === "critical"
   );
   const activeProjects = projectInfos.filter((info) => info.project.status === "active");
-  const managedCount = projects.filter((project) => project.manager_id === user.id).length;
+  const managedCount = projects.filter(
+    (project) => project.manager_id === user.id || project.forms_owner_id === user.id
+  ).length;
   const memberCount = Array.from(personalProjectIds).filter((id) => rolesByProject.get(id) === "member").length;
   const averageProgress =
     projectInfos.length > 0
@@ -728,7 +753,11 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
   const SelectedViewIcon = selectedViewOption.icon;
   const roleLabel =
     user.role === "admin" ? "مدير منصة" : user.role === "project_manager" ? "مدير مشاريع" : "عضو فريق";
-  const homeHref = selectedView === defaultView ? "/dashboard" : `/dashboard?view=${selectedView}`;
+  const homeParams = new URLSearchParams();
+  if (selectedView !== defaultView) homeParams.set("view", selectedView);
+  if (canViewAllProjectScope && projectScope === "all") homeParams.set(PROJECT_LIST_SCOPE_PARAM, "all");
+  const homeQuery = homeParams.toString();
+  const homeHref = `/dashboard${homeQuery ? `?${homeQuery}` : ""}`;
   const riskProjectsCount = projectInfos.filter((info) => info.health === "risk").length;
   const watchProjectsCount = projectInfos.filter((info) => info.health === "watch").length;
   const focusLabels: Record<Exclude<FocusType, null>, string> = {
@@ -820,6 +849,46 @@ export function DashboardClient({ user, projects, tasks, projectMembers, challen
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
                 قراءة مركزة للمشاريع والمهام والميزانية والفريق حسب الفلاتر الحالية.
               </p>
+            )}
+            {canViewAllProjectScope && (
+              <div className="mt-4 inline-flex items-center rounded-xl border border-slate-200 bg-slate-50 p-1">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setQuery({
+                      [PROJECT_LIST_SCOPE_PARAM]: "mine",
+                      project: null,
+                      owner: null,
+                      focus: null,
+                    })
+                  }
+                  className={cn(
+                    "rounded-lg px-3 py-1.5 text-xs font-bold transition-colors",
+                    projectScope === "mine"
+                      ? "bg-white text-indigo-600 shadow-sm"
+                      : "text-slate-500 hover:text-slate-800"
+                  )}
+                >
+                  مشاريعي
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setQuery({
+                      [PROJECT_LIST_SCOPE_PARAM]: "all",
+                      project: null,
+                      owner: null,
+                      focus: null,
+                    })
+                  }
+                  className={cn(
+                    "rounded-lg px-3 py-1.5 text-xs font-bold transition-colors",
+                    projectScope === "all" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-800"
+                  )}
+                >
+                  كل المشاريع
+                </button>
+              </div>
             )}
           </div>
 

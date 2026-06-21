@@ -18,7 +18,7 @@ export function AppShell({ user, children }: AppShellProps) {
     <div className="flex h-screen bg-background overflow-hidden">
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex w-64 flex-shrink-0 flex-col">
-        <Sidebar />
+        <Sidebar user={user} />
       </aside>
 
       {/* Mobile Sidebar Overlay */}
@@ -34,7 +34,7 @@ export function AppShell({ user, children }: AppShellProps) {
           sidebarOpen ? "translate-x-0" : "translate-x-full"
         )}
       >
-        <Sidebar onClose={() => setSidebarOpen(false)} />
+        <Sidebar user={user} onClose={() => setSidebarOpen(false)} />
       </aside>
 
       {/* Main Content */}
