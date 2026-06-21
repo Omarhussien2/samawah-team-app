@@ -44,6 +44,13 @@ pnpm test             # vitest run
 - **ESLint** treats `no-explicit-any` and `no-unused-vars` as warnings (not errors). Unused args prefixed with `_` are ignored.
 - `scripts/` contains one-off utility scripts (run with `tsx scripts/foo.ts`). Not part of the app.
 
+## Code Search
+
+- Semble is installed as a local agent search tool. Use `semble search "..." . --content all` for semantic search across code, docs, and config before opening many files.
+- Use `semble find-related <file_path> <line> .` to discover code similar to a useful result.
+- Use `rg` when every exact occurrence of a literal string is required, such as renaming an identifier or checking all call sites.
+- Codex is configured globally with the Semble MCP server; restart Codex to expose Semble as a native MCP tool in new sessions.
+
 ## Supabase Setup (local dev)
 
 1. Copy `.env.example` to `.env.local` and fill in Supabase credentials
