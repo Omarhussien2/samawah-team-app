@@ -1,12 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { LayoutGrid, List, Plus, Search, FolderKanban, Clock, X } from "lucide-react";
 import { ProjectCard } from "./project-card";
 import { ProjectRow } from "./project-row";
 import { CreateProjectModal } from "./create-project-modal";
 import { PROJECT_TYPE_OPTIONS, getProjectStatusLabel, getProjectType, getProjectTypeLabel } from "@/lib/utils";
+import {
+  PROJECT_LIST_SCOPE_PARAM,
+  canViewAllProjects,
+  type ProjectListScope,
+} from "@/lib/projects/project-access";
 import {
   PROJECTS_FILTER_STORAGE_KEY,
   PROJECT_STATUSES,
@@ -26,6 +31,7 @@ interface Props {
   profiles: Pick<Profile, "id" | "full_name" | "email" | "avatar_url">[];
   templates: (ProjectTemplate & { task_templates: { id: string; title: string }[] })[];
   currentUser: Profile;
+  projectScope: ProjectListScope;
 }
 
 function readStoredProjectFilters(): ProjectFilters | null {
@@ -38,7 +44,7 @@ function readStoredProjectFilters(): ProjectFilters | null {
   }
 }
 
-export function ProjectsClient({ projects, profiles, templates, currentUser }: Props) {
+export function ProjectsClient({ projects, profiles, templates, currentUser, projectScope }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -50,6 +56,7 @@ export function ProjectsClient({ projects, profiles, templates, currentUser }: P
   const [filterManager, setFilterManager] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const canCreateProject = currentUser.role === "admin" || currentUser.role === "project_manager";
+  const canViewAllProjectScope = canViewAllProjects(currentUser);
   const activeFilters: ProjectFilters = useMemo(
     () => ({
       search,
@@ -60,11 +67,16 @@ export function ProjectsClient({ projects, profiles, templates, currentUser }: P
     }),
     [search, filterStatus, filterType, filterManager, view]
   );
+  const getProjectListParams = useCallback((filters: ProjectFilters, scope: ProjectListScope = projectScope) => {
+    const params = projectFiltersToParams(filters);
+    if (canViewAllProjectScope && scope === "all") params.set(PROJECT_LIST_SCOPE_PARAM, "all");
+    return params;
+  }, [canViewAllProjectScope, projectScope]);
   const projectsListHref = useMemo(() => {
-    const params = projectFiltersToParams(activeFilters);
+    const params = getProjectListParams(activeFilters);
     const query = params.toString();
     return `${pathname}${query ? `?${query}` : ""}`;
-  }, [activeFilters, pathname]);
+  }, [activeFilters, getProjectListParams, pathname]);
 
   useEffect(() => {
     const nextFilters = hasProjectFilterParams(searchParams)
@@ -79,14 +91,14 @@ export function ProjectsClient({ projects, profiles, templates, currentUser }: P
       setView(nextFilters.view);
 
       if (!hasProjectFilterParams(searchParams)) {
-        const params = projectFiltersToParams(nextFilters);
+        const params = getProjectListParams(nextFilters);
         const query = params.toString();
         if (query) router.replace(`${pathname}?${query}`, { scroll: false });
       }
     }
 
     setFiltersLoaded(true);
-  }, [pathname, router, searchParams]);
+  }, [getProjectListParams, pathname, router, searchParams]);
 
   useEffect(() => {
     if (!filtersLoaded) return;
@@ -97,14 +109,19 @@ export function ProjectsClient({ projects, profiles, templates, currentUser }: P
       window.localStorage.setItem(PROJECTS_FILTER_STORAGE_KEY, JSON.stringify(activeFilters));
     }
 
-    const nextQuery = projectFiltersToParams(activeFilters).toString();
+    const nextQuery = getProjectListParams(activeFilters).toString();
     if (nextQuery !== searchParams.toString()) {
       router.replace(`${pathname}${nextQuery ? `?${nextQuery}` : ""}`, { scroll: false });
     }
-  }, [activeFilters, filtersLoaded, pathname, router, searchParams]);
+  }, [activeFilters, filtersLoaded, getProjectListParams, pathname, router, searchParams]);
 
   const getProjectHref = (projectId: string) =>
     `/projects/${projectId}?returnTo=${encodeURIComponent(projectsListHref)}`;
+  const getScopeHref = (scope: ProjectListScope) => {
+    const params = getProjectListParams(activeFilters, scope);
+    const query = params.toString();
+    return `${pathname}${query ? `?${query}` : ""}`;
+  };
 
   const filtered = useMemo(() => {
     const matchesSearch = createSearchMatcher(search);
@@ -150,6 +167,28 @@ export function ProjectsClient({ projects, profiles, templates, currentUser }: P
             <p className="text-slate-500 text-sm font-medium mt-0.5">{filtered.length} مشروع متاح</p>
           </div>
         </div>
+        {canViewAllProjectScope && (
+          <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 p-1">
+            <button
+              type="button"
+              onClick={() => router.replace(getScopeHref("mine"), { scroll: false })}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${
+                projectScope === "mine" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              مشاريعي
+            </button>
+            <button
+              type="button"
+              onClick={() => router.replace(getScopeHref("all"), { scroll: false })}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${
+                projectScope === "all" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              كل المشاريع
+            </button>
+          </div>
+        )}
         {canCreateProject && (
           <button
             onClick={() => setShowCreate(true)}

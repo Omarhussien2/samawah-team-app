@@ -2,37 +2,35 @@ import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth/get-user";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import { attachProjectTypes, attachRelationProjectTypes } from "@/lib/projects/project-type-store";
+import { getDashboardWorkspaceData } from "@/lib/dashboard/dashboard-data";
+import { normalizeProjectListScope } from "@/lib/projects/project-access";
 
-export default async function DashboardAnalyticsPage() {
+type DashboardAnalyticsPageSearchParams = Promise<{ scope?: string | string[] | undefined }>;
+
+function firstSearchParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function DashboardAnalyticsPage({
+  searchParams,
+}: {
+  searchParams: DashboardAnalyticsPageSearchParams;
+}) {
   const { user } = await getUser();
   const supabase = await createClient();
+  const params = await searchParams;
+  const projectScope = normalizeProjectListScope(firstSearchParam(params.scope), user);
 
-  const [{ data: projects }, { data: tasks }, { data: projectMembers }, { data: challenges }, { data: comments }] =
-    await Promise.all([
-      supabase
-        .from("projects")
-        .select("*, manager:profiles!projects_manager_id_fkey(id,full_name,avatar_url)")
-        .order("updated_at", { ascending: false }),
-      supabase
-        .from("tasks")
-        .select("*, owner:profiles(id,full_name,avatar_url), project:projects(id,name)")
-        .order("due_date", { ascending: true, nullsFirst: false }),
-      supabase.from("project_members").select("project_id,user_id,role_in_project"),
-      supabase
-        .from("challenges")
-        .select("*, owner:profiles(id,full_name), project:projects(id,name)")
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("comments")
-        .select("id, body, created_at, task_id, user:profiles(full_name), task:tasks(id,title,project_id)")
-        .order("created_at", { ascending: false })
-        .limit(12),
-    ]);
+  const { projects, tasks, projectMembers, challenges, comments } = await getDashboardWorkspaceData(
+    supabase,
+    user,
+    projectScope
+  );
 
   const [projectsWithTypes, tasksWithTypes, challengesWithTypes] = await Promise.all([
-    attachProjectTypes(projects ?? []),
-    attachRelationProjectTypes(tasks ?? []),
-    attachRelationProjectTypes(challenges ?? []),
+    attachProjectTypes(projects),
+    attachRelationProjectTypes(tasks),
+    attachRelationProjectTypes(challenges),
   ]);
 
   return (
@@ -42,9 +40,10 @@ export default async function DashboardAnalyticsPage() {
         user={user}
         projects={projectsWithTypes}
         tasks={tasksWithTypes}
-        projectMembers={projectMembers ?? []}
+        projectMembers={projectMembers}
         challenges={challengesWithTypes}
-        comments={comments ?? []}
+        comments={comments}
+        projectScope={projectScope}
       />
     </div>
   );
