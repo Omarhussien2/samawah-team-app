@@ -21,16 +21,17 @@ const statusColors: Record<string, string> = {
 
 interface Props {
   project: Project & { manager?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null };
+  href?: string;
 }
 
-export function ProjectCard({ project }: Props) {
+export function ProjectCard({ project, href = `/projects/${project.id}` }: Props) {
   const progress = Math.round(project.progress ?? 0);
   const radius = 16;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (progress / 100) * circumference;
 
   return (
-    <Link href={`/projects/${project.id}`} className="block group">
+    <Link href={href} className="block group">
       <div className="bg-white rounded-2xl border border-slate-200 p-5 hover:shadow-lg hover:border-indigo-300 transition-all duration-300 relative overflow-hidden">
         
         {/* Subtle decorative background blur */}

@@ -1,11 +1,23 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { LayoutGrid, List, Plus, Search, FolderKanban, Clock, X } from "lucide-react";
 import { ProjectCard } from "./project-card";
 import { ProjectRow } from "./project-row";
 import { CreateProjectModal } from "./create-project-modal";
 import { PROJECT_TYPE_OPTIONS, getProjectStatusLabel, getProjectType, getProjectTypeLabel } from "@/lib/utils";
+import {
+  PROJECTS_FILTER_STORAGE_KEY,
+  PROJECT_STATUSES,
+  coerceProjectFiltersSnapshot,
+  hasProjectFilterParams,
+  isDefaultProjectFilters,
+  projectFiltersToParams,
+  readProjectFiltersFromParams,
+  type ProjectFilters,
+  type ProjectView,
+} from "@/lib/projects/project-filters";
 import { createSearchMatcher } from "@/lib/utils/search";
 import type { Profile, Project, ProjectTemplate, ProjectType } from "@/lib/supabase/types";
 
@@ -16,16 +28,83 @@ interface Props {
   currentUser: Profile;
 }
 
-const STATUSES = ["active", "paused", "completed", "cancelled"];
+function readStoredProjectFilters(): ProjectFilters | null {
+  try {
+    const stored = window.localStorage.getItem(PROJECTS_FILTER_STORAGE_KEY);
+    if (!stored) return null;
+    return coerceProjectFiltersSnapshot(JSON.parse(stored));
+  } catch {
+    return null;
+  }
+}
 
 export function ProjectsClient({ projects, profiles, templates, currentUser }: Props) {
-  const [view, setView] = useState<"card" | "list" | "timeline">("card");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [filtersLoaded, setFiltersLoaded] = useState(false);
+  const [view, setView] = useState<ProjectView>("card");
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
+  const [filterStatus, setFilterStatus] = useState<ProjectFilters["status"]>("");
   const [filterType, setFilterType] = useState<ProjectType | "">("");
   const [filterManager, setFilterManager] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const canCreateProject = currentUser.role === "admin" || currentUser.role === "project_manager";
+  const activeFilters: ProjectFilters = useMemo(
+    () => ({
+      search,
+      status: filterStatus,
+      type: filterType,
+      manager: filterManager,
+      view,
+    }),
+    [search, filterStatus, filterType, filterManager, view]
+  );
+  const projectsListHref = useMemo(() => {
+    const params = projectFiltersToParams(activeFilters);
+    const query = params.toString();
+    return `${pathname}${query ? `?${query}` : ""}`;
+  }, [activeFilters, pathname]);
+
+  useEffect(() => {
+    const nextFilters = hasProjectFilterParams(searchParams)
+      ? readProjectFiltersFromParams(searchParams)
+      : readStoredProjectFilters();
+
+    if (nextFilters) {
+      setSearch(nextFilters.search);
+      setFilterStatus(nextFilters.status);
+      setFilterType(nextFilters.type);
+      setFilterManager(nextFilters.manager);
+      setView(nextFilters.view);
+
+      if (!hasProjectFilterParams(searchParams)) {
+        const params = projectFiltersToParams(nextFilters);
+        const query = params.toString();
+        if (query) router.replace(`${pathname}?${query}`, { scroll: false });
+      }
+    }
+
+    setFiltersLoaded(true);
+  }, [pathname, router, searchParams]);
+
+  useEffect(() => {
+    if (!filtersLoaded) return;
+
+    if (isDefaultProjectFilters(activeFilters)) {
+      window.localStorage.removeItem(PROJECTS_FILTER_STORAGE_KEY);
+    } else {
+      window.localStorage.setItem(PROJECTS_FILTER_STORAGE_KEY, JSON.stringify(activeFilters));
+    }
+
+    const nextQuery = projectFiltersToParams(activeFilters).toString();
+    if (nextQuery !== searchParams.toString()) {
+      router.replace(`${pathname}${nextQuery ? `?${nextQuery}` : ""}`, { scroll: false });
+    }
+  }, [activeFilters, filtersLoaded, pathname, router, searchParams]);
+
+  const getProjectHref = (projectId: string) =>
+    `/projects/${projectId}?returnTo=${encodeURIComponent(projectsListHref)}`;
 
   const filtered = useMemo(() => {
     const matchesSearch = createSearchMatcher(search);
@@ -107,11 +186,11 @@ export function ProjectsClient({ projects, profiles, templates, currentUser }: P
 
         <select
           value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
+          onChange={(e) => setFilterStatus(e.target.value as ProjectFilters["status"])}
           className="px-3 py-2 text-sm font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 bg-white cursor-pointer hover:border-slate-300 transition-colors"
         >
           <option value="">كل الحالات</option>
-          {STATUSES.map((s) => (
+          {PROJECT_STATUSES.map((s) => (
             <option key={s} value={s}>{getProjectStatusLabel(s)}</option>
           ))}
         </select>
@@ -182,7 +261,7 @@ export function ProjectsClient({ projects, profiles, templates, currentUser }: P
         ) : view === "card" ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filtered.map((project) => (
-              <ProjectCard key={project.id} project={project} />
+              <ProjectCard key={project.id} project={project} href={getProjectHref(project.id)} />
             ))}
           </div>
         ) : view === "list" ? (
@@ -200,7 +279,7 @@ export function ProjectsClient({ projects, profiles, templates, currentUser }: P
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filtered.map((project) => (
-                  <ProjectRow key={project.id} project={project} />
+                  <ProjectRow key={project.id} project={project} href={getProjectHref(project.id)} />
                 ))}
               </tbody>
             </table>

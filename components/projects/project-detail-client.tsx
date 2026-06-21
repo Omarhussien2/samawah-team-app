@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, Wallet, Target, Activity, Users, MoreHorizontal, Pencil, Trash2, Clock } from "lucide-react";
 import Link from "next/link";
@@ -100,6 +100,10 @@ export function ProjectDetailClient({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const initialTab = searchParams.get("tab") || "overview";
+  const projectsReturnHref = useMemo(() => {
+    const returnTo = searchParams.get("returnTo");
+    return returnTo && returnTo.startsWith("/projects") && !returnTo.startsWith("//") ? returnTo : "/projects";
+  }, [searchParams]);
   const { data: tasks = initialTasks } = useQuery({
     queryKey: taskKeys.byProject(project.id),
     queryFn: () => fetchTasks({ projectId: project.id }),
@@ -185,7 +189,7 @@ export function ProjectDetailClient({
       toast.error(`فشل الحذف: ${error.message}`);
     } else {
       toast.success("تم حذف المشروع");
-      router.push("/projects");
+      router.push(projectsReturnHref);
     }
     setDeleting(false);
   };
@@ -216,7 +220,9 @@ export function ProjectDetailClient({
 
   const handleTabChange = (key: string) => {
     setActiveTab(key);
-    router.replace(`${pathname}?tab=${key}`, { scroll: false });
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", key);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
   const progress = Math.round(project.progress ?? 0);
@@ -243,7 +249,7 @@ export function ProjectDetailClient({
     <div className="flex flex-col h-full animate-in fade-in duration-500 p-6 lg:p-8">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-slate-500 mb-6 font-medium">
-        <Link href="/projects" className="hover:text-indigo-600 transition-colors flex items-center gap-1">
+        <Link href={projectsReturnHref} className="hover:text-indigo-600 transition-colors flex items-center gap-1">
           المشاريع
         </Link>
         <span className="text-slate-300">/</span>

@@ -1,0 +1,16 @@
+# Semble-specific search exclusions.
+.env
+.env.*
+*.local
+.codex/
+.next/
+node_modules/
+.vercel/
+coverage/
+reports/
+pnpm-lock.yaml
+tsconfig.tsbuildinfo
+*.xlsx
+*.pptx
+samawah-2026-performance-radar (1)/
+scripts/reset-pass.ts
