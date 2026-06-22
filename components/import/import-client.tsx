@@ -95,22 +95,11 @@ export function ImportClient({ currentUser: _currentUser, projects }: Props) {
     [projects, selectedProjectId]
   );
 
-  const templateLinks = useMemo(() => {
-    if (importType === "projects") {
-      return [{ label: "تحميل قالب المشاريع", href: "/api/import/templates?type=projects" }];
-    }
-
-    return [
-      {
-        label: "قالب مهام لمشروع موجود",
-        href: "/api/import/templates?type=tasks-existing",
-      },
-      {
-        label: "قالب مهام موزعة على مشاريع",
-        href: "/api/import/templates?type=tasks-multi",
-      },
-    ];
-  }, [importType]);
+  const templateLinks = [
+    { label: "قالب المشاريع", href: "/api/import/templates?type=projects" },
+    { label: "قالب مهام لمشروع موجود", href: "/api/import/templates?type=tasks-existing" },
+    { label: "قالب مهام موزعة على مشاريع", href: "/api/import/templates?type=tasks-multi" },
+  ];
 
   const resetParsedData = () => {
     setParsedProjects([]);
@@ -339,7 +328,7 @@ export function ImportClient({ currentUser: _currentUser, projects }: Props) {
               <FileSpreadsheet size={18} className="text-primary" />
               <h3 className="font-medium">قوالب جاهزة</h3>
             </div>
-            <div className="grid sm:grid-cols-2 gap-3">
+            <div className="grid sm:grid-cols-3 gap-3">
               {templateLinks.map((link) => (
                 <a
                   key={link.href}
