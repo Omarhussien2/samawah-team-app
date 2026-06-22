@@ -1,8 +1,15 @@
 import { averageMetric, selectLatestProjectPerformanceByProject } from "@/lib/kpis/operations";
 import { aggregateKpiActuals, getKpiAggregation, getKpiPeriodTarget } from "@/lib/kpis/aggregation";
 import { calculateKpiStatus } from "@/lib/kpis/status";
-import { summarizeChallenges } from "@/lib/challenges/risk";
-import type { ChallengeRiskRecord, KpiValueUpsert, ProjectPerformanceRecord, SimpleWorkspaceKind, SimpleWorkspaceRecord } from "@/lib/queries/kpis";
+import { calculateRiskRegisterCoverage } from "@/lib/challenges/risk";
+import type {
+  ChallengeRiskRecord,
+  KpiValueUpsert,
+  ProjectPerformanceRecord,
+  RiskRegisterProjectRecord,
+  SimpleWorkspaceKind,
+  SimpleWorkspaceRecord,
+} from "@/lib/queries/kpis";
 import type { IndicatorProduct, KpiDefinition, KpiPeriodType, KpiValue } from "@/lib/supabase/types";
 
 type KpiValueContext = {
@@ -76,12 +83,13 @@ export function buildOperationsKpiValues(
 export function buildChallengeRiskKpiValues(
   challenges: ChallengeRiskRecord[],
   definitions: KpiDefinition[],
-  context: Omit<KpiValueContext, "notes">
+  context: Omit<KpiValueContext, "notes">,
+  projects: RiskRegisterProjectRecord[] = []
 ) {
-  const summary = summarizeChallenges(challenges);
+  const riskRegisterCoverage = calculateRiskRegisterCoverage(challenges, projects);
   return buildKpiValuesFromCodes(
     {
-      OPS_RISK_COVERAGE: summary.riskCoverage,
+      OPS_RISK_COVERAGE: riskRegisterCoverage,
     },
     definitions,
     {

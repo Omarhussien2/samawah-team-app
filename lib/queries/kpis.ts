@@ -53,9 +53,10 @@ export type SimpleWorkspaceRecord =
   | AudienceMetric
   | ServiceOutput
   | PartnershipActivity;
+export type RiskRegisterProjectRecord = Pick<Project, "id" | "status">;
 export type ChallengeRiskRecord = Pick<
   Challenge,
-  "id" | "project_id" | "status" | "probability_score" | "impact_score" | "risk_score" | "risk_level" | "kpi_id" | "updated_at"
+  "id" | "project_id" | "status" | "kind" | "probability_score" | "impact_score" | "risk_score" | "risk_level" | "kpi_id" | "updated_at"
 >;
 export type SimpleWorkspacePayload =
   | (RevenueEntryInsert & { id?: string })
@@ -273,8 +274,19 @@ export async function fetchChallengeRiskRecords(): Promise<ChallengeRiskRecord[]
   const supabase = createClient();
   const { data, error } = await supabase
     .from("challenges")
-    .select("id,project_id,status,probability_score,impact_score,risk_score,risk_level,kpi_id,updated_at")
+    .select("id,project_id,status,kind,probability_score,impact_score,risk_score,risk_level,kpi_id,updated_at")
     .order("updated_at", { ascending: false });
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function fetchRiskRegisterProjects(): Promise<RiskRegisterProjectRecord[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("projects")
+    .select("id,status")
+    .eq("status", "active");
 
   if (error) throw error;
   return data ?? [];

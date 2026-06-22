@@ -1,4 +1,4 @@
-import type { Challenge } from "@/lib/supabase/types";
+import type { Challenge, Project } from "@/lib/supabase/types";
 
 export type ChallengeKind = "challenge" | "risk" | "issue";
 export type ChallengeResponseStrategy = "mitigate" | "avoid" | "transfer" | "accept" | "monitor";
@@ -7,7 +7,9 @@ export type ChallengeRiskLevel = "low" | "medium" | "high" | "critical";
 export type ChallengeRiskInput = Pick<
   Challenge,
   "probability_score" | "impact_score" | "risk_score" | "risk_level" | "status"
->;
+> &
+  Partial<Pick<Challenge, "kind" | "project_id">>;
+export type RiskRegisterProjectInput = Pick<Project, "id" | "status">;
 
 export const CHALLENGE_KIND_LABELS: Record<ChallengeKind, string> = {
   challenge: "تحدي",
@@ -75,6 +77,25 @@ export function calculateRiskCoverage(challenges: ChallengeRiskInput[]) {
   return Math.round((handled.length / open.length) * 100);
 }
 
+export function calculateRiskRegisterCoverage(
+  challenges: ChallengeRiskInput[],
+  projects: RiskRegisterProjectInput[]
+) {
+  const activeProjects = projects.filter((project) => project.status === "active");
+  if (activeProjects.length === 0) return 0;
+
+  const activeProjectIds = new Set(activeProjects.map((project) => project.id));
+  const projectsWithRiskRegister = new Set(
+    challenges
+      .filter(isRiskRecord)
+      .map((challenge) => challenge.project_id)
+      .filter((projectId): projectId is string => Boolean(projectId))
+      .filter((projectId) => activeProjectIds.has(projectId))
+  );
+
+  return Math.round((projectsWithRiskRegister.size / activeProjects.length) * 100);
+}
+
 export function summarizeChallenges(challenges: ChallengeRiskInput[]) {
   const open = challenges.filter(isOpenChallenge);
   const critical = challenges.filter(isCriticalChallenge);
@@ -89,4 +110,8 @@ export function summarizeChallenges(challenges: ChallengeRiskInput[]) {
     averageRiskScore,
     riskCoverage: calculateRiskCoverage(challenges),
   };
+}
+
+function isRiskRecord(challenge: ChallengeRiskInput) {
+  return challenge.kind === "risk";
 }

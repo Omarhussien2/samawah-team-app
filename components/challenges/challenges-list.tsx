@@ -19,7 +19,7 @@ import {
 } from "@/lib/challenges/risk";
 import { buildChallengeRiskKpiValues } from "@/lib/kpis/auto-calculations";
 import { getCurrentKpiPeriod } from "@/lib/kpis/periods";
-import { fetchChallengeRiskRecords, upsertKpiValues } from "@/lib/queries/kpis";
+import { fetchChallengeRiskRecords, fetchRiskRegisterProjects, upsertKpiValues } from "@/lib/queries/kpis";
 import { cn, formatRelativeAr, getChallengeStatusLabel } from "@/lib/utils";
 import type { Challenge, Database, KpiDefinition, Profile } from "@/lib/supabase/types";
 
@@ -450,13 +450,16 @@ async function syncRiskKpi(kpiDefinitions: KpiDefinition[], userId: string) {
   const riskDefinitions = kpiDefinitions.filter((kpi) => kpi.code === "OPS_RISK_COVERAGE");
   if (riskDefinitions.length === 0) return;
   const period = getCurrentKpiPeriod("monthly");
-  const records = await fetchChallengeRiskRecords();
+  const [records, projects] = await Promise.all([
+    fetchChallengeRiskRecords(),
+    fetchRiskRegisterProjects(),
+  ]);
   const values = buildChallengeRiskKpiValues(records, riskDefinitions, {
     periodType: period.periodType,
     periodStart: period.periodStart,
     periodEnd: period.periodEnd,
     userId,
-  });
+  }, projects);
   await upsertKpiValues(values);
 }
 

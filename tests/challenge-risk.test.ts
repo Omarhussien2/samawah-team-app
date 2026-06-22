@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { calculateRiskCoverage, calculateRiskScore, getRiskLevel, summarizeChallenges } from "../lib/challenges/risk";
+import {
+  calculateRiskCoverage,
+  calculateRiskRegisterCoverage,
+  calculateRiskScore,
+  getRiskLevel,
+  summarizeChallenges,
+} from "../lib/challenges/risk";
 
 describe("challenge risk helpers", () => {
   it("calculates the matrix score from probability and impact", () => {
@@ -32,6 +38,23 @@ describe("challenge risk helpers", () => {
 
   it("treats projects with no open risks as fully covered", () => {
     expect(calculateRiskCoverage([challenge("resolved", 5, 5)])).toBe(100);
+  });
+
+  it("calculates risk register coverage from projects that have risk records", () => {
+    const coverage = calculateRiskRegisterCoverage(
+      [
+        { ...challenge("open", 5, 5), kind: "risk", project_id: "project-1" },
+        { ...challenge("closed", 2, 3), kind: "risk", project_id: "project-1" },
+        { ...challenge("open", 3, 3), kind: "challenge", project_id: "project-2" },
+      ],
+      [
+        { id: "project-1", status: "active" },
+        { id: "project-2", status: "active" },
+        { id: "project-3", status: "completed" },
+      ]
+    );
+
+    expect(coverage).toBe(50);
   });
 });
 

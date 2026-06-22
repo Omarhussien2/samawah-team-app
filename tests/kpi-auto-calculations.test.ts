@@ -95,13 +95,17 @@ describe("KPI auto calculations", () => {
     expect(byKpi.coverage.actual_value).toBe(50);
   });
 
-  it("syncs OPS_RISK_COVERAGE from open challenge handling", () => {
+  it("syncs OPS_RISK_COVERAGE from project risk register coverage", () => {
     const [definition] = [kpiDefinition("OPS_RISK_COVERAGE", "risk-coverage", 80, "challenges")];
     const values = buildChallengeRiskKpiValues([
-      challengeRisk({ id: "critical", status: "open", probability_score: 5, impact_score: 5 }),
-      challengeRisk({ id: "handled", status: "in_progress", probability_score: 3, impact_score: 4 }),
-      challengeRisk({ id: "closed", status: "resolved", probability_score: 5, impact_score: 5 }),
-    ], [definition], periodContext);
+      challengeRisk({ id: "open-risk", project_id: "project-1", status: "open", kind: "risk", probability_score: 5, impact_score: 5 }),
+      challengeRisk({ id: "closed-risk", project_id: "project-1", status: "resolved", kind: "risk", probability_score: 3, impact_score: 4 }),
+      challengeRisk({ id: "challenge", project_id: "project-2", status: "open", kind: "challenge", probability_score: 5, impact_score: 5 }),
+    ], [definition], periodContext, [
+      { id: "project-1", status: "active" },
+      { id: "project-2", status: "active" },
+      { id: "project-3", status: "completed" },
+    ]);
 
     expect(values).toHaveLength(1);
     expect(values[0]).toMatchObject({
@@ -216,6 +220,7 @@ function challengeRisk(patch: Partial<ChallengeRiskRecord>): ChallengeRiskRecord
     id: patch.id ?? "challenge-1",
     project_id: patch.project_id ?? "project-1",
     status: patch.status ?? "open",
+    kind: patch.kind ?? "risk",
     probability_score: probability,
     impact_score: impact,
     risk_score: score,
