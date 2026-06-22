@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { normalizeMoney } from "@/lib/projects/budget";
+import { canEditProject } from "@/lib/projects/project-permissions";
 import { isMissingProjectTypeColumn, saveProjectTypeOverride } from "@/lib/projects/project-type-store";
 import type { Database, Profile, Project } from "@/lib/supabase/types";
 
@@ -77,8 +78,7 @@ export async function PATCH(
     return NextResponse.json({ error: "لم يتم العثور على المشروع" }, { status: 404 });
   }
 
-  const canEdit = user.role === "admin" || existingProject.manager_id === user.id;
-  if (!canEdit) {
+  if (!canEditProject(user, existingProject)) {
     return NextResponse.json({ error: "ليست لديك صلاحية تعديل هذا المشروع" }, { status: 403 });
   }
 

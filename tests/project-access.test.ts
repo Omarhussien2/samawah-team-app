@@ -6,6 +6,7 @@ import {
   normalizeProjectListScope,
   uniqueProjectIds,
 } from "../lib/projects/project-access";
+import { canEditProject } from "../lib/projects/project-permissions";
 
 describe("project access helpers", () => {
   it("keeps all-project scope admin-only", () => {
@@ -44,5 +45,14 @@ describe("project access helpers", () => {
         "updated_at"
       ).map((project) => project.id)
     ).toEqual(["recently-updated", "newly-created"]);
+  });
+
+  it("allows project managers to edit project manager assignments", () => {
+    const project = { manager_id: "bashayer" };
+
+    expect(canEditProject({ id: "admin", role: "admin" }, project)).toBe(true);
+    expect(canEditProject({ id: "tarneem", role: "project_manager" }, project)).toBe(true);
+    expect(canEditProject({ id: "bashayer", role: "member" }, project)).toBe(true);
+    expect(canEditProject({ id: "member", role: "member" }, project)).toBe(false);
   });
 });

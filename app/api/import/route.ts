@@ -1,13 +1,60 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { normalizeMoney } from "@/lib/projects/budget";
 import { mapProjectType } from "@/lib/utils";
 import { isMissingProjectTypeColumn, saveProjectTypeOverride } from "@/lib/projects/project-type-store";
 import { findUniqueProfileByName } from "@/lib/users/name-matching";
-import type { Database } from "@/lib/supabase/types";
+import type { Database, Profile } from "@/lib/supabase/types";
 
 type ProjectInsert = Database["public"]["Tables"]["projects"]["Insert"];
 type TaskInsert = Database["public"]["Tables"]["tasks"]["Insert"];
+
+interface ImportProjectPayload {
+  legacy_project_id?: string;
+  name?: string;
+  project_type?: string;
+  manager_name?: string;
+  path?: string;
+  current_stage?: string;
+  start_date?: string;
+  end_date?: string;
+  total_budget?: number | string;
+  description?: string;
+  _errors?: string[];
+}
+
+interface ImportTaskPayload {
+  legacy_task_id?: string;
+  legacy_project_id?: string;
+  title?: string;
+  sub_task?: string;
+  category?: string;
+  owner_name?: string;
+  status?: string;
+  start_date?: string;
+  due_date?: string;
+  cost?: number | string;
+  quantity_total?: number | string;
+  quantity_done?: number | string;
+  progress?: number | string;
+  alert_level?: string;
+  alert_message?: string;
+  alert_action?: string;
+  _errors?: string[];
+}
+
+interface ImportBody {
+  type?: "projects" | "tasks";
+  data?: ImportProjectPayload[] | ImportTaskPayload[];
+  targetProjectId?: string | null;
+}
+
+interface ImportProjectAccess {
+  id: string;
+  legacy_project_id: string | null;
+  manager_id: string | null;
+  forms_owner_id: string | null;
+}
 
 function clean(val: string | null | undefined): string | null {
   if (!val || val.trim() === "") return null;
@@ -20,10 +67,50 @@ function cleanNum(val: number | string | null | undefined): number | null {
   return n;
 }
 
+function canImportIntoProject(user: Profile, project: ImportProjectAccess, memberProjectIds: Set<string>) {
+  if (user.role === "admin" || user.role === "project_manager") return true;
+  if (project.manager_id === user.id || project.forms_owner_id === user.id) return true;
+  return memberProjectIds.has(project.id);
+}
+
+const TASK_STATUSES = ["Backlog", "To Do", "In Progress", "Review", "Done", "Cancelled"] as const;
+type TaskStatus = (typeof TASK_STATUSES)[number];
+
+function isTaskStatus(status: string | undefined): status is TaskStatus {
+  return TASK_STATUSES.includes(status as TaskStatus);
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { type, data } = await request.json();
+    const body = await request.json() as ImportBody;
+    const { type, data, targetProjectId } = body;
+
+    if (type !== "projects" && type !== "tasks") {
+      return NextResponse.json({ error: "نوع الاستيراد غير صحيح" }, { status: 400 });
+    }
+
+    if (!Array.isArray(data)) {
+      return NextResponse.json({ error: "بيانات الاستيراد غير صحيحة" }, { status: 400 });
+    }
+
+    const userClient = await createClient();
+    const { data: authData } = await userClient.auth.getUser();
+    if (!authData.user) {
+      return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
+    }
+
     const supabase = createServiceClient();
+    const { data: currentUser, error: currentUserError } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", authData.user.id)
+      .maybeSingle();
+
+    if (currentUserError) throw currentUserError;
+    if (!currentUser) {
+      return NextResponse.json({ error: "لم يتم العثور على ملف المستخدم" }, { status: 403 });
+    }
+
     const { data: profiles, error: profilesError } = await supabase
       .from("profiles")
       .select("id,full_name,email");
@@ -45,12 +132,17 @@ export async function POST(request: NextRequest) {
     const errorDetails: string[] = [];
 
     if (type === "projects") {
-      for (const project of data) {
-        if (project._errors?.length > 0) {
+      if (currentUser.role !== "admin" && currentUser.role !== "project_manager") {
+        return NextResponse.json({ error: "ليس لديك صلاحية استيراد المشاريع" }, { status: 403 });
+      }
+
+      for (const project of data as ImportProjectPayload[]) {
+        if (project._errors?.length) {
           errorCount++;
           errorDetails.push(`مشروع "${project.name || project.legacy_project_id || "بدون اسم"}": ${project._errors.join("، ")}`);
           continue;
         }
+
         const legacyId = clean(project.legacy_project_id);
         const projectType = mapProjectType(project.project_type);
         const managerName = clean(project.manager_name);
@@ -96,6 +188,7 @@ export async function POST(request: NextRequest) {
           savedProject = retry.data;
           error = retry.error;
         }
+
         if (error) {
           errorCount++;
           errorDetails.push(`مشروع "${project.name}": ${error.message}`);
@@ -113,33 +206,71 @@ export async function POST(request: NextRequest) {
         }
       }
     } else if (type === "tasks") {
-      const { data: projects, error: projectsError } = await supabase.from("projects").select("id, legacy_project_id");
-      if (projectsError) throw projectsError;
-      const projectMap = new Map(projects?.map((p) => [p.legacy_project_id, p.id]) ?? []);
+      const { data: memberships, error: membershipsError } = await supabase
+        .from("project_members")
+        .select("project_id")
+        .eq("user_id", currentUser.id);
+      if (membershipsError) throw membershipsError;
 
-      for (const task of data) {
-        if (task._errors?.length > 0) {
+      const memberProjectIds = new Set((memberships ?? []).map((membership) => membership.project_id));
+      let fixedProject: ImportProjectAccess | null = null;
+      let projectMap = new Map<string, ImportProjectAccess>();
+
+      if (targetProjectId) {
+        const { data: project, error: projectError } = await supabase
+          .from("projects")
+          .select("id, legacy_project_id, manager_id, forms_owner_id")
+          .eq("id", targetProjectId)
+          .maybeSingle();
+        if (projectError) throw projectError;
+
+        if (!project || !canImportIntoProject(currentUser, project, memberProjectIds)) {
+          return NextResponse.json({ error: "ليس لديك صلاحية استيراد مهام داخل هذا المشروع" }, { status: 403 });
+        }
+
+        fixedProject = project;
+      } else {
+        const { data: projects, error: projectsError } = await supabase
+          .from("projects")
+          .select("id, legacy_project_id, manager_id, forms_owner_id");
+        if (projectsError) throw projectsError;
+
+        projectMap = new Map(
+          (projects ?? [])
+            .filter((project) => project.legacy_project_id)
+            .map((project) => [project.legacy_project_id as string, project])
+        );
+      }
+
+      for (const task of data as ImportTaskPayload[]) {
+        if (task._errors?.length) {
           errorCount++;
           errorDetails.push(`مهمة "${task.title || task.legacy_task_id || "بدون اسم"}": ${task._errors.join("، ")}`);
           continue;
         }
-        const projectId = projectMap.get(task.legacy_project_id);
-        if (!projectId) {
+
+        const project = fixedProject ?? projectMap.get(task.legacy_project_id ?? "");
+        if (!project) {
           errorCount++;
           errorDetails.push(`مهمة "${task.title || task.legacy_task_id || "بدون اسم"}": لم يتم العثور على مشروع بالمعرف ${task.legacy_project_id || "الفارغ"}`);
           continue;
         }
 
-        const alertLevel = task.alert_level && ["Low","Medium","High","Critical"].includes(task.alert_level) ? task.alert_level : null;
+        if (!canImportIntoProject(currentUser, project, memberProjectIds)) {
+          errorCount++;
+          errorDetails.push(`مهمة "${task.title || task.legacy_task_id || "بدون اسم"}": ليس لديك صلاحية الاستيراد داخل المشروع المرتبط`);
+          continue;
+        }
+
+        const alertLevel = task.alert_level && ["Low", "Medium", "High", "Critical"].includes(task.alert_level) ? task.alert_level : null;
         const legacyTaskId = clean(task.legacy_task_id);
-        const validStatuses = ["Backlog","To Do","In Progress","Review","Done","Cancelled"];
-        const status = validStatuses.includes(task.status) ? task.status : "To Do";
+        const status = isTaskStatus(task.status) ? task.status : "To Do";
         const ownerName = clean(task.owner_name);
         const ownerProfile = findUniqueProfileByName(ownerName, profileLookup);
 
         const row: TaskInsert = {
           ...(legacyTaskId ? { legacy_task_id: legacyTaskId } : {}),
-          project_id: projectId,
+          project_id: project.id,
           title: task.title,
           sub_task: clean(task.sub_task),
           category: clean(task.category),
@@ -169,7 +300,7 @@ export async function POST(request: NextRequest) {
           errorDetails.push(`مهمة "${task.title}": ${error.message}`);
         } else {
           try {
-            if (ownerProfile) await ensureProjectMember(projectId, ownerProfile.id, "member");
+            if (ownerProfile) await ensureProjectMember(project.id, ownerProfile.id, "member");
             successCount++;
           } catch (memberError) {
             errorCount++;
